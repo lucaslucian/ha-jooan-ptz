@@ -1,15 +1,19 @@
 import hashlib
+import logging
 from urllib.parse import urljoin
 
 import requests
 
+_LOGGER = logging.getLogger("jooan_ptz.camera")
+
 
 class JooanCamera:
-    def __init__(self, ip: str, username: str, password: str, timeout: float = 5.0):
+    def __init__(self, ip: str, username: str, password: str, timeout: float = 5.0, debug: bool = True):
         self.ip = ip.strip().rstrip("/")
         self.username = username.strip() or "admin"
         self.password = password
         self.timeout = timeout
+        self.debug = debug
         self.userkey = hashlib.md5(password.encode("utf-8")).hexdigest()
 
     @property
@@ -20,11 +24,26 @@ class JooanCamera:
         query = {"userid": self.username, "userkey": self.userkey}
         if params:
             query.update(params)
-        return requests.get(
-            urljoin(self.base_url + "/", endpoint.lstrip("/")),
-            params=query,
-            timeout=self.timeout,
-        )
+
+        # Never log query parameters: userkey is derived from the camera password.
+        if self.debug:
+            _LOGGER.debug("GET %s", endpoint)
+
+        try:
+            response = requests.get(
+                urljoin(self.base_url + "/", endpoint.lstrip("/")),
+                params=query,
+                timeout=self.timeout,
+            )
+        except requests.RequestException as exc:
+            _LOGGER.warning("Request %s failed: %s", endpoint, exc)
+            raise
+
+        if self.debug:
+            _LOGGER.debug("HTTP %s %s", response.status_code, endpoint)
+            _LOGGER.debug("Response body: %s", response.text)
+
+        return response
 
     def command(self, direction: str):
         allowed = {"up", "down", "left", "right", "stop"}
