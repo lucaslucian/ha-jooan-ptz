@@ -9,6 +9,12 @@ from flask import Flask, jsonify, Response
 
 from camera import JooanCamera
 
+# Ensure startup/request diagnostics are visible in the Home Assistant add-on log.
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+)
+
 app = Flask(__name__)
 _LOGGER = logging.getLogger("jooan_ptz")
 CONFIG_PATH = Path("/data/options.json")
@@ -57,6 +63,7 @@ def update_state(**values):
 
 
 def validate_camera():
+    _LOGGER.info("Starting JOOAN camera credential check")
     try:
         camera = get_camera()
         update_state(configured=True, last_error=None, last_check=time.time())
@@ -87,19 +94,17 @@ def validate_camera():
 
 
 def validation_loop():
-    # The initial check is performed synchronously by start_validation().
-    # Subsequent checks keep the connection state fresh without blocking
-    # application startup.
     while True:
         time.sleep(30)
         validate_camera()
 
 
 def start_validation():
-    # Validate immediately during startup so the configured credentials are
-    # always checked before the web UI becomes available. This also guarantees
-    # that the request/response appears in the debug log on every start.
+    # Run the first check synchronously. This guarantees that startup always
+    # attempts the credential request before the background polling begins.
+    _LOGGER.info("Running initial JOOAN camera validation")
     validate_camera()
+    _LOGGER.info("Starting periodic JOOAN camera validation (30s)")
     threading.Thread(target=validation_loop, name="camera-validation", daemon=True).start()
 
 
@@ -146,7 +151,6 @@ def network():
         return jsonify(_state["network_state"] or {})
 
 
-start_validation()
-
 if __name__ == "__main__":
+    start_validation()
     app.run(host="0.0.0.0", port=8099)
