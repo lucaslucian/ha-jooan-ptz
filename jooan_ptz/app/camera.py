@@ -22,18 +22,32 @@ class JooanCamera:
     def base_url(self):
         return f"http://{self.ip}"
 
+    def _debug_log(self, message: str, *args):
+        """Write diagnostic request/response details when debug is enabled.
+
+        The add-on normally runs with an INFO-level logger, so using
+        _LOGGER.debug() here would make the debug selector appear to do
+        nothing. Keep the existing selector semantics and emit diagnostics
+        at INFO only when debug=True.
+        """
+        if self.debug:
+            _LOGGER.info(message, *args)
+
     def _get(self, endpoint: str, params=None):
         query = {"userid": self.username, "userkey": self.userkey}
         if params:
             query.update(params)
 
-        if self.debug:
-            _LOGGER.debug("REQUEST: GET %s", endpoint)
-            _LOGGER.debug("REQUEST parameters: userid=%s", self.username)
+        url = urljoin(self.base_url + "/", endpoint.lstrip("/"))
+        prepared_query = requests.Request("GET", url, params=query).prepare().url
+        # Never expose the camera password hash in the add-on logs.
+        safe_url = re.sub(r"([?&]userkey=)[^&]*", r"\1<redacted>", prepared_query or "")
+
+        self._debug_log("REQUEST: GET %s", safe_url)
 
         try:
             response = requests.get(
-                urljoin(self.base_url + "/", endpoint.lstrip("/")),
+                url,
                 params=query,
                 timeout=self.timeout,
             )
@@ -41,11 +55,10 @@ class JooanCamera:
             _LOGGER.warning("Request %s failed: %s", endpoint, exc)
             raise
 
-        if self.debug:
-            _LOGGER.debug("RESPONSE: HTTP %s", response.status_code)
-            _LOGGER.debug("RESPONSE headers: %s", dict(response.headers))
-            _LOGGER.debug("RESPONSE content-type: %s", response.headers.get("Content-Type", ""))
-            _LOGGER.debug("RESPONSE body: %s", response.text)
+        self._debug_log("RESPONSE: HTTP %s", response.status_code)
+        self._debug_log("RESPONSE headers: %s", dict(response.headers))
+        self._debug_log("RESPONSE content-type: %s", response.headers.get("Content-Type", ""))
+        self._debug_log("RESPONSE body: %s", response.text)
 
         return response
 
