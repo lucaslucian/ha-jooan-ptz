@@ -43,7 +43,12 @@ def get_camera():
         raise ValueError("Camera username is not configured")
     if not config.get("camera_password"):
         raise ValueError("Camera password is not configured")
-    return JooanCamera(config["camera_ip"], config.get("camera_user", "admin"), config.get("camera_password", ""), debug=bool(config.get("debug", True)))
+    return JooanCamera(
+        config["camera_ip"],
+        config.get("camera_user", "admin"),
+        config.get("camera_password", ""),
+        debug=bool(config.get("debug", True)),
+    )
 
 
 def update_state(**values):
@@ -59,15 +64,21 @@ def validate_camera():
         platform = camera.get_platform_id()
         if isinstance(platform, dict) and platform.get("result") == "error_passwd":
             raise PermissionError("Camera rejected the credentials")
-        # Keep any successful response for investigation. Do not reject it merely because
-        # its JSON schema is unknown; reverse engineering needs the raw data.
         _LOGGER.info("JOOAN getPlatformID returned a response")
+
         network = None
         try:
             network = camera.get_network_state()
         except Exception as exc:
             _LOGGER.warning("Could not read camera network state: %s", exc)
-        update_state(authenticated=True, camera_info=platform, network_state=network, last_error=None, last_check=time.time())
+
+        update_state(
+            authenticated=True,
+            camera_info=platform,
+            network_state=network,
+            last_error=None,
+            last_check=time.time(),
+        )
         return True
     except Exception as exc:
         _LOGGER.warning("JOOAN camera validation failed: %s", exc)
@@ -76,12 +87,19 @@ def validate_camera():
 
 
 def validation_loop():
+    # The initial check is performed synchronously by start_validation().
+    # Subsequent checks keep the connection state fresh without blocking
+    # application startup.
     while True:
-        validate_camera()
         time.sleep(30)
+        validate_camera()
 
 
 def start_validation():
+    # Validate immediately during startup so the configured credentials are
+    # always checked before the web UI becomes available. This also guarantees
+    # that the request/response appears in the debug log on every start.
+    validate_camera()
     threading.Thread(target=validation_loop, name="camera-validation", daemon=True).start()
 
 
