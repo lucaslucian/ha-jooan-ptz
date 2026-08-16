@@ -1,6 +1,6 @@
 name: JOOAN PTZ
 description: Local LAN PTZ control for JOOAN cameras
-version: "0.1.0"
+version: "0.1.1"
 slug: jooan_ptz
 init: false
 arch:
@@ -19,7 +19,9 @@ ports_description:
   8099/tcp: JOOAN PTZ web interface
 options:
   camera_ip: ""
+  camera_user: admin
   camera_password: ""
 schema:
   camera_ip: str
+  camera_user: str
   camera_password: password
