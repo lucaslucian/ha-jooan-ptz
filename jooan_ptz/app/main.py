@@ -1,7 +1,8 @@
+import json
 import os
 from pathlib import Path
 
-from flask import Flask, jsonify
+from flask import Flask, jsonify, Response
 
 from camera import JooanCamera
 
@@ -11,7 +12,6 @@ CONFIG_PATH = Path("/data/options.json")
 
 def load_config():
     if CONFIG_PATH.exists():
-        import json
         return json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
     return {
         "camera_ip": os.environ.get("CAMERA_IP", ""),
@@ -33,7 +33,8 @@ def camera():
 
 @app.get("/")
 def index():
-    return """<!doctype html>
+    return Response(
+        """<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -60,13 +61,18 @@ async function ptz(command){
   const s=document.getElementById('status'); s.textContent='Sending '+command+'...';
   try{
     const r=await fetch('/api/ptz/'+command,{method:'POST'});
-    const d=await r.json();
+    const text=await r.text();
+    let d;
+    try { d=JSON.parse(text); }
+    catch { throw new Error('Camera/API returned invalid JSON: '+text.slice(0,120)); }
     s.textContent=r.ok ? 'Result: '+(d.result||'success') : 'Error: '+(d.error||'request failed');
-  }catch(e){s.textContent='Error: '+e}
+  }catch(e){s.textContent='Error: '+e.message;}
 }
 </script>
 </body>
-</html>"""
+</html>""",
+        mimetype="text/html",
+    )
 
 
 @app.post("/api/ptz/<direction>")
