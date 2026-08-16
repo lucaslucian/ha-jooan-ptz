@@ -1,13 +1,11 @@
-import html
 import os
 from pathlib import Path
 
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify
 
 from camera import JooanCamera
 
 app = Flask(__name__)
-
 CONFIG_PATH = Path("/data/options.json")
 
 
@@ -17,6 +15,7 @@ def load_config():
         return json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
     return {
         "camera_ip": os.environ.get("CAMERA_IP", ""),
+        "camera_user": os.environ.get("CAMERA_USER", "admin"),
         "camera_password": os.environ.get("CAMERA_PASSWORD", ""),
     }
 
@@ -25,7 +24,11 @@ def camera():
     config = load_config()
     if not config.get("camera_ip"):
         raise ValueError("Camera IP is not configured")
-    return JooanCamera(config["camera_ip"], config.get("camera_password", ""))
+    return JooanCamera(
+        config["camera_ip"],
+        config.get("camera_user", "admin"),
+        config.get("camera_password", ""),
+    )
 
 
 @app.get("/")
@@ -75,8 +78,6 @@ def ptz(direction):
         return jsonify(result)
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 400
-    except PermissionError as exc:
-        return jsonify({"error": str(exc)}), 401
     except Exception as exc:
         return jsonify({"error": str(exc)}), 502
 
@@ -86,8 +87,6 @@ def test():
     try:
         result = camera().test()
         return jsonify({"ok": True, "platform": result})
-    except PermissionError as exc:
-        return jsonify({"ok": False, "error": str(exc)}), 401
     except Exception as exc:
         return jsonify({"ok": False, "error": str(exc)}), 502
 
