@@ -1,6 +1,6 @@
 name: JOOAN PTZ
 description: Local LAN PTZ control for JOOAN cameras
-version: "0.1.4"
+version: "0.1.5"
 slug: jooan_ptz
 init: false
 arch:
