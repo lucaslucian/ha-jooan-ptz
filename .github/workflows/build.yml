@@ -23,8 +23,8 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install dependencies
-        run: python -m pip install -r jooan_ptz/app/requirements.txt
+      - name: Install test dependencies
+        run: python -m pip install pyyaml -r jooan_ptz/app/requirements.txt
 
       - name: Compile Python sources
         run: python -m compileall -q jooan_ptz/app
@@ -41,6 +41,8 @@ jobs:
           - arch: aarch64
             platform: linux/arm64
           - arch: armv7
+            platform: linux/arm/v7
+          - arch: armhf
             platform: linux/arm/v7
           - arch: i386
             platform: linux/386
@@ -87,8 +89,8 @@ jobs:
 
       - name: Validate YAML
         run: |
+          python3 -m pip install pyyaml
           python3 - <<'PY'
-          import pathlib
           import yaml
           for path in ["repository.yaml", "jooan_ptz/config.yaml", "jooan_ptz/build.yaml"]:
               with open(path, encoding="utf-8") as f:
