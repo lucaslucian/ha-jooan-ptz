@@ -5,8 +5,9 @@ import requests
 
 
 class JooanCamera:
-    def __init__(self, ip: str, password: str, timeout: float = 5.0):
+    def __init__(self, ip: str, username: str, password: str, timeout: float = 5.0):
         self.ip = ip.strip().rstrip("/")
+        self.username = username.strip() or "admin"
         self.password = password
         self.timeout = timeout
         self.userkey = hashlib.md5(password.encode("utf-8")).hexdigest()
@@ -16,7 +17,7 @@ class JooanCamera:
         return f"http://{self.ip}"
 
     def _get(self, endpoint: str, params=None):
-        query = {"userid": "admin", "userkey": self.userkey}
+        query = {"userid": self.username, "userkey": self.userkey}
         if params:
             query.update(params)
         return requests.get(
@@ -62,5 +63,5 @@ class JooanCamera:
     def test(self):
         data = self.get_platform_id()
         if isinstance(data, dict) and data.get("result") == "error_passwd":
-            raise PermissionError("Camera rejected the password")
+            raise PermissionError("Camera rejected the credentials")
         return data
