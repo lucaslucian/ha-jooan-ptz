@@ -1,5 +1,4 @@
-ARG BUILD_FROM
-FROM ${BUILD_FROM}
+FROM ghcr.io/home-assistant/base:3.22
 
 RUN apk add --no-cache python3 py3-pip
 
@@ -10,5 +9,11 @@ RUN pip3 install --no-cache-dir --break-system-packages -r /app/requirements.txt
 COPY app /app
 COPY run.sh /run.sh
 RUN chmod +x /run.sh
+
+LABEL \
+  io.hass.type="app" \
+  io.hass.name="JOOAN PTZ" \
+  io.hass.description="Local LAN PTZ control for JOOAN cameras" \
+  org.opencontainers.image.source="https://github.com/lucaslucian/ha-jooan-ptz"
 
 CMD ["/run.sh"]
