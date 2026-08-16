@@ -1,0 +1,27 @@
+name: JOOAN PTZ
+description: Local LAN PTZ control for JOOAN cameras
+version: "0.1.0"
+slug: jooan_ptz
+init: false
+arch:
+  - amd64
+  - aarch64
+  - armv7
+  - armhf
+  - i386
+startup: application
+boot: auto
+webui: "http://[HOST]:[PORT:8099]/"
+ingress: true
+ingress_port: 8099
+panel_icon: mdi:cctv
+ports:
+  8099/tcp: 8099
+ports_description:
+  8099/tcp: JOOAN PTZ web interface
+options:
+  camera_ip: ""
+  camera_password: ""
+schema:
+  camera_ip: str
+  camera_password: password
