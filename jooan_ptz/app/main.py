@@ -16,8 +16,13 @@ app = Flask(__name__)
 _LOGGER = logging.getLogger("jooan_ptz")
 CONFIG_PATH = Path("/data/options.json")
 _state_lock = threading.Lock()
+_camera_io_lock = threading.Lock()
+_probe_start_lock = threading.Lock()
 _snapshot_lock = threading.Lock()
-_snapshot_cache: dict[tuple[str, int, str], bytes] = {}
+_snapshot_cache: dict[tuple[str, int, str], tuple[float, bytes]] = {}
+SNAPSHOT_CACHE_TTL = 90.0
+CAMERA_IO_LOCK_TIMEOUT = 2.0
+DISCOVERY_GAP = 0.15
 _validation_started = False
 _state = {
     "configured": False,
@@ -37,6 +42,8 @@ _state = {
     "last_seen": None,
     "last_heartbeat": None,
     "last_deep_probe": None,
+    "probe_running": False,
+    "probe_started_at": None,
 }
 
 
@@ -70,6 +77,14 @@ def update_state(**values) -> None:
 
 
 def validate_camera(*, deep: bool = False) -> bool:
+    # All camera service traffic is serialized. The stock JA-A12 has very
+    # limited HTTP/RTSP/ONVIF workers and concurrent protocol operations can
+    # make otherwise valid requests time out.
+    with _camera_io_lock:
+        return _validate_camera_locked(deep=deep)
+
+
+def _validate_camera_locked(*, deep: bool = False) -> bool:
     _LOGGER.info("Validating JOOAN camera over the local network%s", " (deep probe)" if deep else "")
     try:
         camera = get_camera()
@@ -79,24 +94,28 @@ def validate_camera(*, deep: bool = False) -> bool:
         # endpoint already proven by the local integration and avoids treating
         # getPlatformID as the sole source of truth for authentication.
         camera.check_auth()
+        time.sleep(DISCOVERY_GAP)
 
         try:
             platform = camera.get_platform_id()
         except Exception as exc:
             _LOGGER.warning("Could not read camera platform information: %s", redact_secrets(exc))
             platform = None
+        time.sleep(DISCOVERY_GAP)
 
         try:
             network = camera.get_network_state()
         except Exception as exc:
             _LOGGER.warning("Could not read camera network state: %s", redact_secrets(exc))
             network = None
+        time.sleep(DISCOVERY_GAP)
 
         try:
             lan_support = camera.get_ap_lan_p2p_support()
         except Exception as exc:
             _LOGGER.warning("Could not read LAN capability endpoint: %s", redact_secrets(exc))
             lan_support = None
+        time.sleep(DISCOVERY_GAP)
 
         try:
             info = camera.get_device_features()
@@ -104,6 +123,7 @@ def validate_camera(*, deep: bool = False) -> bool:
         except Exception as exc:
             _LOGGER.warning("Could not read camera device features on port 9898: %s", redact_secrets(exc))
             device_info = None
+        time.sleep(DISCOVERY_GAP)
 
         try:
             channels = (device_info or {}).get("channel_count", 1)
@@ -137,7 +157,10 @@ def validate_camera(*, deep: bool = False) -> bool:
                 _LOGGER.warning("Could not probe ONVIF: %s", redact_secrets(exc))
                 values["onvif_info"] = {"reachable": False, "error": redact_secrets(exc)}
             try:
-                values["media_probe"] = camera.probe_rtsp_streams(values.get("onvif_info"))
+                values["media_probe"] = camera.probe_rtsp_streams(
+                    values.get("onvif_info"),
+                    channel_count=channels,
+                )
             except Exception as exc:
                 _LOGGER.warning("Could not probe RTSP streams: %s", redact_secrets(exc))
                 values["media_probe"] = {"reachable": False, "streams": [], "error": redact_secrets(exc)}
@@ -181,13 +204,15 @@ def validate_camera(*, deep: bool = False) -> bool:
         except Exception:
             pass
         now = time.time()
+        with _state_lock:
+            previous_last_seen = _state.get("last_seen")
         update_state(
             online=online,
             authenticated=False,
             initial_scan_complete=True,
             last_error=safe_error,
             last_check=now,
-            last_seen=now if online else _state.get("last_seen"),
+            last_seen=now if online else previous_last_seen,
         )
         return False
 
@@ -212,8 +237,6 @@ def heartbeat_camera() -> bool:
         }
         if online:
             values["last_seen"] = now
-            if _state.get("authenticated"):
-                values["last_error"] = None
         else:
             values["last_error"] = heartbeat.get("error") or "Camera is offline"
         update_state(**values)
@@ -229,7 +252,11 @@ def heartbeat_camera() -> bool:
 
 def validation_loop() -> None:
     # Full discovery is intentionally performed only once at startup.
-    validate_camera(deep=True)
+    update_state(probe_running=True, probe_started_at=time.time())
+    try:
+        validate_camera(deep=True)
+    finally:
+        update_state(probe_running=False)
     while True:
         time.sleep(_validation_interval())
         heartbeat_camera()
@@ -301,7 +328,7 @@ async function loadSnapshot(img){
   }
 }
 async function refreshSnapshots(){
-  if(document.hidden||!mediaVisible||snapshotRefreshRunning)return;
+  if(document.hidden||!mediaVisible||snapshotRefreshRunning||lastData?.probe_running)return;
   snapshotRefreshRunning=true;
   const button=document.getElementById('snapshots');
   const previousText=button.textContent;
@@ -341,15 +368,25 @@ function renderMedia(data,force=false){
     const img=document.createElement('img');img.alt='Snapshot '+item.path;img.dataset.stream=stream;
     box.append(title,img,meta);root.appendChild(box)
   }
-  if(!document.hidden&&mediaVisible)void refreshSnapshots()
+  if(!document.hidden&&mediaVisible&&!data?.probe_running)void refreshSnapshots()
 }
 async function deepProbe(){
   const b=document.getElementById('probe');b.disabled=true;b.textContent='Diagnosticando...';
   try{
-    await fetch(api('api/probe'),{method:'POST'});
-    await refresh();
-    await refreshSnapshots()
-  }finally{b.disabled=false;b.textContent='Executar diagnóstico profundo'}
+    const response=await fetch(api('api/probe'),{method:'POST'});
+    if(!response.ok)throw new Error('HTTP '+response.status);
+    for(let i=0;i<90;i++){
+      await sleep(1000);
+      await refresh();
+      if(!lastData?.probe_running)break
+    }
+    if(!lastData?.probe_running)await refreshSnapshots()
+  }catch(e){
+    document.getElementById('command').textContent='Erro no diagnóstico: '+e.message
+  }finally{
+    b.disabled=!!lastData?.probe_running;
+    b.textContent=lastData?.probe_running?'Diagnosticando...':'Executar diagnóstico profundo'
+  }
 }
 document.getElementById('probe').addEventListener('click',deepProbe);
 document.getElementById('snapshots').addEventListener('click',refreshSnapshots);
@@ -357,7 +394,8 @@ document.getElementById('snapshots').addEventListener('click',refreshSnapshots);
 async function refresh(){
   try{
     const r=await fetch(api('api/status'),{cache:'no-store'});if(!r.ok)throw new Error('HTTP '+r.status);
-    const d=await r.json();lastData=d;online=!!d.online;authenticated=!!d.authenticated;enableControls(online&&authenticated);
+    const d=await r.json();lastData=d;online=!!d.online;authenticated=!!d.authenticated;enableControls(online&&authenticated&&!d.probe_running);
+    const probeButton=document.getElementById('probe');probeButton.disabled=!!d.probe_running;probeButton.textContent=d.probe_running?'Diagnosticando...':'Executar diagnóstico profundo';
     const status=document.getElementById('status');status.className='status '+(online&&authenticated?'ok':'bad');
     if(!online)status.textContent='Câmera offline';
     else if(!authenticated)status.textContent='Câmera online, mas autenticação não validada';
@@ -420,16 +458,23 @@ def status():
 @app.post("/api/ptz/<direction>")
 def ptz(direction: str):
     with _state_lock:
-        if not _state["authenticated"]:
-            return jsonify({"error": "Camera is not authenticated"}), 503
+        if not _state["online"] or not _state["authenticated"]:
+            return jsonify({"error": "Camera is not ready"}), 503
+
+    if not _camera_io_lock.acquire(timeout=CAMERA_IO_LOCK_TIMEOUT):
+        return jsonify({"error": "Camera is busy with diagnostics or media"}), 503
     try:
         return jsonify(get_camera().command(direction))
     except JooanAuthError as exc:
-        update_state(authenticated=False, last_error=str(exc))
-        return jsonify({"error": str(exc)}), 401
+        safe_error = redact_secrets(exc)
+        update_state(authenticated=False, last_error=safe_error)
+        return jsonify({"error": safe_error}), 401
     except Exception as exc:
-        update_state(last_error=str(exc))
-        return jsonify({"error": str(exc)}), 502
+        safe_error = redact_secrets(exc)
+        update_state(last_error=safe_error)
+        return jsonify({"error": safe_error}), 502
+    finally:
+        _camera_io_lock.release()
 
 
 @app.post("/api/test")
@@ -437,9 +482,28 @@ def test():
     return jsonify({"ok": validate_camera(deep=False)})
 
 
+def _manual_probe_worker() -> None:
+    try:
+        validate_camera(deep=True)
+    finally:
+        update_state(probe_running=False)
+
+
 @app.post("/api/probe")
 def deep_probe():
-    return jsonify({"ok": validate_camera(deep=True)})
+    # Never keep a Gunicorn request open for a complete ONVIF + RTSP scan.
+    # Start one background probe and let /api/status report progress.
+    with _probe_start_lock:
+        with _state_lock:
+            if _state.get("probe_running"):
+                return jsonify({"ok": True, "started": False, "running": True}), 202
+        update_state(probe_running=True, probe_started_at=time.time())
+        threading.Thread(
+            target=_manual_probe_worker,
+            name="camera-manual-probe",
+            daemon=True,
+        ).start()
+    return jsonify({"ok": True, "started": True, "running": True}), 202
 
 
 def _snapshot_cache_key(stream: str) -> tuple[str, int, str]:
@@ -452,24 +516,34 @@ def _snapshot_cache_key(stream: str) -> tuple[str, int, str]:
 
 
 def _capture_snapshot_with_fallback(stream: str) -> tuple[bytes, bool]:
-    """Capture one RTSP frame at a time and preserve the last good frame.
-
-    The stock JA-A12 becomes unreliable when several FFmpeg/RTSP sessions are
-    opened concurrently. A single process-wide lock keeps snapshot captures
-    serialized. If a transient RTSP capture fails after a successful frame was
-    already obtained, return that last good frame instead of replacing the UI
-    image with an HTTP 502 response.
-    """
+    """Capture one frame safely and keep only a short-lived last-good image."""
     key = _snapshot_cache_key(stream)
     with _snapshot_lock:
-        cached = _snapshot_cache.get(key)
+        now = time.monotonic()
+        cached_entry = _snapshot_cache.get(key)
+        cached = None
+        if cached_entry is not None:
+            cached_at, cached_image = cached_entry
+            if now - cached_at <= SNAPSHOT_CACHE_TTL:
+                cached = cached_image
+            else:
+                _snapshot_cache.pop(key, None)
+
+        if not _camera_io_lock.acquire(timeout=CAMERA_IO_LOCK_TIMEOUT):
+            if cached is not None:
+                return cached, True
+            raise RuntimeError("Camera is busy with diagnostics or another media operation")
+
         try:
             image = get_camera().snapshot(stream)
         except Exception:
             if cached is not None:
                 return cached, True
             raise
-        _snapshot_cache[key] = image
+        finally:
+            _camera_io_lock.release()
+
+        _snapshot_cache[key] = (time.monotonic(), image)
         return image, False
 
 
