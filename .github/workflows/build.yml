@@ -62,6 +62,7 @@ jobs:
               base / "CHANGELOG.md",
               base / "icon.png",
               base / "logo.png",
+              Path("docs/images/dashboard-concept.jpg"),
           ]
           for path in required:
               if not path.is_file():
@@ -79,6 +80,11 @@ jobs:
               if image.format != "PNG":
                   raise SystemExit("logo.png must be PNG")
               print(f"OK: logo.png {image.width}x{image.height}")
+
+          with Image.open("docs/images/dashboard-concept.jpg") as image:
+              if image.format != "JPEG":
+                  raise SystemExit("dashboard-concept.jpg must be JPEG")
+              print(f"OK: dashboard-concept.jpg {image.width}x{image.height}")
           PY
 
   docker:
