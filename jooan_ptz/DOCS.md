@@ -27,7 +27,7 @@ Na aba **Configuração** do App:
 | `features_port` | `9898` | capabilities/estado |
 | `rtsp_port` | `554` | mídia RTSP |
 | `onvif_port` | `8899` | candidato ONVIF |
-| `validation_interval` | `30` | intervalo do heartbeat leve (TCP/80) em segundos |
+| `validation_interval` | `30` | intervalo do heartbeat ICMP em segundos; não abre portas da câmera |
 | `debug` | `false` | diagnóstico adicional nos logs |
 
 Para o primeiro teste, `debug: true` pode ajudar. Desative depois de concluir o diagnóstico normal.
@@ -85,7 +85,7 @@ O App obtém a configuração RTSP somente no backend e testa primeiro os caminh
 /live/ch01_1
 ```
 
-O probe é **sequencial**. A JA-A12 testada usa um servidor RTSP embarcado limitado e abrir vários `ffprobe` simultâneos pode fazer streams válidos falharem.
+O probe é **sequencial e mínimo**. Para cada canal reportado, o App testa primeiro o stream principal (`*_0`) e só testa o substream (`*_1`) se o principal falhar. A JA-A12 testada usa um servidor RTSP embarcado limitado e abrir sessões desnecessárias pode fazer streams válidos falharem.
 
 Na v0.4, caminhos adicionais reportados por ONVIF `GetStreamUri` também podem ser testados, sempre mantendo o host preso ao IP local configurado.
 
@@ -131,9 +131,9 @@ O botão **Executar diagnóstico profundo** verifica:
 14. PTZ nodes/configurations/status;
 15. presets existentes.
 
-O diagnóstico completo é executado **uma vez na inicialização**. Depois disso, o processo em background faz somente um heartbeat TCP na porta HTTP configurada para saber se a câmera continua online.
+O diagnóstico completo é executado **uma vez na inicialização**. Depois disso, o processo em background usa somente ICMP ping para saber se a câmera continua online, sem abrir conexão em HTTP, RTSP, 9898 ou ONVIF.
 
-A interface também economiza tráfego: quando a aba/página do App não está visível, o navegador pausa polling de status e snapshots. Os snapshots só são atualizados quando a página está visível e o card de mídia está em uso/na tela.
+A interface também economiza tráfego: quando a aba/página do App não está visível, o navegador pausa polling de status e snapshots. Os snapshots só são atualizados quando a página está visível e o card de mídia está em uso/na tela. O diagnóstico profundo manual roda em background, uma instância por vez, sem manter a requisição HTTP do painel aberta durante todo o probe.
 
 ## Segurança
 
