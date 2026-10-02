@@ -3,7 +3,9 @@ from __future__ import annotations
 import http.client
 import json
 import logging
+import re
 import subprocess
+import time
 import xml.etree.ElementTree as ET
 from typing import Any
 from urllib.parse import urlsplit
@@ -15,6 +17,7 @@ ONVIF_DEVICE = "http://www.onvif.org/ver10/device/wsdl"
 ONVIF_MEDIA = "http://www.onvif.org/ver10/media/wsdl"
 ONVIF_PTZ = "http://www.onvif.org/ver20/ptz/wsdl"
 ONVIF_SCHEMA = "http://www.onvif.org/ver10/schema"
+ONVIF_REQUEST_GAP = 0.15
 
 
 def icmp_probe(host: str, timeout: float = 1.5) -> dict[str, Any]:
@@ -46,6 +49,22 @@ def icmp_probe(host: str, timeout: float = 1.5) -> dict[str, Any]:
 
 def _local_name(tag: str) -> str:
     return tag.rsplit("}", 1)[-1]
+
+
+def _safe_int(value: str | None) -> int | None:
+    try:
+        return int(value) if value is not None else None
+    except (TypeError, ValueError):
+        return None
+
+
+def _redact_process_output(value: str) -> str:
+    return re.sub(
+        r"(rtsp://[^:/@\s]+:)[^@\s]+(@)",
+        r"\1<redacted>\2",
+        value,
+        flags=re.I,
+    )
 
 
 def _safe_service_path(xaddr: str | None, fallback: str | None = None) -> str | None:
@@ -140,6 +159,10 @@ def _soap_post(
         }
     finally:
         connection.close()
+        # Give the embedded ONVIF service a brief recovery window before the
+        # next SOAP transaction. This is intentionally small but prevents a
+        # deep diagnostic from becoming a tight request burst.
+        time.sleep(ONVIF_REQUEST_GAP)
 
 
 def _parse_xml(body: bytes) -> ET.Element | None:
@@ -154,13 +177,15 @@ def _parse_xml(body: bytes) -> ET.Element | None:
 def _soap_fault(root: ET.Element | None) -> str | None:
     if root is None:
         return None
-    for element in root.iter():
+    fault = next((item for item in root.iter() if _local_name(item.tag) == "Fault"), None)
+    if fault is None:
+        return None
+    for element in fault.iter():
         if _local_name(element.tag) in {"Text", "Reason"} and element.text:
-            # Return a short diagnostic only. Do not echo arbitrary XML bodies.
             value = element.text.strip()
             if value:
                 return value[:240]
-    return None
+    return "ONVIF SOAP fault"
 
 
 def _extract_capability_services(root: ET.Element | None) -> dict[str, dict[str, Any]]:
@@ -218,22 +243,22 @@ def _extract_profiles(root: ET.Element | None) -> list[dict[str, Any]]:
                     if local == "Encoding" and value.text:
                         item["video"]["encoding"] = value.text.strip()
                     elif local == "Width" and value.text:
-                        item["video"]["width"] = int(value.text)
+                        parsed = _safe_int(value.text)\n                        if parsed is not None:\n                            item["video"]["width"] = parsed
                     elif local == "Height" and value.text:
-                        item["video"]["height"] = int(value.text)
+                        parsed = _safe_int(value.text)\n                        if parsed is not None:\n                            item["video"]["height"] = parsed
                     elif local == "FrameRateLimit" and value.text:
-                        item["video"]["frame_rate_limit"] = int(value.text)
+                        parsed = _safe_int(value.text)\n                        if parsed is not None:\n                            item["video"]["frame_rate_limit"] = parsed
                     elif local == "BitrateLimit" and value.text:
-                        item["video"]["bitrate_limit_kbps"] = int(value.text)
+                        parsed = _safe_int(value.text)\n                        if parsed is not None:\n                            item["video"]["bitrate_limit_kbps"] = parsed
             elif name == "AudioEncoderConfiguration":
                 for value in child.iter():
                     local = _local_name(value.tag)
                     if local == "Encoding" and value.text:
                         item["audio"]["encoding"] = value.text.strip()
                     elif local == "Bitrate" and value.text:
-                        item["audio"]["bitrate_kbps"] = int(value.text)
+                        parsed = _safe_int(value.text)\n                        if parsed is not None:\n                            item["audio"]["bitrate_kbps"] = parsed
                     elif local == "SampleRate" and value.text:
-                        item["audio"]["sample_rate_khz"] = int(value.text)
+                        parsed = _safe_int(value.text)\n                        if parsed is not None:\n                            item["audio"]["sample_rate_khz"] = parsed
 
         profiles.append(item)
     return profiles
@@ -490,7 +515,7 @@ def onvif_probe(host: str, port: int = 8899, timeout: float = 3.0) -> dict[str, 
         )
         if response["status"] is None:
             result["error"] = response["error"]
-            continue
+            return result
 
         result.update(
             {
@@ -502,9 +527,12 @@ def onvif_probe(host: str, port: int = 8899, timeout: float = 3.0) -> dict[str, 
             }
         )
         device_response = response
-        if response["status"] is not None:
-            result["reachable"] = True
-        if response["status"] == 200:
+        result["reachable"] = True
+        # 401 proves the service/path exists and retrying alternate paths only
+        # adds load. Only try fallbacks for an explicit 404.
+        if response["status"] == 200 or response["status"] == 401:
+            break
+        if response["status"] != 404:
             break
 
     if not device_response or device_response["status"] != 200:
@@ -556,6 +584,11 @@ def onvif_probe(host: str, port: int = 8899, timeout: float = 3.0) -> dict[str, 
         elif response["error"]:
             entry["error"] = response["error"]
         result["device_diagnostics"][key] = entry
+        if response["status"] is None or response["status"] == 401:
+            # A transport failure or authentication gate will generally affect
+            # the remaining device-service reads too. Stop instead of issuing
+            # a series of redundant timeouts/401s.
+            return result
 
     media_path = (services.get("media") or {}).get("path")
     if media_path:
@@ -568,6 +601,9 @@ def onvif_probe(host: str, port: int = 8899, timeout: float = 3.0) -> dict[str, 
             timeout=timeout,
         )
         result["video_sources_http"] = video_sources_response["status"]
+        if video_sources_response["status"] is None or video_sources_response["status"] == 401:
+            result["media_error"] = video_sources_response["error"] or "ONVIF media authentication required"
+            return result
         result["video_sources"] = (
             _extract_video_sources(_parse_xml(video_sources_response["body"]))
             if video_sources_response["status"] == 200
@@ -583,6 +619,9 @@ def onvif_probe(host: str, port: int = 8899, timeout: float = 3.0) -> dict[str, 
             timeout=timeout,
         )
         result["audio_sources_http"] = audio_sources_response["status"]
+        if audio_sources_response["status"] is None or audio_sources_response["status"] == 401:
+            result["media_error"] = audio_sources_response["error"] or "ONVIF media authentication required"
+            return result
         result["audio_sources"] = (
             _extract_audio_sources(_parse_xml(audio_sources_response["body"]))
             if audio_sources_response["status"] == 200
@@ -604,6 +643,9 @@ def onvif_probe(host: str, port: int = 8899, timeout: float = 3.0) -> dict[str, 
         )
         result["media_status"] = profiles_response["status"]
         result["media_authentication_required"] = profiles_response["authentication_required"]
+        if profiles_response["status"] is None or profiles_response["status"] == 401:
+            result["media_error"] = profiles_response["error"] or "ONVIF media authentication required"
+            return result
 
         if profiles_response["status"] == 200:
             profiles_root = _parse_xml(profiles_response["body"])
@@ -635,6 +677,11 @@ def onvif_probe(host: str, port: int = 8899, timeout: float = 3.0) -> dict[str, 
                     timeout=timeout,
                 )
                 profile["stream_status"] = stream_response["status"]
+                if stream_response["status"] is None or stream_response["status"] == 401:
+                    profile["stream"] = None
+                    profile["stream_error"] = stream_response["error"] or "ONVIF media authentication required"
+                    result["profiles"] = profiles
+                    return result
                 if stream_response["status"] == 200:
                     profile["stream"] = _extract_stream_uri(
                         _parse_xml(stream_response["body"])
@@ -662,6 +709,10 @@ def onvif_probe(host: str, port: int = 8899, timeout: float = 3.0) -> dict[str, 
                 timeout=timeout,
             )
             ptz["nodes_http"] = nodes_response["status"]
+            if nodes_response["status"] is None or nodes_response["status"] == 401:
+                ptz["error"] = nodes_response["error"] or "ONVIF PTZ authentication required"
+                result["ptz"] = ptz
+                return result
             ptz["nodes"] = (
                 _extract_ptz_nodes(_parse_xml(nodes_response["body"]))
                 if nodes_response["status"] == 200
@@ -677,6 +728,10 @@ def onvif_probe(host: str, port: int = 8899, timeout: float = 3.0) -> dict[str, 
                 timeout=timeout,
             )
             ptz["configurations_http"] = configurations_response["status"]
+            if configurations_response["status"] is None or configurations_response["status"] == 401:
+                ptz["error"] = configurations_response["error"] or "ONVIF PTZ authentication required"
+                result["ptz"] = ptz
+                return result
             ptz["configurations"] = (
                 _extract_ptz_configurations(_parse_xml(configurations_response["body"]))
                 if configurations_response["status"] == 200
@@ -701,6 +756,10 @@ def onvif_probe(host: str, port: int = 8899, timeout: float = 3.0) -> dict[str, 
                 timeout=timeout,
             )
             ptz["status_http"] = status_response["status"]
+            if status_response["status"] is None or status_response["status"] == 401:
+                ptz["error"] = status_response["error"] or "ONVIF PTZ authentication required"
+                result["ptz"] = ptz
+                return result
             ptz["status"] = (
                 _extract_ptz_status(_parse_xml(status_response["body"]))
                 if status_response["status"] == 200
@@ -769,7 +828,7 @@ def ffprobe_rtsp(url: str, timeout: float = 8.0) -> dict[str, Any]:
         return {"available": False, "error": f"ffprobe unavailable: {exc}", "streams": []}
 
     if proc.returncode != 0:
-        message = proc.stderr.decode("utf-8", "replace").strip()
+        message = _redact_process_output(proc.stderr.decode("utf-8", "replace").strip())
         host = urlsplit(url).hostname
         if host:
             message = message.replace(url, f"rtsp://{host}/<redacted>")
