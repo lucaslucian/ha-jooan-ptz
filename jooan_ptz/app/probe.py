@@ -277,6 +277,142 @@ def _extract_presets(root: ET.Element | None) -> list[dict[str, Any]]:
     return presets
 
 
+def _first_text(root: ET.Element | None, name: str) -> str | None:
+    if root is None:
+        return None
+    for node in root.iter():
+        if _local_name(node.tag) == name and node.text:
+            return node.text.strip()
+    return None
+
+
+def _extract_device_information(root: ET.Element | None) -> dict[str, Any]:
+    mapping = {
+        "Manufacturer": "manufacturer",
+        "Model": "model",
+        "FirmwareVersion": "firmware_version",
+        "SerialNumber": "serial_number",
+        "HardwareId": "hardware_id",
+    }
+    return {
+        target: value
+        for source, target in mapping.items()
+        if (value := _first_text(root, source)) is not None
+    }
+
+
+def _extract_system_datetime(root: ET.Element | None) -> dict[str, Any]:
+    if root is None:
+        return {}
+    result: dict[str, Any] = {}
+    for key in ("DateTimeType", "DaylightSavings"):
+        value = _first_text(root, key)
+        if value is not None:
+            result[key.lower()] = value
+    tz = _first_text(root, "TZ")
+    if tz:
+        result["timezone"] = tz
+    utc = next((n for n in root.iter() if _local_name(n.tag) == "UTCDateTime"), None)
+    if utc is not None:
+        parts = {}
+        for node in utc.iter():
+            name = _local_name(node.tag)
+            if name in {"Year","Month","Day","Hour","Minute","Second"} and node.text:
+                parts[name.lower()] = node.text.strip()
+        result["utc"] = parts
+    return result
+
+
+def _extract_scopes(root: ET.Element | None) -> list[str]:
+    if root is None:
+        return []
+    values = []
+    for node in root.iter():
+        if _local_name(node.tag) == "ScopeItem" and node.text:
+            values.append(node.text.strip())
+    return values[:64]
+
+
+def _extract_network_interfaces(root: ET.Element | None) -> list[dict[str, Any]]:
+    interfaces = []
+    if root is None:
+        return interfaces
+    for node in root.iter():
+        if _local_name(node.tag) != "NetworkInterfaces":
+            continue
+        item: dict[str, Any] = {
+            "token": node.attrib.get("token"),
+            "enabled": _first_text(node, "Enabled"),
+            "name": _first_text(node, "Name"),
+            "hw_address": _first_text(node, "HwAddress"),
+            "mtu": _first_text(node, "MTU"),
+            "ipv4": [],
+            "ipv6": [],
+        }
+        for child in node.iter():
+            local = _local_name(child.tag)
+            if local == "Manual":
+                address = _first_text(child, "Address")
+                prefix = _first_text(child, "PrefixLength")
+                if address:
+                    target = item["ipv6"] if ":" in address else item["ipv4"]
+                    target.append({"address": address, "prefix_length": prefix})
+        interfaces.append(item)
+    return interfaces
+
+
+def _extract_services_list(root: ET.Element | None) -> list[dict[str, Any]]:
+    services = []
+    if root is None:
+        return services
+    for node in root.iter():
+        if _local_name(node.tag) != "Service":
+            continue
+        namespace = _first_text(node, "Namespace")
+        xaddr = _first_text(node, "XAddr")
+        major = _first_text(node, "Major")
+        minor = _first_text(node, "Minor")
+        services.append({
+            "namespace": namespace,
+            "path": _safe_service_path(xaddr),
+            "version": f"{major}.{minor}" if major is not None and minor is not None else None,
+        })
+    return services
+
+
+def _extract_video_sources(root: ET.Element | None) -> list[dict[str, Any]]:
+    sources = []
+    if root is None:
+        return sources
+    for node in root.iter():
+        if _local_name(node.tag) != "VideoSources":
+            continue
+        item = {
+            "token": node.attrib.get("token"),
+            "framerate": _first_text(node, "Framerate"),
+            "width": _first_text(node, "Width"),
+            "height": _first_text(node, "Height"),
+        }
+        sources.append(item)
+    return sources
+
+
+def _extract_ptz_configurations(root: ET.Element | None) -> list[dict[str, Any]]:
+    configs = []
+    if root is None:
+        return configs
+    for node in root.iter():
+        if _local_name(node.tag) != "PTZConfiguration":
+            continue
+        configs.append({
+            "token": node.attrib.get("token"),
+            "name": _first_text(node, "Name"),
+            "node_token": _first_text(node, "NodeToken"),
+            "default_timeout": _first_text(node, "DefaultPTZTimeout"),
+        })
+    return configs
+
+
 def onvif_probe(host: str, port: int = 8899, timeout: float = 3.0) -> dict[str, Any]:
     """Perform read-only ONVIF discovery against the configured LAN camera."""
     result: dict[str, Any] = {
@@ -346,8 +482,57 @@ def onvif_probe(host: str, port: int = 8899, timeout: float = 3.0) -> dict[str, 
     services = _extract_capability_services(device_root)
     result["services"] = services
 
+    # Device diagnostics: read-only calls against the confirmed device service.
+    device_ops = [
+        ("device_information", "<tds:GetDeviceInformation/>", "GetDeviceInformation", _extract_device_information),
+        ("system_datetime", "<tds:GetSystemDateAndTime/>", "GetSystemDateAndTime", _extract_system_datetime),
+        ("network_interfaces", "<tds:GetNetworkInterfaces/>", "GetNetworkInterfaces", _extract_network_interfaces),
+        ("scopes", "<tds:GetScopes/>", "GetScopes", _extract_scopes),
+        (
+            "services_list",
+            "<tds:GetServices><tds:IncludeCapability>false</tds:IncludeCapability></tds:GetServices>",
+            "GetServices",
+            _extract_services_list,
+        ),
+    ]
+    result["device_diagnostics"] = {}
+    for key, payload, action_name, parser in device_ops:
+        response = _soap_post(
+            host,
+            port,
+            result["path"],
+            _soap_envelope(ONVIF_DEVICE, "tds", payload),
+            action=f"{ONVIF_DEVICE}/{action_name}",
+            timeout=timeout,
+        )
+        entry = {"http": response["status"], "authentication_required": response["authentication_required"]}
+        if response["status"] == 200:
+            root = _parse_xml(response["body"])
+            entry["data"] = parser(root)
+            fault = _soap_fault(root)
+            if fault:
+                entry["fault"] = fault
+        elif response["error"]:
+            entry["error"] = response["error"]
+        result["device_diagnostics"][key] = entry
+
     media_path = (services.get("media") or {}).get("path")
     if media_path:
+        video_sources_response = _soap_post(
+            host,
+            port,
+            media_path,
+            _soap_envelope(ONVIF_MEDIA, "trt", "<trt:GetVideoSources/>"),
+            action=f"{ONVIF_MEDIA}/GetVideoSources",
+            timeout=timeout,
+        )
+        result["video_sources_http"] = video_sources_response["status"]
+        result["video_sources"] = (
+            _extract_video_sources(_parse_xml(video_sources_response["body"]))
+            if video_sources_response["status"] == 200
+            else []
+        )
+
         profiles_request = _soap_envelope(
             ONVIF_MEDIA,
             "trt",
@@ -411,6 +596,21 @@ def onvif_probe(host: str, port: int = 8899, timeout: float = 3.0) -> dict[str, 
         token = profiles[0].get("token")
         if token:
             ptz: dict[str, Any] = {"path": ptz_path, "profile_token": token}
+
+            configurations_response = _soap_post(
+                host,
+                port,
+                ptz_path,
+                _soap_envelope(ONVIF_PTZ, "tptz", "<tptz:GetConfigurations/>"),
+                action=f"{ONVIF_PTZ}/GetConfigurations",
+                timeout=timeout,
+            )
+            ptz["configurations_http"] = configurations_response["status"]
+            ptz["configurations"] = (
+                _extract_ptz_configurations(_parse_xml(configurations_response["body"]))
+                if configurations_response["status"] == 200
+                else []
+            )
 
             status_request = _soap_envelope(
                 ONVIF_PTZ,
