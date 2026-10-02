@@ -188,3 +188,19 @@ def test_audio_only_rtsp_result_does_not_count_as_working_video(monkeypatch):
         "/live/ch00_1",
     ]
     assert result["reachable"] is True
+
+
+def test_heartbeat_preserves_unknown_icmp_state(monkeypatch):
+    camera = JooanCamera("10.0.0.10", "admin", "secret")
+
+    monkeypatch.setattr(
+        camera_module,
+        "icmp_probe",
+        lambda *args, **kwargs: {
+            "online": None,
+            "method": "icmp",
+            "error": "ICMP heartbeat is unavailable in this container",
+        },
+    )
+
+    assert camera.heartbeat()["online"] is None
