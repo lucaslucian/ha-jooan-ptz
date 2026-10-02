@@ -13,6 +13,13 @@
 - Limited last-good snapshot fallback to 90 seconds and reuse it when diagnostics temporarily own the camera I/O lock.
 - Preserved protocol errors instead of clearing them merely because an ICMP heartbeat succeeds.
 - Updated documentation and translations for the ICMP-only heartbeat introduced in v0.5.1.
+- Added monotonic PTZ request sequencing so a delayed direction cannot execute after a newer STOP.
+- Added emergency STOP on page blur/hide and before starting a deep diagnostic.
+- Added light automatic revalidation after a camera comes back online, without restoring periodic deep polling.
+- Fixed media selection so each dual-lens channel keeps its own main/substream fallback.
+- Avoided sending arbitrary ONVIF-discovered RTSP paths to the fixed snapshot endpoint.
+- Bounded camera-controlled ONVIF lists and escaped profile tokens before reinserting them into SOAP requests.
+- Added API no-store/security headers and hardened Home Assistant Ingress-relative URL construction.
 
 
 ## 0.5.1
