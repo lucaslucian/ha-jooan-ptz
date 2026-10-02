@@ -224,3 +224,38 @@ def test_deep_probe_is_rejected_while_ptz_is_moving():
 
     assert response.status_code == 409
     assert "Stop PTZ" in response.get_json()["error"]
+
+
+def test_snapshot_does_not_open_rtsp_while_ptz_is_moving(monkeypatch):
+    key = ("10.0.0.10", 554, "ch00_0")
+    main._snapshot_cache[key] = (time.monotonic(), b"cached-frame")
+    monkeypatch.setattr(main, "_snapshot_cache_key", lambda stream: key)
+
+    class FakeCamera:
+        def snapshot(self, stream):
+            raise AssertionError("RTSP must not open while PTZ is moving")
+
+    monkeypatch.setattr(main, "get_camera", lambda: FakeCamera())
+    main.update_state(ptz_moving=True)
+
+    image, stale = main._capture_snapshot_with_fallback("ch00_0")
+
+    assert image == b"cached-frame"
+    assert stale is True
+
+
+def test_light_test_rejects_while_ptz_is_moving(monkeypatch):
+    monkeypatch.setattr(
+        main,
+        "_validate_camera_locked",
+        lambda **kwargs: (_ for _ in ()).throw(
+            AssertionError("validation must not run while PTZ is moving")
+        ),
+    )
+    main.update_state(ptz_moving=True, probe_running=False)
+    client = main.app.test_client()
+
+    response = client.post("/api/test")
+
+    assert response.status_code == 409
+    assert response.get_json()["busy"] is True
