@@ -14,7 +14,7 @@ def test_private_camera_ip_is_accepted():
     assert camera.ip == "192.168.1.20"
 
 
-@pytest.mark.parametrize("address", ["8.8.8.8", "1.1.1.1", "127.0.0.1", "0.0.0.0"])
+@pytest.mark.parametrize("address", ["8.8.8.8", "1.1.1.1", "100.64.0.1", "203.0.113.10", "127.0.0.1", "0.0.0.0"])
 def test_non_lan_camera_ip_is_rejected(address):
     with pytest.raises(ValueError):
         JooanCamera(address, "admin", "secret")
