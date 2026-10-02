@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   python:
-    name: Python validation
+    name: Python and metadata validation
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -23,7 +23,7 @@ jobs:
           python-version: "3.12"
 
       - name: Install dependencies
-        run: python -m pip install pytest pyyaml -r jooan_ptz/app/requirements.txt
+        run: python -m pip install pytest pyyaml pillow -r jooan_ptz/app/requirements.txt
 
       - name: Compile Python sources
         run: python -m compileall -q jooan_ptz/app
@@ -37,10 +37,48 @@ jobs:
         run: |
           python - <<'PY'
           import yaml
-          for path in ["repository.yaml", "jooan_ptz/config.yaml"]:
+          paths = [
+              "repository.yaml",
+              "jooan_ptz/config.yaml",
+              "jooan_ptz/translations/en.yaml",
+              "jooan_ptz/translations/pt-BR.yaml",
+          ]
+          for path in paths:
               with open(path, encoding="utf-8") as file:
                   yaml.safe_load(file)
               print(f"OK: {path}")
+          PY
+
+      - name: Validate Home Assistant presentation files
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          from PIL import Image
+
+          base = Path("jooan_ptz")
+          required = [
+              base / "README.md",
+              base / "DOCS.md",
+              base / "CHANGELOG.md",
+              base / "icon.png",
+              base / "logo.png",
+          ]
+          for path in required:
+              if not path.is_file():
+                  raise SystemExit(f"Missing required presentation file: {path}")
+              print(f"OK: {path}")
+
+          with Image.open(base / "icon.png") as image:
+              if image.format != "PNG":
+                  raise SystemExit("icon.png must be PNG")
+              if image.width != image.height:
+                  raise SystemExit("icon.png must be square")
+              print(f"OK: icon.png {image.width}x{image.height}")
+
+          with Image.open(base / "logo.png") as image:
+              if image.format != "PNG":
+                  raise SystemExit("logo.png must be PNG")
+              print(f"OK: logo.png {image.width}x{image.height}")
           PY
 
   docker:
@@ -72,7 +110,7 @@ jobs:
           platforms: ${{ matrix.platform }}
           push: false
           build-args: |
-            BUILD_VERSION=0.3.0
+            BUILD_VERSION=0.3.1
             BUILD_ARCH=${{ matrix.arch }}
           tags: local/jooan-local-control:${{ matrix.arch }}
           cache-from: type=gha,scope=jooan-${{ matrix.arch }}
