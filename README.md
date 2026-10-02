@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <img alt="Version" src="https://img.shields.io/badge/version-0.3.2-blue">
+  <img alt="Version" src="https://img.shields.io/badge/version-0.4.0-blue">
   <img alt="Stage" src="https://img.shields.io/badge/stage-experimental-orange">
   <img alt="aarch64" src="https://img.shields.io/badge/aarch64-yes-success">
   <img alt="amd64" src="https://img.shields.io/badge/amd64-yes-success">
@@ -46,11 +46,11 @@ Se o botão não preencher o repositório automaticamente:
 | Leitura de capacidades na porta 9898 | ✅ |
 | Estado de SD, gravação, detecção, tracking e luzes | ✅ leitura |
 | Detecção de lente dupla | ✅ |
-| RTSP e descoberta de streams | ✅ |
-| Codec, resolução e áudio via ffprobe | ✅ |
-| Snapshots JPEG via RTSP | ✅ |
-| Probe ONVIF read-only | ✅ |
-| Presets/Home via ONVIF | 🔬 pesquisa |
+| RTSP / credenciais locais | ✅ |
+| Descoberta de streams/codec/áudio via ffprobe | 🔬 probe sequencial v0.4 |
+| Snapshots JPEG via RTSP | ✅ após stream confirmado |
+| ONVIF 8899 `/onvif/device_service` | ✅ validado no JA-A12 stock |
+| ONVIF GetProfiles/GetStreamUri/GetStatus/GetPresets | 🔬 read-only v0.4 |
 | Vídeo contínuo no navegador | 🧭 planejado |
 | Playback do microSD | 🔬 pesquisa |
 | Talk-back | 🔬 pesquisa |
@@ -103,7 +103,7 @@ Essa referência está documentada em [docs/UI_DESIGN.md](docs/UI_DESIGN.md).
 | 80/TCP | HTTP | CGI, autenticação, PTZ e informações |
 | 554/TCP | RTSP | vídeo e áudio |
 | 9898/TCP | HTTP | capabilities e estado do dispositivo |
-| 8899/TCP | ONVIF candidato | probe read-only |
+| 8899/TCP | ONVIF | Device Service validado; media/PTZ read-only em descoberta |
 | 7788/UDP | proprietário | descoberta em investigação |
 
 ## Pesquisa
