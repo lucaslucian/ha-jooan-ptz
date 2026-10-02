@@ -15,6 +15,12 @@
   <img alt="amd64" src="https://img.shields.io/badge/amd64-yes-success">
 </p>
 
+<p align="center">
+  <img src="docs/images/dashboard-concept.jpg" alt="Conceito visual do painel completo do JOOAN Local Control" width="900">
+</p>
+
+<p align="center"><em>Conceito visual aprovado para a evolução do painel completo. A imagem representa a direção de UI e não uma captura da implementação atual.</em></p>
+
 ## Instalação
 
 [![Adicionar repositório ao Home Assistant](https://my.home-assistant.io/badges/supervisor_add_addon_repository.svg)](https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https%3A%2F%2Fgithub.com%2Flucaslucian%2Fha-jooan-ptz)
