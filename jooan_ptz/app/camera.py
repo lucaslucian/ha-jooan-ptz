@@ -134,6 +134,25 @@ class DeviceInfo:
         }
 
 
+def redact_secrets(value: object) -> str:
+    """Remove camera/RTSP credentials from messages before logging or returning them."""
+    text = str(value)
+    text = re.sub(r"([?&]userkey=)[^&\\s'\"]+", r"\1<redacted>", text, flags=re.I)
+    text = re.sub(
+        r"([?&](?:key|password|AuthKey)=)[^&\\s'\"]+",
+        r"\1<redacted>",
+        text,
+        flags=re.I,
+    )
+    text = re.sub(
+        r"(rtsp://[^:/@\\s]+:)[^@\\s]+(@)",
+        r"\1<redacted>\2",
+        text,
+        flags=re.I,
+    )
+    return text
+
+
 def _to_int(value):
     try:
         return int(value) if value is not None else None
@@ -240,7 +259,6 @@ class JooanCamera:
         self.timeout = timeout
         self.debug = debug
         self.userkey = hashlib.md5(password.encode("utf-8")).hexdigest()
-        self._session = requests.Session()
 
     @staticmethod
     def _validate_local_ip(value: str) -> str:
@@ -288,9 +306,7 @@ class JooanCamera:
 
     @staticmethod
     def _safe_url(url: str) -> str:
-        safe = re.sub(r"([?&]userkey=)[^&]*", r"\1<redacted>", url)
-        safe = re.sub(r"([?&](?:key|password|AuthKey)=)[^&]*", r"\1<redacted>", safe, flags=re.I)
-        return safe
+        return redact_secrets(url)
 
     def _get(self, endpoint: str, params=None, *, authenticated: bool = True, port: int | None = None):
         query = {}
@@ -305,9 +321,20 @@ class JooanCamera:
         self._debug_log("REQUEST: GET %s", self._safe_url(prepared))
 
         try:
-            response = self._session.get(url, params=query, timeout=self.timeout)
+            # Do not keep persistent HTTP connections to the camera. Some JOOAN
+            # firmwares expose a very small embedded HTTP server and can stop
+            # accepting new requests when clients leave keep-alive connections
+            # around across repeated health checks.
+            response = requests.get(
+                url,
+                params=query,
+                timeout=self.timeout,
+                headers={"Connection": "close"},
+            )
         except requests.RequestException as exc:
-            raise JooanNetworkError(f"Request to {endpoint} failed: {exc}") from exc
+            raise JooanNetworkError(
+                f"Request to {endpoint} failed: {redact_secrets(exc)}"
+            ) from None
 
         self._debug_log("RESPONSE: HTTP %s %s", response.status_code, endpoint)
         try:
@@ -362,6 +389,10 @@ class JooanCamera:
         if direction not in allowed:
             raise ValueError("Unsupported PTZ command")
         return self._goform("/goform/SingleHandlebyCommand", {"singleCMD": direction})
+
+    def check_auth(self) -> dict:
+        """Validate CGI credentials with the already-confirmed PTZ endpoint."""
+        return self.command("stop")
 
     def get_platform_id(self) -> dict:
         return self._goform("/goform/getPlatformID")
@@ -483,4 +514,4 @@ class JooanCamera:
         return capture_snapshot(self.build_rtsp_url_path(path, username, password))
 
     def test(self) -> dict:
-        return self.get_platform_id()
+        return self.check_auth()
