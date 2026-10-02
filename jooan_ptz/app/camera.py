@@ -5,7 +5,7 @@ import ipaddress
 import json
 import logging
 import re
-from concurrent.futures import ThreadPoolExecutor
+import time
 from dataclasses import dataclass
 from urllib.parse import quote, urljoin
 
@@ -83,10 +83,22 @@ SAFE_PROPERTY_KEYS = {
 }
 
 RTSP_PATH_CANDIDATES = (
+    # Main streams first. These two paths were previously confirmed manually
+    # on the tested dual-lens JA-A12 and should not compete with substream
+    # probes for the camera's limited RTSP session capacity.
+    "/live/ch00_0",
+    "/live/ch01_0",
+    "/live/ch00_1",
+    "/live/ch01_1",
+)
+
+RTSP_DISCOVERED_PATH_RE = re.compile(
+    r"^/[A-Za-z0-9._~!RTSP_PATH_CANDIDATES = (
     "/live/ch00_0",
     "/live/ch00_1",
     "/live/ch01_0",
     "/live/ch01_1",
+)'()*+,;=:@%/-]{1,160}$"
 )
 
 
@@ -461,9 +473,21 @@ class JooanCamera:
         data = self._goform("/goform/getOtherSetttings", {"singleCMD": "RtspConf"})
         return str(data.get("user") or self.username), str(data.get("key") or self.password)
 
-    def build_rtsp_url_path(self, path: str, username: str, password: str) -> str:
+    def build_rtsp_url_path(
+        self,
+        path: str,
+        username: str,
+        password: str,
+        *,
+        discovered: bool = False,
+    ) -> str:
         if path not in RTSP_PATH_CANDIDATES:
-            raise ValueError("Unsupported RTSP path")
+            if (
+                not discovered
+                or not RTSP_DISCOVERED_PATH_RE.fullmatch(path)
+                or ".." in path
+            ):
+                raise ValueError("Unsupported RTSP path")
         user = quote(username, safe="")
         key = quote(password, safe="")
         return f"rtsp://{user}:{key}@{self._url_host}:{self.rtsp_port}{path}"
@@ -480,17 +504,55 @@ class JooanCamera:
             "reported_channel_count": max(1, int(channel_count)),
         }
 
-    def probe_rtsp_streams(self) -> dict:
-        username, password = self.get_rtsp_credentials()
-        def probe_path(path: str) -> dict:
-            url = self.build_rtsp_url_path(path, username, password)
-            return {"path": path, **ffprobe_rtsp(url)}
+    def probe_rtsp_streams(self, onvif_info: dict | None = None) -> dict:
+        """Probe RTSP candidates sequentially.
 
-        with ThreadPoolExecutor(max_workers=len(RTSP_PATH_CANDIDATES)) as pool:
-            results = list(pool.map(probe_path, RTSP_PATH_CANDIDATES))
+        The tested JA-A12 has a constrained embedded RTSP server. Opening four
+        ffprobe sessions at once can make even valid streams fail. Probe one
+        URI at a time and let each process release the socket before starting
+        the next one.
+        """
+        username, password = self.get_rtsp_credentials()
+        candidates = list(RTSP_PATH_CANDIDATES)
+        discovered_paths: set[str] = set()
+
+        for profile in (onvif_info or {}).get("profiles", []):
+            stream = profile.get("stream") or {}
+            path = stream.get("path")
+            if (
+                isinstance(path, str)
+                and RTSP_DISCOVERED_PATH_RE.fullmatch(path)
+                and ".." not in path
+                and path not in candidates
+            ):
+                candidates.append(path)
+                discovered_paths.add(path)
+
+        results = []
+        for index, path in enumerate(candidates):
+            url = self.build_rtsp_url_path(
+                path,
+                username,
+                password,
+                discovered=path in discovered_paths,
+            )
+            result = ffprobe_rtsp(url)
+            results.append(
+                {
+                    "path": path,
+                    "source": "onvif" if path in discovered_paths else "known_candidate",
+                    **result,
+                }
+            )
+            # Give the embedded RTSP server a short window to release the
+            # previous session before opening another candidate.
+            if index + 1 < len(candidates):
+                time.sleep(0.25)
+
         return {
             "port": self.rtsp_port,
             "reachable": tcp_probe(self.ip, self.rtsp_port).reachable,
+            "probe_mode": "sequential",
             "streams": results,
         }
 
