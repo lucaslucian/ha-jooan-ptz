@@ -23,6 +23,7 @@ options:
   http_port: 80
   features_port: 9898
   rtsp_port: 554
+  onvif_port: 8899
   validation_interval: 30
   debug: false
 schema:
@@ -32,5 +33,6 @@ schema:
   http_port: port
   features_port: port
   rtsp_port: port
+  onvif_port: port
   validation_interval: "int(10,3600)"
   debug: bool
