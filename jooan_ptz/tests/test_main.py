@@ -168,3 +168,29 @@ def test_offline_heartbeat_clears_authenticated_state(monkeypatch):
     with main._state_lock:
         assert main._state["online"] is False
         assert main._state["authenticated"] is False
+
+
+def test_api_responses_disable_caching():
+    client = main.app.test_client()
+    response = client.get("/api/status")
+
+    assert response.headers["Cache-Control"] == "no-store, max-age=0"
+    assert response.headers["X-Content-Type-Options"] == "nosniff"
+    assert response.headers["Referrer-Policy"] == "no-referrer"
+
+
+def test_light_test_rejects_while_probe_is_running(monkeypatch):
+    monkeypatch.setattr(
+        main,
+        "validate_camera",
+        lambda **kwargs: (_ for _ in ()).throw(
+            AssertionError("validation must not run while deep probe is active")
+        ),
+    )
+    main.update_state(probe_running=True)
+    client = main.app.test_client()
+
+    response = client.post("/api/test")
+
+    assert response.status_code == 409
+    assert response.get_json()["busy"] is True
