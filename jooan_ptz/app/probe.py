@@ -397,6 +397,20 @@ def _extract_video_sources(root: ET.Element | None) -> list[dict[str, Any]]:
     return sources
 
 
+def _extract_audio_sources(root: ET.Element | None) -> list[dict[str, Any]]:
+    sources = []
+    if root is None:
+        return sources
+    for node in root.iter():
+        if _local_name(node.tag) != "AudioSources":
+            continue
+        sources.append({
+            "token": node.attrib.get("token"),
+            "channels": _first_text(node, "Channels"),
+        })
+    return sources
+
+
 def _extract_ptz_configurations(root: ET.Element | None) -> list[dict[str, Any]]:
     configs = []
     if root is None:
@@ -551,6 +565,21 @@ def onvif_probe(host: str, port: int = 8899, timeout: float = 3.0) -> dict[str, 
         result["video_sources"] = (
             _extract_video_sources(_parse_xml(video_sources_response["body"]))
             if video_sources_response["status"] == 200
+            else []
+        )
+
+        audio_sources_response = _soap_post(
+            host,
+            port,
+            media_path,
+            _soap_envelope(ONVIF_MEDIA, "trt", "<trt:GetAudioSources/>"),
+            action=f"{ONVIF_MEDIA}/GetAudioSources",
+            timeout=timeout,
+        )
+        result["audio_sources_http"] = audio_sources_response["status"]
+        result["audio_sources"] = (
+            _extract_audio_sources(_parse_xml(audio_sources_response["body"]))
+            if audio_sources_response["status"] == 200
             else []
         )
 
