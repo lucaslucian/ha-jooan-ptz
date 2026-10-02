@@ -18,6 +18,9 @@ ONVIF_MEDIA = "http://www.onvif.org/ver10/media/wsdl"
 ONVIF_PTZ = "http://www.onvif.org/ver20/ptz/wsdl"
 ONVIF_SCHEMA = "http://www.onvif.org/ver10/schema"
 ONVIF_REQUEST_GAP = 0.15
+MAX_ONVIF_PROFILES = 8
+MAX_ONVIF_LIST_ITEMS = 32
+MAX_ONVIF_PRESETS = 64
 
 
 def icmp_probe(host: str, timeout: float = 1.5) -> dict[str, Any]:
@@ -273,6 +276,8 @@ def _extract_profiles(root: ET.Element | None) -> list[dict[str, Any]]:
                             item["audio"]["sample_rate_khz"] = parsed
 
         profiles.append(item)
+        if len(profiles) >= MAX_ONVIF_PROFILES:
+            break
     return profiles
 
 
@@ -318,6 +323,8 @@ def _extract_presets(root: ET.Element | None) -> list[dict[str, Any]]:
             if _local_name(child.tag) == "Name" and child.text:
                 item["name"] = child.text.strip()
         presets.append(item)
+        if len(presets) >= MAX_ONVIF_PRESETS:
+            break
     return presets
 
 
@@ -402,6 +409,8 @@ def _extract_network_interfaces(root: ET.Element | None) -> list[dict[str, Any]]
                     target = item["ipv6"] if ":" in address else item["ipv4"]
                     target.append({"address": address, "prefix_length": prefix})
         interfaces.append(item)
+        if len(interfaces) >= MAX_ONVIF_LIST_ITEMS:
+            break
     return interfaces
 
 
@@ -421,6 +430,8 @@ def _extract_services_list(root: ET.Element | None) -> list[dict[str, Any]]:
             "path": _safe_service_path(xaddr),
             "version": f"{major}.{minor}" if major is not None and minor is not None else None,
         })
+        if len(services) >= MAX_ONVIF_LIST_ITEMS:
+            break
     return services
 
 
@@ -438,6 +449,8 @@ def _extract_video_sources(root: ET.Element | None) -> list[dict[str, Any]]:
             "height": _first_text(node, "Height"),
         }
         sources.append(item)
+        if len(sources) >= MAX_ONVIF_LIST_ITEMS:
+            break
     return sources
 
 
@@ -452,6 +465,8 @@ def _extract_audio_sources(root: ET.Element | None) -> list[dict[str, Any]]:
             "token": node.attrib.get("token"),
             "channels": _first_text(node, "Channels"),
         })
+        if len(sources) >= MAX_ONVIF_LIST_ITEMS:
+            break
     return sources
 
 
@@ -468,6 +483,8 @@ def _extract_ptz_configurations(root: ET.Element | None) -> list[dict[str, Any]]
             "node_token": _first_text(node, "NodeToken"),
             "default_timeout": _first_text(node, "DefaultPTZTimeout"),
         })
+        if len(configs) >= MAX_ONVIF_LIST_ITEMS:
+            break
     return configs
 
 
@@ -489,6 +506,8 @@ def _extract_ptz_nodes(root: ET.Element | None) -> list[dict[str, Any]]:
             "maximum_presets": _first_text(node, "MaximumNumberOfPresets"),
             "auxiliary_commands": auxiliary,
         })
+        if len(nodes) >= MAX_ONVIF_LIST_ITEMS:
+            break
     return nodes
 
 
