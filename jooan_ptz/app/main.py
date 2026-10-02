@@ -16,6 +16,8 @@ app = Flask(__name__)
 _LOGGER = logging.getLogger("jooan_ptz")
 CONFIG_PATH = Path("/data/options.json")
 _state_lock = threading.Lock()
+_snapshot_lock = threading.Lock()
+_snapshot_cache: dict[tuple[str, int, str], bytes] = {}
 _validation_started = False
 _state = {
     "configured": False,
@@ -202,11 +204,59 @@ buttons.forEach(button=>{const dir=button.dataset.dir;button.addEventListener('p
 document.getElementById('stop').addEventListener('click',()=>{activeDirection=null;send('stop')});
 window.addEventListener('blur',()=>{if(activeDirection){activeDirection=null;send('stop')}});
 
+let mediaSignature='',snapshotRefreshRunning=false;
+function sleep(ms){return new Promise(resolve=>setTimeout(resolve,ms))}
+async function loadSnapshot(img){
+  try{
+    const response=await fetch(
+      api('api/snapshot/'+encodeURIComponent(img.dataset.stream)+'?t='+Date.now()),
+      {cache:'no-store'}
+    );
+    if(!response.ok)return false;
+    const blob=await response.blob();
+    const objectUrl=URL.createObjectURL(blob);
+    const previous=img.dataset.objectUrl;
+    img.src=objectUrl;
+    img.dataset.objectUrl=objectUrl;
+    img.dataset.loaded='1';
+    if(previous)URL.revokeObjectURL(previous);
+    return true
+  }catch(_){
+    return false
+  }
+}
+async function refreshSnapshots(){
+  if(snapshotRefreshRunning)return;
+  snapshotRefreshRunning=true;
+  const button=document.getElementById('snapshots');
+  const previousText=button.textContent;
+  button.disabled=true;button.textContent='Atualizando...';
+  try{
+    const images=[...document.querySelectorAll('img[data-stream]')];
+    for(let i=0;i<images.length;i++){
+      await loadSnapshot(images[i]);
+      if(i+1<images.length)await sleep(300)
+    }
+  }finally{
+    snapshotRefreshRunning=false;
+    button.disabled=false;button.textContent=previousText
+  }
+}
 function renderMedia(data,force=false){
   const root=document.getElementById('media');
   const probe=data?.media_probe?.streams||[];
-  const available=probe.filter(item=>item.available&&item.streams?.some(s=>s.codec_type==='video'));
-  if(!available.length){root.textContent='Nenhum stream RTSP confirmado ainda. Execute o diagnóstico profundo.';return}
+  const videoStreams=probe.filter(item=>item.available&&item.streams?.some(s=>s.codec_type==='video'));
+  const mainStreams=videoStreams.filter(item=>/_0$/.test(item.path));
+  const available=mainStreams.length?mainStreams:videoStreams;
+  if(!available.length){
+    mediaSignature='';
+    root.textContent='Nenhum stream RTSP confirmado ainda. Execute o diagnóstico profundo.';
+    return
+  }
+  const signature=JSON.stringify(available.map(item=>({path:item.path,streams:item.streams})));
+  if(!force&&signature===mediaSignature)return;
+  mediaSignature=signature;
+  root.querySelectorAll('img[data-object-url]').forEach(img=>URL.revokeObjectURL(img.dataset.objectUrl));
   root.innerHTML='';
   for(const item of available){
     const stream=item.path.split('/').pop();
@@ -214,16 +264,17 @@ function renderMedia(data,force=false){
     const title=document.createElement('strong');title.textContent=item.path;
     const meta=document.createElement('pre');meta.textContent=JSON.stringify(item.streams,null,2);
     const img=document.createElement('img');img.alt='Snapshot '+item.path;img.dataset.stream=stream;
-    img.src=api('api/snapshot/'+stream+'?t='+Date.now());
     box.append(title,img,meta);root.appendChild(box)
   }
-}
-function refreshSnapshots(){
-  document.querySelectorAll('img[data-stream]').forEach(img=>{img.src=api('api/snapshot/'+img.dataset.stream+'?t='+Date.now())})
+  void refreshSnapshots()
 }
 async function deepProbe(){
   const b=document.getElementById('probe');b.disabled=true;b.textContent='Diagnosticando...';
-  try{await fetch(api('api/probe'),{method:'POST'});await refresh()}finally{b.disabled=false;b.textContent='Executar diagnóstico profundo'}
+  try{
+    await fetch(api('api/probe'),{method:'POST'});
+    await refresh();
+    await refreshSnapshots()
+  }finally{b.disabled=false;b.textContent='Executar diagnóstico profundo'}
 }
 document.getElementById('probe').addEventListener('click',deepProbe);
 document.getElementById('snapshots').addEventListener('click',refreshSnapshots);
@@ -282,14 +333,48 @@ def deep_probe():
     return jsonify({"ok": validate_camera(deep=True)})
 
 
+def _snapshot_cache_key(stream: str) -> tuple[str, int, str]:
+    config = load_config()
+    return (
+        str(config.get("camera_ip", "")),
+        int(config.get("rtsp_port", 554)),
+        stream,
+    )
+
+
+def _capture_snapshot_with_fallback(stream: str) -> tuple[bytes, bool]:
+    """Capture one RTSP frame at a time and preserve the last good frame.
+
+    The stock JA-A12 becomes unreliable when several FFmpeg/RTSP sessions are
+    opened concurrently. A single process-wide lock keeps snapshot captures
+    serialized. If a transient RTSP capture fails after a successful frame was
+    already obtained, return that last good frame instead of replacing the UI
+    image with an HTTP 502 response.
+    """
+    key = _snapshot_cache_key(stream)
+    with _snapshot_lock:
+        cached = _snapshot_cache.get(key)
+        try:
+            image = get_camera().snapshot(stream)
+        except Exception:
+            if cached is not None:
+                return cached, True
+            raise
+        _snapshot_cache[key] = image
+        return image, False
+
+
 @app.get("/api/snapshot/<stream>")
 def snapshot(stream: str):
     try:
-        image = get_camera().snapshot(stream)
+        image, stale = _capture_snapshot_with_fallback(stream)
         return Response(
             image,
             mimetype="image/jpeg",
-            headers={"Cache-Control": "no-store, max-age=0"},
+            headers={
+                "Cache-Control": "no-store, max-age=0",
+                "X-JOOAN-Snapshot": "stale" if stale else "fresh",
+            },
         )
     except Exception as exc:
         _LOGGER.warning("Snapshot failed for %s: %s", stream, redact_secrets(exc))

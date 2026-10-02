@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.4.1
+
+- Fixed snapshots being recreated every 5 seconds by the status polling loop.
+- Changed snapshot refresh to sequential requests so the stock JA-A12 is not hit by several FFmpeg/RTSP sessions at once.
+- Preserved the last successfully displayed frame when a later snapshot request fails.
+- Added backend serialization for snapshot capture as a second layer of protection against concurrent browser requests.
+- Added an in-memory last-good-frame fallback, keyed by camera IP, RTSP port and stream.
+- Prefer the main `*_0` stream for each channel in the media panel, reducing duplicate main/substream load.
+- Kept manual snapshot refresh available without replacing a good image with a broken one on transient errors.
+
+
 ## 0.4.0
 
 - Confirmed ONVIF TCP/8899 and `/onvif/device_service` on the stock JA-A12 test unit.
