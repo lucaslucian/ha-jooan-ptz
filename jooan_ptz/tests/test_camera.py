@@ -6,6 +6,7 @@ from camera import (
     _capabilities,
     _safe_properties,
     _state_from_properties,
+    redact_secrets,
 )
 
 
@@ -79,3 +80,32 @@ def test_ptz_command_is_allowlisted(monkeypatch):
     camera = JooanCamera("10.0.0.10", "admin", "secret")
     with pytest.raises(ValueError):
         camera.command("SetDiagMode")
+
+
+def test_redact_secrets_hides_userkey_and_rtsp_password():
+    message = (
+        "GET http://10.0.0.10/path?userid=admin&userkey=deadbeef "
+        "rtsp://admin:super-secret@10.0.0.10:554/live/ch00_0"
+    )
+    safe = redact_secrets(message)
+    assert "deadbeef" not in safe
+    assert "super-secret" not in safe
+    assert "userkey=<redacted>" in safe
+    assert "rtsp://admin:<redacted>@10.0.0.10" in safe
+
+
+def test_check_auth_uses_ptz_stop(monkeypatch):
+    camera = JooanCamera("10.0.0.10", "admin", "secret")
+    calls = []
+
+    def fake_goform(endpoint, params=None):
+        calls.append((endpoint, params))
+        return {"result": "success"}
+
+    monkeypatch.setattr(camera, "_goform", fake_goform)
+    result = camera.check_auth()
+
+    assert result == {"result": "success"}
+    assert calls == [
+        ("/goform/SingleHandlebyCommand", {"singleCMD": "stop"})
+    ]

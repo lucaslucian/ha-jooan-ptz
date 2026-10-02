@@ -7,7 +7,7 @@ configuration:
     description: Local camera user. Most tested devices use admin.
   camera_password:
     name: Camera password
-    description: Local camera password. It is used only by the backend and is not returned by the dashboard API.
+    description: Local HTTP/CGI password used by the /goform/ endpoints. Do not use the RTSP key when the firmware keeps separate credentials. It is used only by the backend and is not returned by the dashboard API.
   http_port:
     name: HTTP / CGI port
     description: Local HTTP port used by JOOAN CGI endpoints.

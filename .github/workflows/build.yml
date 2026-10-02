@@ -116,7 +116,7 @@ jobs:
           platforms: ${{ matrix.platform }}
           push: false
           build-args: |
-            BUILD_VERSION=0.3.1
+            BUILD_VERSION=0.3.2
             BUILD_ARCH=${{ matrix.arch }}
           tags: local/jooan-local-control:${{ matrix.arch }}
           cache-from: type=gha,scope=jooan-${{ matrix.arch }}
