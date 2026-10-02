@@ -626,7 +626,7 @@ class JooanCamera:
         """Very cheap background liveness check using ICMP only."""
         probe = icmp_probe(self.ip, timeout=1.5)
         return {
-            "online": bool(probe.get("online")),
+            "online": probe.get("online"),
             "method": probe.get("method", "icmp"),
             "error": probe.get("error"),
         }
