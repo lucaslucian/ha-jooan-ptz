@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.4.0
+
+- Confirmed ONVIF TCP/8899 and `/onvif/device_service` on the stock JA-A12 test unit.
+- Expanded read-only ONVIF discovery to `GetCapabilities`, `GetProfiles`, `GetStreamUri`, `GetStatus` and `GetPresets`.
+- Sanitized ONVIF XAddr and RTSP URI data; reported hosts are never followed by the App.
+- Kept all ONVIF discovery pinned to the configured private camera IP.
+- Changed RTSP probing from four concurrent ffprobe processes to sequential probing for the constrained embedded RTSP server.
+- Prioritized the previously confirmed main paths `/live/ch00_0` and `/live/ch01_0`.
+- Added ONVIF-discovered RTSP paths as safe probe candidates.
+- Added parser and sequential-probe regression tests.
+- Updated compatibility and local protocol documentation with the first stock hardware results.
+
+
 ## 0.3.2
 
 - Fixed repeated HTTP health checks leaking persistent camera connections.
