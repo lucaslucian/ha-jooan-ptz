@@ -1,46 +1,104 @@
-# JOOAN PTZ
+# JOOAN Local Control
 
-Controle local de câmeras JOOAN compatíveis através da rede LAN.
+Controle local de câmeras JOOAN/CAM720 compatíveis pela LAN.
 
 ## Configuração
 
-Configure no Home Assistant:
-
-- **Camera IP**: endereço IP da câmera na rede local.
-- **Camera User**: usuário da câmera. O padrão é `admin`, mas pode ser alterado.
-- **Camera Password**: senha atual da câmera.
-- **Debug**: habilitado por padrão durante a fase de desenvolvimento.
-
-A senha nunca é exibida nos logs. O add-on calcula localmente o `MD5` da senha para gerar o `userkey` exigido pela API CGI local.
+- **camera_ip**: IP privado/local da câmera. Hostnames e IPs públicos são rejeitados.
+- **camera_user**: usuário local da câmera. Normalmente `admin`.
+- **camera_password**: senha local da câmera.
+- **http_port**: porta CGI local. Padrão `80`.
+- **features_port**: porta de propriedades do dispositivo. Padrão `9898`.
+- **rtsp_port**: porta RTSP. Padrão `554`.
+- **onvif_port**: porta candidata do serviço ONVIF OEM. Padrão `8899`.
+- **validation_interval**: intervalo de validação em segundos.
+- **debug**: registra diagnóstico sem expor credenciais.
 
 ## Validação
 
-Ao iniciar, o add-on verifica as credenciais usando o endpoint somente leitura:
+Ao iniciar, o App executa em background:
 
-`/goform/getPlatformID`
+- `getPlatformID`;
+- `getNetWorkState`;
+- `getAPLanP2PSupport`;
+- `get_deviceFeatures` na porta 9898;
+- confirmação RTSP com `RtspConf`;
+- probe das portas locais;
+- probe dos caminhos RTSP;
+- probe ONVIF somente leitura.
 
-Se a resposta for válida, as informações retornadas pela câmera são mostradas no painel. O estado da rede também é consultado através de `/goform/getNetWorkState`.
+A autenticação CGI usa:
 
-Os controles PTZ permanecem desativados enquanto a câmera não estiver configurada, acessível ou autenticada.
+```text
+userid = usuário configurado
+userkey = MD5(senha)
+```
 
-## PTZ disponível
+A senha e o hash não são enviados à interface.
 
-- Cima
-- Baixo
-- Esquerda
-- Direita
-- Parar
+## PTZ
 
-## Debug
+O endpoint confirmado é:
 
-O debug está ativado por padrão nesta fase para facilitar a engenharia reversa. Os logs registram endpoint, código HTTP e corpo retornado pela câmera, mas não registram senha nem `userkey`.
+```text
+/goform/SingleHandlebyCommand?singleCMD=up|down|left|right|stop
+```
 
-As respostas podem ajudar a identificar informações adicionais do dispositivo e futuramente descobrir dados relacionados a vídeo/stream.
+A interface envia o comando de direção ao pressionar e envia `stop` ao soltar.
 
-## Privacidade e rede
+O backend usa allowlist fixa; não há proxy genérico de `singleCMD`.
 
-O controle PTZ usa HTTP diretamente entre o add-on e a câmera na LAN. Não é necessário MQTT ou serviço de nuvem para os comandos locais confirmados.
+## RTSP
 
-## Limitações atuais
+O App consulta `RtspConf` para obter as credenciais no backend e usa `ffprobe` para testar:
 
-O stream de vídeo, home/reset e outros comandos ainda estão sendo investigados. O add-on não assume que exista um equivalente local para comandos descobertos originalmente via MQTT.
+```text
+/live/ch00_0
+/live/ch00_1
+/live/ch01_0
+/live/ch01_1
+```
+
+A UI recebe somente metadados de stream. A URL RTSP autenticada não é retornada.
+
+## Snapshot
+
+O App usa FFmpeg para obter um frame JPEG do RTSP.
+
+Somente os quatro caminhos RTSP conhecidos podem ser usados. Não existe parâmetro de URL arbitrária.
+
+## ONVIF
+
+A porta padrão de probe é 8899. O App tenta somente `GetCapabilities` em caminhos Device Service conhecidos.
+
+Nesta versão ONVIF não envia PTZ nem altera configurações.
+
+## Diagnóstico local v0.3.0
+
+A interface mostra:
+
+- disponibilidade dos serviços locais;
+- capacidades reportadas pela porta 9898;
+- estado de SD/gravação/detecção/tracking/luzes;
+- resultado do probe ONVIF;
+- streams RTSP confirmados;
+- codec, resolução e áudio;
+- snapshots dos streams confirmados.
+
+## Campos sensíveis
+
+O backend não envia para a interface:
+
+- senha da câmera;
+- `userkey`;
+- chave/senha RTSP;
+- `AuthKey`;
+- `device_pwd`;
+- `security_password`;
+- tokens de cloud.
+
+Campos desconhecidos retornados por novos firmwares também não são expostos automaticamente.
+
+## Pesquisa técnica
+
+Veja [`docs/LOCAL_PROTOCOL.md`](../docs/LOCAL_PROTOCOL.md) para o inventário completo de endpoints, propriedades e descobertas de engenharia reversa.
