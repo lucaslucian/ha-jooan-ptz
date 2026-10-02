@@ -8,7 +8,7 @@ from pathlib import Path
 
 from flask import Flask, Response, jsonify
 
-from camera import JooanAuthError, JooanCamera
+from camera import JooanAuthError, JooanCamera, redact_secrets
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
@@ -69,32 +69,41 @@ def validate_camera(*, deep: bool = False) -> bool:
         camera = get_camera()
         update_state(configured=True, last_error=None, last_check=time.time())
 
-        platform = camera.get_platform_id()
+        # Validate authentication against the PTZ endpoint. This is the same
+        # endpoint already proven by the local integration and avoids treating
+        # getPlatformID as the sole source of truth for authentication.
+        camera.check_auth()
+
+        try:
+            platform = camera.get_platform_id()
+        except Exception as exc:
+            _LOGGER.warning("Could not read camera platform information: %s", redact_secrets(exc))
+            platform = None
 
         try:
             network = camera.get_network_state()
         except Exception as exc:
-            _LOGGER.warning("Could not read camera network state: %s", exc)
+            _LOGGER.warning("Could not read camera network state: %s", redact_secrets(exc))
             network = None
 
         try:
             lan_support = camera.get_ap_lan_p2p_support()
         except Exception as exc:
-            _LOGGER.warning("Could not read LAN capability endpoint: %s", exc)
+            _LOGGER.warning("Could not read LAN capability endpoint: %s", redact_secrets(exc))
             lan_support = None
 
         try:
             info = camera.get_device_features()
             device_info = info.as_dict()
         except Exception as exc:
-            _LOGGER.warning("Could not read camera device features on port 9898: %s", exc)
+            _LOGGER.warning("Could not read camera device features on port 9898: %s", redact_secrets(exc))
             device_info = None
 
         try:
             channels = (device_info or {}).get("channel_count", 1)
             stream_info = camera.stream_summary(channels)
         except Exception as exc:
-            _LOGGER.warning("Could not confirm local RTSP settings: %s", exc)
+            _LOGGER.warning("Could not confirm local RTSP settings: %s", redact_secrets(exc))
             stream_info = {
                 "credentials_confirmed": False,
                 "candidate_paths": [],
@@ -116,24 +125,25 @@ def validate_camera(*, deep: bool = False) -> bool:
             try:
                 values["services"] = camera.probe_services()
             except Exception as exc:
-                _LOGGER.warning("Could not probe local service ports: %s", exc)
+                _LOGGER.warning("Could not probe local service ports: %s", redact_secrets(exc))
             try:
                 values["onvif_info"] = camera.probe_onvif()
             except Exception as exc:
-                _LOGGER.warning("Could not probe ONVIF: %s", exc)
-                values["onvif_info"] = {"reachable": False, "error": str(exc)}
+                _LOGGER.warning("Could not probe ONVIF: %s", redact_secrets(exc))
+                values["onvif_info"] = {"reachable": False, "error": redact_secrets(exc)}
             try:
                 values["media_probe"] = camera.probe_rtsp_streams()
             except Exception as exc:
-                _LOGGER.warning("Could not probe RTSP streams: %s", exc)
-                values["media_probe"] = {"reachable": False, "streams": [], "error": str(exc)}
+                _LOGGER.warning("Could not probe RTSP streams: %s", redact_secrets(exc))
+                values["media_probe"] = {"reachable": False, "streams": [], "error": redact_secrets(exc)}
             values["last_deep_probe"] = time.time()
 
         update_state(**values)
         return True
     except Exception as exc:
-        _LOGGER.warning("JOOAN camera validation failed: %s", exc)
-        update_state(authenticated=False, last_error=str(exc), last_check=time.time())
+        safe_error = redact_secrets(exc)
+        _LOGGER.warning("JOOAN camera validation failed: %s", safe_error)
+        update_state(authenticated=False, last_error=safe_error, last_check=time.time())
         return False
 
 
@@ -282,7 +292,7 @@ def snapshot(stream: str):
             headers={"Cache-Control": "no-store, max-age=0"},
         )
     except Exception as exc:
-        _LOGGER.warning("Snapshot failed for %s: %s", stream, exc)
+        _LOGGER.warning("Snapshot failed for %s: %s", stream, redact_secrets(exc))
         return jsonify({"error": "Snapshot unavailable for this local stream"}), 502
 
 
