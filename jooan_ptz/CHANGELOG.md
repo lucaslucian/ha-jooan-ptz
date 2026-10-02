@@ -7,7 +7,7 @@
 - Paused browser status polling and media refresh while the Home Assistant App tab/page is hidden.
 - Media snapshots refresh only while the page is visible and the media card is on screen.
 - Added read-only ONVIF diagnostics for device information, system date/time, network interfaces, scopes and service list.
-- Added ONVIF video-source discovery.
+- Added ONVIF video-source and audio-source discovery.
 - Added PTZ node and PTZ configuration discovery, in addition to status and presets.
 - Kept all new diagnostics read-only and pinned to the configured private camera IP.
 
