@@ -6,7 +6,7 @@ import threading
 import time
 from pathlib import Path
 
-from flask import Flask, Response, jsonify, request
+from flask import Flask, Response, jsonify
 
 from camera import JooanAuthError, JooanCamera
 
@@ -15,8 +15,6 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name
 app = Flask(__name__)
 _LOGGER = logging.getLogger("jooan_ptz")
 CONFIG_PATH = Path("/data/options.json")
-_TRUSTED_INGRESS_IPS = {"172.30.32.2", "127.0.0.1", "::1"}
-
 _state_lock = threading.Lock()
 _validation_started = False
 _state = {
@@ -121,15 +119,6 @@ def start_validation() -> None:
     _validation_started = True
     validate_camera()
     threading.Thread(target=validation_loop, name="camera-validation", daemon=True).start()
-
-
-@app.before_request
-def restrict_to_home_assistant_ingress():
-    remote = request.remote_addr or ""
-    if remote not in _TRUSTED_INGRESS_IPS:
-        _LOGGER.warning("Rejected non-Ingress request from %s", remote)
-        return jsonify({"error": "This interface is available only through Home Assistant Ingress"}), 403
-    return None
 
 
 @app.get("/healthz")
