@@ -132,10 +132,6 @@ def validate_camera(*, deep: bool = False) -> bool:
 
         if deep:
             try:
-                values["services"] = camera.probe_services()
-            except Exception as exc:
-                _LOGGER.warning("Could not probe local service ports: %s", redact_secrets(exc))
-            try:
                 values["onvif_info"] = camera.probe_onvif()
             except Exception as exc:
                 _LOGGER.warning("Could not probe ONVIF: %s", redact_secrets(exc))
@@ -145,6 +141,31 @@ def validate_camera(*, deep: bool = False) -> bool:
             except Exception as exc:
                 _LOGGER.warning("Could not probe RTSP streams: %s", redact_secrets(exc))
                 values["media_probe"] = {"reachable": False, "streams": [], "error": redact_secrets(exc)}
+
+            # Derive service health only from real protocol operations. Never
+            # open a socket merely to see whether a port accepts connections.
+            values["services"] = {
+                "http": {
+                    "port": camera.http_port,
+                    "reachable": True,
+                    "source": "authenticated_cgi",
+                },
+                "features": {
+                    "port": camera.features_port,
+                    "reachable": device_info is not None,
+                    "source": "get_deviceFeatures",
+                },
+                "rtsp": {
+                    "port": camera.rtsp_port,
+                    "reachable": bool((values.get("media_probe") or {}).get("reachable")),
+                    "source": "ffprobe",
+                },
+                "onvif": {
+                    "port": camera.onvif_port,
+                    "reachable": bool((values.get("onvif_info") or {}).get("reachable")),
+                    "source": "soap",
+                },
+            }
             values["last_deep_probe"] = time.time()
 
         values["initial_scan_complete"] = True
