@@ -137,21 +137,20 @@ class DeviceInfo:
 def redact_secrets(value: object) -> str:
     """Remove camera/RTSP credentials from messages before logging or returning them."""
     text = str(value)
-    text = re.sub(r"([?&]userkey=)[^&\\s'\"]+", r"\1<redacted>", text, flags=re.I)
+    text = re.sub(r"([?&]userkey=)[^&\s'\"]+", r"\1<redacted>", text, flags=re.I)
     text = re.sub(
-        r"([?&](?:key|password|AuthKey)=)[^&\\s'\"]+",
+        r"([?&](?:key|password|AuthKey)=)[^&\s'\"]+",
         r"\1<redacted>",
         text,
         flags=re.I,
     )
     text = re.sub(
-        r"(rtsp://[^:/@\\s]+:)[^@\\s]+(@)",
+        r"(rtsp://[^:/@\s]+:)[^@\s]+(@)",
         r"\1<redacted>\2",
         text,
         flags=re.I,
     )
     return text
-
 
 def _to_int(value):
     try:
