@@ -1,6 +1,6 @@
 name: JOOAN Local Control
-description: Local-only LAN control for compatible JOOAN/CAM720 cameras
-version: "0.3.0"
+description: Local LAN control, RTSP snapshots and diagnostics for compatible JOOAN/CAM720 cameras
+version: "0.3.1"
 slug: jooan_ptz
 url: "https://github.com/lucaslucian/ha-jooan-ptz"
 stage: experimental
@@ -13,7 +13,7 @@ boot: auto
 ingress: true
 ingress_port: 8099
 panel_icon: mdi:cctv
-panel_title: JOOAN Camera
+panel_title: JOOAN Local Control
 panel_admin: true
 watchdog: "http://[HOST]:[PORT:8099]/healthz"
 options:
