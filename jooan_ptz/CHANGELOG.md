@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.5.1
+
+- Removed connect-only TCP health checks against camera services.
+- Changed the periodic online heartbeat to ICMP ping so it does not consume an embedded HTTP server connection slot.
+- Removed TCP port pre-probing from ONVIF discovery; the App now sends the actual SOAP request directly.
+- Removed the extra RTSP TCP reachability probe after ffprobe; RTSP state is derived from the real stream probe.
+- Service status is now derived from successful CGI, port 9898, ONVIF SOAP and ffprobe operations instead of opening throwaway sockets.
+- This specifically avoids a JA-A12 failure mode where a TCP connection opened and closed without speaking the expected protocol can leave the local service unresponsive.
+
+
 ## 0.5.0
 
 - Added a low-impact background heartbeat that only opens TCP/80 to determine whether the camera is online.
