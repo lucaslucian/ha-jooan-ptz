@@ -24,8 +24,8 @@ A família JOOAN/CAM720 contém várias revisões de hardware e firmware com nom
 | dual-lens | Detectado |
 | SD / recording / motion / tracking / light state | Detectado |
 | substreams `*_1` | Experimental |
-| ONVIF 8899 | Corroborado + probe experimental |
-| presets/Home | Corroborado, não habilitado |
+| ONVIF 8899 | Validado: `/onvif/device_service` respondeu `GetCapabilities` com HTTP 200 |
+| `GetProfiles` / `GetStreamUri` / `GetStatus` / `GetPresets` | Experimental read-only v0.4 |
 | UDP 7788 | Observado, formato em pesquisa |
 | playback microSD | Em pesquisa |
 | talk-back | Em pesquisa |
