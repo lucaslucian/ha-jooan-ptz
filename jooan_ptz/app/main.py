@@ -67,6 +67,7 @@ _state = {
     "probe_running": False,
     "probe_started_at": None,
     "last_recovery_validation": None,
+    "ptz_moving": False,
 }
 
 
@@ -117,6 +118,7 @@ def _validate_camera_locked(*, deep: bool = False) -> bool:
         # endpoint already proven by the local integration and avoids treating
         # getPlatformID as the sole source of truth for authentication.
         camera.check_auth()
+        update_state(ptz_moving=False)
         time.sleep(DISCOVERY_GAP)
 
         try:
@@ -592,7 +594,9 @@ def ptz(direction: str):
         # the camera lock. Never execute an older direction after a newer STOP.
         if not _ptz_sequence_is_current(client_id, sequence):
             return jsonify({"ok": True, "ignored": True, "reason": "superseded PTZ request"})
-        return jsonify(get_camera().command(direction))
+        result = get_camera().command(direction)
+        update_state(ptz_moving=direction != "stop")
+        return jsonify(result)
     except JooanAuthError as exc:
         safe_error = redact_secrets(exc)
         update_state(authenticated=False, last_error=safe_error)
@@ -622,6 +626,13 @@ def _manual_probe_worker() -> None:
 
 @app.post("/api/probe")
 def deep_probe():
+    with _state_lock:
+        if _state.get("ptz_moving"):
+            return jsonify({
+                "ok": False,
+                "error": "Stop PTZ movement before starting diagnostics",
+            }), 409
+
     # Never keep a Gunicorn request open for a complete ONVIF + RTSP scan.
     # Start one background probe and let /api/status report progress.
     with _probe_start_lock:
