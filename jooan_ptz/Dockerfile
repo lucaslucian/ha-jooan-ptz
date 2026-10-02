@@ -3,7 +3,7 @@ FROM ghcr.io/home-assistant/base:3.22
 ARG BUILD_VERSION
 ARG BUILD_ARCH
 
-RUN apk add --no-cache python3 py3-pip
+RUN apk add --no-cache python3 py3-pip ffmpeg
 
 WORKDIR /app
 COPY app/requirements.txt /app/requirements.txt
