@@ -11,6 +11,7 @@ from probe import (
     _extract_profiles,
     _extract_stream_uri,
     _safe_rtsp_descriptor,
+    _soap_fault,
 )
 
 
@@ -246,3 +247,27 @@ def test_extract_profiles_ignores_malformed_numeric_values():
     assert "width" not in profiles[0]["video"]
     assert "frame_rate_limit" not in profiles[0]["video"]
     assert profiles[0]["video"]["height"] == 1296
+
+
+def test_soap_fault_ignores_non_fault_reason_text():
+    root = ET.fromstring("<Envelope><Reason>normal metadata</Reason></Envelope>")
+    assert _soap_fault(root) is None
+
+
+def test_soap_fault_reads_actual_fault_text():
+    root = ET.fromstring(
+        """<Envelope>
+          <Fault>
+            <Reason><Text>Unsupported operation</Text></Reason>
+          </Fault>
+        </Envelope>"""
+    )
+    assert _soap_fault(root) == "Unsupported operation"
+
+
+def test_profile_extraction_is_bounded():
+    xml = "<Envelope>" + "".join(
+        f'<Profiles token="p{i}"><Name>P{i}</Name></Profiles>' for i in range(20)
+    ) + "</Envelope>"
+    profiles = _extract_profiles(ET.fromstring(xml))
+    assert len(profiles) == 8
