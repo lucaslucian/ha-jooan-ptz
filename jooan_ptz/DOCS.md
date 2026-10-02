@@ -76,14 +76,18 @@ Esses recursos permanecem **somente leitura** até termos um comando LAN de escr
 
 ### RTSP
 
-O App obtém a configuração RTSP somente no backend e testa, por allowlist:
+O App obtém a configuração RTSP somente no backend e testa primeiro os caminhos conhecidos:
 
 ```text
 /live/ch00_0
-/live/ch00_1
 /live/ch01_0
+/live/ch00_1
 /live/ch01_1
 ```
+
+O probe é **sequencial**. A JA-A12 testada usa um servidor RTSP embarcado limitado e abrir vários `ffprobe` simultâneos pode fazer streams válidos falharem.
+
+Na v0.4, caminhos adicionais reportados por ONVIF `GetStreamUri` também podem ser testados, sempre mantendo o host preso ao IP local configurado.
 
 O `ffprobe` identifica quais streams realmente existem e coleta metadados como codec, resolução e áudio.
 
@@ -95,13 +99,17 @@ O FFmpeg gera um JPEG diretamente do RTSP para cada stream confirmado. A interfa
 
 ### ONVIF
 
-O App testa a porta configurada e tenta somente uma operação read-only de `GetCapabilities`.
+No hardware JA-A12 stock testado, a porta `8899` e o caminho `/onvif/device_service` responderam `GetCapabilities` com HTTP 200.
 
-Nesta versão:
+A v0.4 amplia a descoberta somente leitura para:
 
-- ONVIF PTZ não é usado;
-- presets não são alterados;
-- nenhuma configuração ONVIF é escrita.
+- `GetCapabilities`;
+- `GetProfiles`;
+- `GetStreamUri`;
+- `GetStatus` PTZ;
+- `GetPresets`.
+
+Nenhuma dessas operações altera a câmera. PTZ de escrita continua usando apenas o CGI já validado; presets ainda não são criados, removidos ou chamados via ONVIF.
 
 ## Diagnóstico profundo
 
@@ -170,7 +178,7 @@ Alguns firmwares podem não expor esse serviço. PTZ/RTSP podem continuar funcio
 
 ### ONVIF não encontrado
 
-A porta 8899 é baseada em evidências da família JA-A12 e não é garantida em toda revisão. ONVIF é opcional nesta fase.
+A porta 8899 foi validada na JA-A12 usada no desenvolvimento, mas JOOAN possui revisões diferentes. Em outros firmwares o serviço pode usar outra porta, caminho, autenticação ou simplesmente não existir.
 
 ## Limitações atuais
 
