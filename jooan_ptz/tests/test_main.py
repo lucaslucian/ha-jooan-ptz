@@ -194,3 +194,22 @@ def test_light_test_rejects_while_probe_is_running(monkeypatch):
 
     assert response.status_code == 409
     assert response.get_json()["busy"] is True
+
+
+def test_unavailable_icmp_preserves_last_known_online_state(monkeypatch):
+    class FakeCamera:
+        def heartbeat(self):
+            return {
+                "online": None,
+                "method": "icmp",
+                "error": "ICMP heartbeat is unavailable in this container",
+            }
+
+    monkeypatch.setattr(main, "get_camera", lambda: FakeCamera())
+    main.update_state(online=True, authenticated=True)
+
+    assert main.heartbeat_camera() is True
+    with main._state_lock:
+        assert main._state["online"] is True
+        assert main._state["authenticated"] is True
+        assert main._state["heartbeat_error"] is not None
