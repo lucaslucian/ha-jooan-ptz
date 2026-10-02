@@ -505,3 +505,40 @@ Sem registrar identificadores únicos do dispositivo, o teste stock confirmou:
 - `/onvif/device_service` respondeu `GetCapabilities` com HTTP 200.
 
 Essas observações são de capability/state discovery. Um campo existir não significa que a escrita correspondente já esteja validada.
+
+
+## Política de polling / redução de carga
+
+A partir da v0.5.0, a câmera não é consultada continuamente para informações que mudam pouco.
+
+### Inicialização
+
+Uma descoberta completa é permitida no startup para preencher:
+
+- identificação CGI;
+- estado/capabilities da porta 9898;
+- configuração e probe RTSP;
+- serviços e diagnóstico ONVIF;
+- informações de dispositivo/rede/data e hora;
+- profiles, video sources, StreamUri, PTZ nodes/configurations/status e presets.
+
+### Operação normal
+
+Depois do startup, o background usa apenas uma conexão TCP curta à porta HTTP configurada para determinar `online/offline`.
+
+Não são repetidos periodicamente:
+
+- `getPlatformID`;
+- `getNetWorkState`;
+- `getAPLanP2PSupport`;
+- `get_deviceFeatures`;
+- `RtspConf`;
+- ONVIF;
+- ffprobe;
+- snapshots.
+
+### Interface
+
+O navegador usa a Page Visibility API. Quando a aba/página do App está oculta, polling de status e mídia é suspenso. O card de mídia também usa IntersectionObserver, portanto snapshots não são solicitados enquanto o card estiver fora da área visível.
+
+Isso reduz carga no servidor HTTP/RTSP embarcado e evita tráfego sem utilidade.
