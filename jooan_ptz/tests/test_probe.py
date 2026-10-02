@@ -157,12 +157,6 @@ def test_rtsp_probe_runs_sequentially(monkeypatch):
 
     monkeypatch.setattr(camera_module, "ffprobe_rtsp", fake_ffprobe)
     monkeypatch.setattr(camera_module.time, "sleep", lambda _: None)
-    monkeypatch.setattr(
-        camera_module,
-        "tcp_probe",
-        lambda *args, **kwargs: type("Probe", (), {"reachable": True})(),
-    )
-
     result = camera.probe_rtsp_streams(
         {
             "profiles": [
@@ -172,6 +166,7 @@ def test_rtsp_probe_runs_sequentially(monkeypatch):
     )
 
     assert result["probe_mode"] == "sequential"
+    assert result["reachable"] is True
     assert [item["path"] for item in result["streams"]][:4] == [
         "/live/ch00_0",
         "/live/ch01_0",
