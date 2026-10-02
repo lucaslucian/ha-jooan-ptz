@@ -36,19 +36,33 @@ def icmp_probe(host: str, timeout: float = 1.5) -> dict[str, Any]:
         proc = subprocess.run(
             ["ping", "-c", "1", "-W", str(seconds), host],
             stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
             timeout=max(timeout + 1.0, 2.0),
             check=False,
         )
-        return {
-            "online": proc.returncode == 0,
-            "method": "icmp",
-            "error": None if proc.returncode == 0 else "ICMP ping failed",
-        }
+        if proc.returncode == 0:
+            return {"online": True, "method": "icmp", "error": None}
+
+        stderr = proc.stderr.decode("utf-8", "replace").strip()
+        lowered = stderr.lower()
+        if any(
+            marker in lowered
+            for marker in ("operation not permitted", "permission denied", "not found")
+        ):
+            return {
+                "online": None,
+                "method": "icmp",
+                "error": "ICMP heartbeat is unavailable in this container",
+            }
+        return {"online": False, "method": "icmp", "error": "ICMP ping failed"}
     except subprocess.TimeoutExpired:
         return {"online": False, "method": "icmp", "error": "ICMP ping timeout"}
-    except OSError as exc:
-        return {"online": False, "method": "icmp", "error": str(exc)}
+    except OSError:
+        return {
+            "online": None,
+            "method": "icmp",
+            "error": "ICMP heartbeat is unavailable in this container",
+        }
 
 
 def _local_name(tag: str) -> str:
