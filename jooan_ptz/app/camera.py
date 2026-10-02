@@ -536,7 +536,7 @@ class JooanCamera:
                 password,
                 discovered=path in discovered_paths,
             )
-            result = ffprobe_rtsp(url)
+            result = ffprobe_rtsp(url, timeout=5.0)
             results.append(
                 {
                     "path": path,
