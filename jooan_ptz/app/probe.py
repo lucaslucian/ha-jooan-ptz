@@ -7,6 +7,7 @@ import re
 import subprocess
 import time
 import xml.etree.ElementTree as ET
+from xml.sax.saxutils import escape as xml_escape
 from typing import Any
 from urllib.parse import urlsplit
 
@@ -18,7 +19,7 @@ ONVIF_MEDIA = "http://www.onvif.org/ver10/media/wsdl"
 ONVIF_PTZ = "http://www.onvif.org/ver20/ptz/wsdl"
 ONVIF_SCHEMA = "http://www.onvif.org/ver10/schema"
 ONVIF_REQUEST_GAP = 0.15
-MAX_ONVIF_PROFILES = 8
+MAX_ONVIF_PROFILES = 4
 MAX_ONVIF_LIST_ITEMS = 32
 MAX_ONVIF_PRESETS = 64
 
@@ -212,11 +213,11 @@ def _extract_capability_services(root: ET.Element | None) -> dict[str, dict[str,
                 break
         if not xaddr:
             continue
-        parsed = urlsplit(xaddr)
         try:
+            parsed = urlsplit(xaddr)
             reported_port = parsed.port
         except ValueError:
-            reported_port = None
+            continue
         services[name] = {
             "path": _safe_service_path(xaddr),
             "reported_scheme": parsed.scheme or None,
@@ -695,7 +696,7 @@ def onvif_probe(host: str, port: int = 8899, timeout: float = 3.0) -> dict[str, 
                         "<tt:Stream>RTP-Unicast</tt:Stream>"
                         "<tt:Transport><tt:Protocol>RTSP</tt:Protocol></tt:Transport>"
                         "</trt:StreamSetup>"
-                        f"<trt:ProfileToken>{token}</trt:ProfileToken>"
+                        f"<trt:ProfileToken>{xml_escape(str(token))}</trt:ProfileToken>"
                         "</trt:GetStreamUri>"
                     ),
                 )
@@ -774,7 +775,7 @@ def onvif_probe(host: str, port: int = 8899, timeout: float = 3.0) -> dict[str, 
                 "tptz",
                 (
                     "<tptz:GetStatus>"
-                    f"<tptz:ProfileToken>{token}</tptz:ProfileToken>"
+                    f"<tptz:ProfileToken>{xml_escape(str(token))}</tptz:ProfileToken>"
                     "</tptz:GetStatus>"
                 ),
             )
@@ -802,7 +803,7 @@ def onvif_probe(host: str, port: int = 8899, timeout: float = 3.0) -> dict[str, 
                 "tptz",
                 (
                     "<tptz:GetPresets>"
-                    f"<tptz:ProfileToken>{token}</tptz:ProfileToken>"
+                    f"<tptz:ProfileToken>{xml_escape(str(token))}</tptz:ProfileToken>"
                     "</tptz:GetPresets>"
                 ),
             )
