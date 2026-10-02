@@ -126,7 +126,7 @@ O botão **Executar diagnóstico profundo** verifica:
 9. data/hora e timezone ONVIF;
 10. interfaces de rede ONVIF;
 11. scopes e lista de serviços ONVIF;
-12. video sources;
+12. video sources e audio sources;
 13. profiles e StreamUri;
 14. PTZ nodes/configurations/status;
 15. presets existentes.
