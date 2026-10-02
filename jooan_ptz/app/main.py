@@ -15,6 +15,19 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name
 
 app = Flask(__name__)
 _LOGGER = logging.getLogger("jooan_ptz")
+
+
+@app.after_request
+def security_headers(response):
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("Referrer-Policy", "no-referrer")
+    response.headers.setdefault(
+        "Permissions-Policy",
+        "camera=(), microphone=(), geolocation=()",
+    )
+    if request.path.startswith("/api/"):
+        response.headers["Cache-Control"] = "no-store, max-age=0"
+    return response
 CONFIG_PATH = Path("/data/options.json")
 _state_lock = threading.Lock()
 _camera_io_lock = threading.Lock()
@@ -321,13 +334,14 @@ def index():
 
 <script>
 let authenticated=false,online=false,activeDirection=null,lastData=null;
-let statusTimer=null,snapshotTimer=null,mediaVisible=true;
+let statusTimer=null,snapshotTimer=null,mediaVisible=!('IntersectionObserver' in window);
 const STATUS_REFRESH_MS=5000;
 const SNAPSHOT_REFRESH_MS=15000;
 const buttons=[...document.querySelectorAll('[data-dir]')];
 const ptzClient=(globalThis.crypto?.randomUUID?.()||('ptz-'+Math.random().toString(36).slice(2)));
 let ptzSequence=0;
-function api(path){return new URL(path,window.location.href).toString()}
+const ingressBase=new URL(window.location.href);ingressBase.search='';ingressBase.hash='';if(!ingressBase.pathname.endsWith('/'))ingressBase.pathname+='/';
+function api(path){return new URL(path,ingressBase).toString()}
 function ptzUrl(command,sequence){const u=new URL(api('api/ptz/'+command));u.searchParams.set('client',ptzClient);u.searchParams.set('seq',String(sequence));return u.toString()}
 function enableControls(enabled){buttons.forEach(b=>b.disabled=!enabled);document.getElementById('stop').disabled=!enabled}
 async function send(command,keepalive=false){if(!authenticated)return;const sequence=++ptzSequence;const out=document.getElementById('command');try{const r=await fetch(ptzUrl(command,sequence),{method:'POST',keepalive});const d=await r.json();if(!d.ignored)out.textContent=r.ok?'Comando: '+command:'Erro: '+(d.error||'falha na requisição');if(!r.ok&&r.status===401){authenticated=false;enableControls(false)}}catch(e){out.textContent='Erro: '+e.message}}
@@ -424,6 +438,7 @@ function renderMedia(data,force=false){
 async function deepProbe(){
   const b=document.getElementById('probe');b.disabled=true;b.textContent='Diagnosticando...';
   try{
+    if(activeDirection){activeDirection=null;await send('stop')}
     const response=await fetch(api('api/probe'),{method:'POST'});
     if(!response.ok)throw new Error('HTTP '+response.status);
     for(let i=0;i<90;i++){
@@ -578,6 +593,9 @@ def ptz(direction: str):
 
 @app.post("/api/test")
 def test():
+    with _state_lock:
+        if _state.get("probe_running"):
+            return jsonify({"ok": False, "busy": True}), 409
     return jsonify({"ok": validate_camera(deep=False)})
 
 
