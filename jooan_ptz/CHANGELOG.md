@@ -20,6 +20,7 @@
 - Avoided sending arbitrary ONVIF-discovered RTSP paths to the fixed snapshot endpoint.
 - Bounded camera-controlled ONVIF lists and escaped profile tokens before reinserting them into SOAP requests.
 - Added API no-store/security headers and hardened Home Assistant Ingress-relative URL construction.
+- Treats unavailable ICMP capability as an unknown heartbeat state instead of falsely marking the camera offline or falling back to TCP probing.
 
 
 ## 0.5.1
