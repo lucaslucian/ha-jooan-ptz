@@ -6,6 +6,13 @@ import main
 
 def setup_function():
     main._snapshot_cache.clear()
+    main._ptz_sequences.clear()
+    main.update_state(
+        online=False,
+        authenticated=False,
+        probe_running=False,
+        last_error=None,
+    )
 
 
 def test_last_good_snapshot_is_returned_after_transient_failure(monkeypatch):
@@ -113,3 +120,51 @@ def test_snapshot_uses_stale_cache_while_camera_io_is_busy(monkeypatch):
 
     assert image == b"cached-frame"
     assert stale is True
+
+
+def test_stale_ptz_sequence_is_ignored(monkeypatch):
+    commands = []
+
+    class FakeCamera:
+        def command(self, direction):
+            commands.append(direction)
+            return {"result": "success"}
+
+    monkeypatch.setattr(main, "get_camera", lambda: FakeCamera())
+    main.update_state(online=True, authenticated=True)
+    client = main.app.test_client()
+
+    newer = client.post("/api/ptz/stop?client=test-client&seq=2")
+    older = client.post("/api/ptz/right?client=test-client&seq=1")
+
+    assert newer.status_code == 200
+    assert older.status_code == 200
+    assert older.get_json()["ignored"] is True
+    assert commands == ["stop"]
+
+
+def test_invalid_ptz_direction_is_rejected_without_camera_call(monkeypatch):
+    monkeypatch.setattr(
+        main,
+        "get_camera",
+        lambda: (_ for _ in ()).throw(AssertionError("camera must not be called")),
+    )
+    main.update_state(online=True, authenticated=True)
+    client = main.app.test_client()
+    response = client.post("/api/ptz/SetDiagMode?client=test-client&seq=1")
+
+    assert response.status_code == 400
+
+
+def test_offline_heartbeat_clears_authenticated_state(monkeypatch):
+    class FakeCamera:
+        def heartbeat(self):
+            return {"online": False, "method": "icmp", "error": "ICMP ping failed"}
+
+    monkeypatch.setattr(main, "get_camera", lambda: FakeCamera())
+    main.update_state(online=True, authenticated=True)
+
+    assert main.heartbeat_camera() is False
+    with main._state_lock:
+        assert main._state["online"] is False
+        assert main._state["authenticated"] is False
