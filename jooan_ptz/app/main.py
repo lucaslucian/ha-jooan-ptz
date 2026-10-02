@@ -347,7 +347,12 @@ async function refresh(){
     document.getElementById('onvif').textContent=d.onvif_info?JSON.stringify(d.onvif_info,null,2):'Execute o diagnóstico profundo';
     document.getElementById('lan').textContent=JSON.stringify({lan_support:d.lan_support,stream_info:d.stream_info,media_probe:d.media_probe},null,2);
     document.getElementById('info').textContent=d.camera_info?JSON.stringify(d.camera_info,null,2):'Informações não disponíveis';
-    document.getElementById('network').textContent=d.network_state?JSON.stringify(d.network_state,null,2):'Informações não disponíveis';
+    document.getElementById('network').textContent=JSON.stringify({
+      online:d.online,
+      last_seen:d.last_seen,
+      last_heartbeat:d.last_heartbeat,
+      network_state:d.network_state
+    },null,2);
     document.getElementById('command').textContent=d.last_error?'Último erro: '+d.last_error:'';
     renderMedia(d);
   }catch(e){
