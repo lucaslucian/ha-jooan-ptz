@@ -11,6 +11,7 @@ def setup_function():
         online=False,
         authenticated=False,
         probe_running=False,
+        ptz_moving=False,
         last_error=None,
     )
 
@@ -213,3 +214,13 @@ def test_unavailable_icmp_preserves_last_known_online_state(monkeypatch):
         assert main._state["online"] is True
         assert main._state["authenticated"] is True
         assert main._state["heartbeat_error"] is not None
+
+
+def test_deep_probe_is_rejected_while_ptz_is_moving():
+    main.update_state(ptz_moving=True, probe_running=False)
+    client = main.app.test_client()
+
+    response = client.post("/api/probe")
+
+    assert response.status_code == 409
+    assert "Stop PTZ" in response.get_json()["error"]
