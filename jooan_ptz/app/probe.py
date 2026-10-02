@@ -413,6 +413,27 @@ def _extract_ptz_configurations(root: ET.Element | None) -> list[dict[str, Any]]
     return configs
 
 
+def _extract_ptz_nodes(root: ET.Element | None) -> list[dict[str, Any]]:
+    nodes = []
+    if root is None:
+        return nodes
+    for node in root.iter():
+        if _local_name(node.tag) != "PTZNode":
+            continue
+        auxiliary = []
+        for child in node.iter():
+            if _local_name(child.tag) == "AuxiliaryCommands" and child.text:
+                auxiliary.append(child.text.strip())
+        nodes.append({
+            "token": node.attrib.get("token"),
+            "name": _first_text(node, "Name"),
+            "home_supported": _first_text(node, "HomeSupported"),
+            "maximum_presets": _first_text(node, "MaximumNumberOfPresets"),
+            "auxiliary_commands": auxiliary,
+        })
+    return nodes
+
+
 def onvif_probe(host: str, port: int = 8899, timeout: float = 3.0) -> dict[str, Any]:
     """Perform read-only ONVIF discovery against the configured LAN camera."""
     result: dict[str, Any] = {
@@ -596,6 +617,21 @@ def onvif_probe(host: str, port: int = 8899, timeout: float = 3.0) -> dict[str, 
         token = profiles[0].get("token")
         if token:
             ptz: dict[str, Any] = {"path": ptz_path, "profile_token": token}
+
+            nodes_response = _soap_post(
+                host,
+                port,
+                ptz_path,
+                _soap_envelope(ONVIF_PTZ, "tptz", "<tptz:GetNodes/>"),
+                action=f"{ONVIF_PTZ}/GetNodes",
+                timeout=timeout,
+            )
+            ptz["nodes_http"] = nodes_response["status"]
+            ptz["nodes"] = (
+                _extract_ptz_nodes(_parse_xml(nodes_response["body"]))
+                if nodes_response["status"] == 200
+                else []
+            )
 
             configurations_response = _soap_post(
                 host,
