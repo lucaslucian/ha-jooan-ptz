@@ -439,11 +439,12 @@ class JooanCamera:
 
     def probe_rtsp_streams(self) -> dict:
         username, password = self.get_rtsp_credentials()
-        results = []
-        for path in RTSP_PATH_CANDIDATES:
+        def probe_path(path: str) -> dict:
             url = self.build_rtsp_url_path(path, username, password)
-            result = ffprobe_rtsp(url)
-            results.append({"path": path, **result})
+            return {"path": path, **ffprobe_rtsp(url)}
+
+        with ThreadPoolExecutor(max_workers=len(RTSP_PATH_CANDIDATES)) as pool:
+            results = list(pool.map(probe_path, RTSP_PATH_CANDIDATES))
         return {
             "port": self.rtsp_port,
             "reachable": tcp_probe(self.ip, self.rtsp_port).reachable,
