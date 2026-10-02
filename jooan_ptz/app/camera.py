@@ -11,7 +11,7 @@ from urllib.parse import quote, urljoin
 
 import requests
 
-from probe import capture_snapshot, ffprobe_rtsp, onvif_probe, tcp_probe
+from probe import capture_snapshot, ffprobe_rtsp, icmp_probe, onvif_probe
 
 _LOGGER = logging.getLogger("jooan_ptz.camera")
 
@@ -545,7 +545,7 @@ class JooanCamera:
 
         return {
             "port": self.rtsp_port,
-            "reachable": tcp_probe(self.ip, self.rtsp_port).reachable,
+            "reachable": any(bool(item.get("available")) for item in results),
             "probe_mode": "sequential",
             "streams": results,
         }
@@ -554,24 +554,12 @@ class JooanCamera:
         return onvif_probe(self.ip, self.onvif_port)
 
     def heartbeat(self) -> dict:
-        """Very cheap background liveness check.
-
-        It opens one TCP connection to the configured HTTP port and does not
-        call CGI, ONVIF, RTSP or the features service.
-        """
-        probe = tcp_probe(self.ip, self.http_port, timeout=1.5)
+        """Very cheap background liveness check using ICMP only."""
+        probe = icmp_probe(self.ip, timeout=1.5)
         return {
-            "online": probe.reachable,
-            "port": self.http_port,
-            "error": probe.error,
-        }
-
-    def probe_services(self) -> dict:
-        return {
-            "http": tcp_probe(self.ip, self.http_port).as_dict(),
-            "features": tcp_probe(self.ip, self.features_port).as_dict(),
-            "rtsp": tcp_probe(self.ip, self.rtsp_port).as_dict(),
-            "onvif": tcp_probe(self.ip, self.onvif_port).as_dict(),
+            "online": bool(probe.get("online")),
+            "method": probe.get("method", "icmp"),
+            "error": probe.get("error"),
         }
 
     def snapshot(self, stream: str) -> bytes:
