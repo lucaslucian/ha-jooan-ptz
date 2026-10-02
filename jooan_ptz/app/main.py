@@ -62,6 +62,7 @@ _state = {
     "last_check": None,
     "last_seen": None,
     "last_heartbeat": None,
+    "heartbeat_error": None,
     "last_deep_probe": None,
     "probe_running": False,
     "probe_started_at": None,
@@ -251,14 +252,26 @@ def heartbeat_camera() -> bool:
     try:
         heartbeat = get_camera().heartbeat()
         now = time.time()
-        online = bool(heartbeat.get("online"))
+        heartbeat_online = heartbeat.get("online")
         values = {
             "configured": True,
-            "online": online,
             "last_heartbeat": now,
+            "heartbeat_error": heartbeat.get("error"),
         }
+
+        if heartbeat_online is None:
+            # ICMP is not available in this container. Preserve the last known
+            # camera state rather than falsely marking the camera offline or
+            # falling back to a connect-only TCP heartbeat.
+            update_state(**values)
+            with _state_lock:
+                return bool(_state.get("online"))
+
+        online = bool(heartbeat_online)
+        values["online"] = online
         if online:
             values["last_seen"] = now
+            values["heartbeat_error"] = None
         else:
             values["authenticated"] = False
             values["last_error"] = heartbeat.get("error") or "Camera is offline"
@@ -476,6 +489,7 @@ async function refresh(){
       online:d.online,
       last_seen:d.last_seen,
       last_heartbeat:d.last_heartbeat,
+      heartbeat_error:d.heartbeat_error,
       network_state:d.network_state
     },null,2);
     document.getElementById('command').textContent=d.last_error?'Último erro: '+d.last_error:'';
