@@ -112,20 +112,16 @@ def test_check_auth_uses_ptz_stop(monkeypatch):
     ]
 
 
-def test_heartbeat_only_probes_http_port(monkeypatch):
+def test_heartbeat_uses_icmp_without_touching_camera_ports(monkeypatch):
     camera = JooanCamera("10.0.0.10", "admin", "secret", http_port=8080)
     calls = []
 
-    class Probe:
-        reachable = True
-        error = None
+    def fake_icmp_probe(host, timeout=1.5):
+        calls.append((host, timeout))
+        return {"online": True, "method": "icmp", "error": None}
 
-    def fake_tcp_probe(host, port, timeout=1.5):
-        calls.append((host, port, timeout))
-        return Probe()
-
-    monkeypatch.setattr(camera_module, "tcp_probe", fake_tcp_probe)
+    monkeypatch.setattr(camera_module, "icmp_probe", fake_icmp_probe)
     result = camera.heartbeat()
 
-    assert result == {"online": True, "port": 8080, "error": None}
-    assert calls == [("10.0.0.10", 8080, 1.5)]
+    assert result == {"online": True, "method": "icmp", "error": None}
+    assert calls == [("10.0.0.10", 1.5)]
