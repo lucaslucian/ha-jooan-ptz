@@ -7,7 +7,7 @@ configuration:
     description: Usuário local da câmera. A maioria dos dispositivos testados utiliza admin.
   camera_password:
     name: Senha da câmera
-    description: Senha local da câmera. É utilizada somente pelo backend e não é devolvida pela API do painel.
+    description: Senha local HTTP/CGI usada pelos endpoints /goform/. Não use a chave RTSP se o firmware mantiver credenciais separadas. É utilizada somente pelo backend e não é devolvida pela API do painel.
   http_port:
     name: Porta HTTP / CGI
     description: Porta HTTP local usada pelos endpoints CGI da JOOAN.
