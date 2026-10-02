@@ -243,22 +243,34 @@ def _extract_profiles(root: ET.Element | None) -> list[dict[str, Any]]:
                     if local == "Encoding" and value.text:
                         item["video"]["encoding"] = value.text.strip()
                     elif local == "Width" and value.text:
-                        parsed = _safe_int(value.text)\n                        if parsed is not None:\n                            item["video"]["width"] = parsed
+                        parsed = _safe_int(value.text)
+                        if parsed is not None:
+                            item["video"]["width"] = parsed
                     elif local == "Height" and value.text:
-                        parsed = _safe_int(value.text)\n                        if parsed is not None:\n                            item["video"]["height"] = parsed
+                        parsed = _safe_int(value.text)
+                        if parsed is not None:
+                            item["video"]["height"] = parsed
                     elif local == "FrameRateLimit" and value.text:
-                        parsed = _safe_int(value.text)\n                        if parsed is not None:\n                            item["video"]["frame_rate_limit"] = parsed
+                        parsed = _safe_int(value.text)
+                        if parsed is not None:
+                            item["video"]["frame_rate_limit"] = parsed
                     elif local == "BitrateLimit" and value.text:
-                        parsed = _safe_int(value.text)\n                        if parsed is not None:\n                            item["video"]["bitrate_limit_kbps"] = parsed
+                        parsed = _safe_int(value.text)
+                        if parsed is not None:
+                            item["video"]["bitrate_limit_kbps"] = parsed
             elif name == "AudioEncoderConfiguration":
                 for value in child.iter():
                     local = _local_name(value.tag)
                     if local == "Encoding" and value.text:
                         item["audio"]["encoding"] = value.text.strip()
                     elif local == "Bitrate" and value.text:
-                        parsed = _safe_int(value.text)\n                        if parsed is not None:\n                            item["audio"]["bitrate_kbps"] = parsed
+                        parsed = _safe_int(value.text)
+                        if parsed is not None:
+                            item["audio"]["bitrate_kbps"] = parsed
                     elif local == "SampleRate" and value.text:
-                        parsed = _safe_int(value.text)\n                        if parsed is not None:\n                            item["audio"]["sample_rate_khz"] = parsed
+                        parsed = _safe_int(value.text)
+                        if parsed is not None:
+                            item["audio"]["sample_rate_khz"] = parsed
 
         profiles.append(item)
     return profiles
