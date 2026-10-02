@@ -18,7 +18,7 @@ https://github.com/lucaslucian/ha-jooan-ptz
 5. Configure o IP local da câmera, usuário e senha.
 6. Inicie o App e abra a interface pelo menu lateral.
 
-## Recursos atuais
+## Recursos atuais (v0.3.0)
 
 - Comunicação somente com IP privado/local configurado.
 - Autenticação local via `userid` + `MD5(password)`.
@@ -45,6 +45,14 @@ O App exige que `camera_ip` seja um endereço IP literal privado ou link-local. 
 | 80/TCP | CGI `/goform/`, autenticação, PTZ e informações |
 | 554/TCP | RTSP |
 | 9898/TCP | Recursos/propriedades do dispositivo |
+
+## Documentação técnica
+
+O inventário de endpoints, portas, propriedades observadas, pesquisa ONVIF/RTSP e notas de segurança está em:
+
+- [docs/LOCAL_PROTOCOL.md](docs/LOCAL_PROTOCOL.md)
+
+O documento separa explicitamente descobertas confirmadas no firmware stock de evidências vindas de projetos externos/retrofit.
 
 ## Origem do conhecimento
 
