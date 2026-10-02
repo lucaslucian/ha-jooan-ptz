@@ -245,7 +245,9 @@ async function refreshSnapshots(){
 function renderMedia(data,force=false){
   const root=document.getElementById('media');
   const probe=data?.media_probe?.streams||[];
-  const available=probe.filter(item=>item.available&&item.streams?.some(s=>s.codec_type==='video'));
+  const videoStreams=probe.filter(item=>item.available&&item.streams?.some(s=>s.codec_type==='video'));
+  const mainStreams=videoStreams.filter(item=>/_0$/.test(item.path));
+  const available=mainStreams.length?mainStreams:videoStreams;
   if(!available.length){
     mediaSignature='';
     root.textContent='Nenhum stream RTSP confirmado ainda. Execute o diagnóstico profundo.';
