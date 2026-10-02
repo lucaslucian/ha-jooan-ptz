@@ -23,7 +23,7 @@ O objetivo do projeto é **operar a câmera pela LAN sem depender da nuvem para 
 | 8899/TCP | HTTP/SOAP ONVIF | CONFIRMADO-STOCK | `/onvif/device_service` respondeu `GetCapabilities` com HTTP 200 no JA-A12 testado |
 | 7788/UDP | protocolo proprietário | HIPÓTESE/observação anterior | descoberta local; formato ainda não incorporado ao App |
 
-A v0.4.0 faz descoberta não destrutiva em 80, 554, 9898 e 8899. A porta 7788 permanece somente documentada até termos o pacote de descoberta completamente descrito.
+A descoberta atual usa requisições reais dos protocolos em 80, 554, 9898 e 8899. Desde a v0.5.1 não são abertos sockets TCP descartáveis apenas para testar portas, porque esse padrão mostrou capacidade de deixar os serviços locais da JA-A12 sem resposta. A porta 7788 permanece somente documentada até termos o pacote de descoberta completamente descrito.
 
 ## HTTP local stock — porta 80
 
@@ -450,7 +450,7 @@ O App também exige IP literal privado/link-local e rejeita destino público.
 
 ## Matriz atual do App
 
-| Recurso | v0.4.0 |
+| Recurso | v0.5.2 |
 |---|---|
 | validar câmera/credenciais | sim |
 | identificação LAN | sim |
@@ -460,7 +460,7 @@ O App também exige IP literal privado/link-local e rejeita destino público.
 | RTSP credential check | sim |
 | descobrir caminhos RTSP com ffprobe | sim |
 | snapshot RTSP | sim |
-| probe de portas | sim |
+| probe TCP connect-only de portas | não; removido por incompatibilidade com JA-A12 |
 | ONVIF GetCapabilities | sim, confirmado stock |
 | ONVIF GetProfiles/GetStreamUri | sim, read-only experimental |
 | ONVIF GetStatus/GetPresets | sim, read-only experimental |
@@ -524,7 +524,7 @@ Uma descoberta completa é permitida no startup para preencher:
 
 ### Operação normal
 
-Depois do startup, o background usa apenas uma conexão TCP curta à porta HTTP configurada para determinar `online/offline`.
+Depois do startup, o background usa apenas ICMP ping para determinar `online/offline`. Nenhuma porta de serviço da câmera é aberta apenas para heartbeat.
 
 Não são repetidos periodicamente:
 
@@ -542,3 +542,18 @@ Não são repetidos periodicamente:
 O navegador usa a Page Visibility API. Quando a aba/página do App está oculta, polling de status e mídia é suspenso. O card de mídia também usa IntersectionObserver, portanto snapshots não são solicitados enquanto o card estiver fora da área visível.
 
 Isso reduz carga no servidor HTTP/RTSP embarcado e evita tráfego sem utilidade.
+
+
+## Estabilidade de transporte — v0.5.2
+
+A auditoria posterior aos testes de hardware introduziu proteções adicionais para a stack embarcada:
+
+- todo acesso CGI/9898/ONVIF/RTSP é serializado no backend para evitar concorrência entre diagnóstico, PTZ e snapshots;
+- diagnóstico profundo manual é executado em background e somente uma instância pode ficar ativa;
+- ONVIF interrompe a sequência após falha de transporte ou autenticação, evitando séries de timeouts redundantes;
+- chamadas SOAP recebem um pequeno intervalo entre transações;
+- RTSP testa primeiro somente o stream principal de cada canal e usa substream como fallback;
+- caminhos adicionais descobertos via ONVIF só são sondados se ainda faltarem streams funcionais;
+- RtspConf possui cache curto em memória para evitar uma consulta HTTP a cada snapshot;
+- o último snapshot válido tem TTL limitado, impedindo que uma imagem antiga seja servida indefinidamente;
+- erros de subprocessos RTSP recebem sanitização adicional para impedir vazamento de credenciais.
