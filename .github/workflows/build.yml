@@ -23,7 +23,7 @@ jobs:
           python-version: "3.12"
 
       - name: Install dependencies
-        run: python -m pip install pyyaml -r jooan_ptz/app/requirements.txt
+        run: python -m pip install pytest pyyaml -r jooan_ptz/app/requirements.txt
 
       - name: Compile Python sources
         run: python -m compileall -q jooan_ptz/app
@@ -67,7 +67,7 @@ jobs:
           platforms: ${{ matrix.platform }}
           push: false
           build-args: |
-            BUILD_VERSION=0.2.0
+            BUILD_VERSION=0.3.0
             BUILD_ARCH=${{ matrix.arch }}
           tags: local/jooan-local-control:${{ matrix.arch }}
           cache-from: type=gha,scope=jooan-${{ matrix.arch }}
