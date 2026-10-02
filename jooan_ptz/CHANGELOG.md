@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.3.2
+
+- Fixed repeated HTTP health checks leaking persistent camera connections.
+- Switched CGI authentication validation to the confirmed PTZ `stop` command.
+- Treated `getPlatformID` as optional device information instead of the sole authentication check.
+- Added redaction for secrets embedded inside network exception messages.
+- Prevented timeout errors from leaking `userkey` or RTSP credentials into logs/UI.
+- Added regression tests for secret redaction and authentication validation.
+
+
 ## 0.3.1
 
 - Added Home Assistant `icon.png` (128x128).
