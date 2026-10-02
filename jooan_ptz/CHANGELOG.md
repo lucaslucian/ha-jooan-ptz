@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.3.1
+
+- Added Home Assistant `icon.png` (128x128).
+- Added Home Assistant `logo.png` (250x100).
+- Added an app-level `README.md` for the App Store introduction.
+- Expanded `DOCS.md` with setup, diagnostics, security and troubleshooting.
+- Added English and Brazilian Portuguese option translations.
+- Improved App Store description and panel title.
+- Added compatibility and UI design documentation.
+- Added the approved full-dashboard visual concept to the repository documentation.
+- Added CI validation for presentation files, translations and image formats.
+
 ## 0.3.0
 
 - Added read-only LAN capability discovery via `getAPLanP2PSupport`.

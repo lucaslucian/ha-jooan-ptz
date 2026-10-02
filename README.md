@@ -1,108 +1,118 @@
-# JOOAN Local Control for Home Assistant
+<p align="center">
+  <img src="jooan_ptz/logo.png" alt="JOOAN Local Control" width="250">
+</p>
 
-App experimental para controlar câmeras JOOAN/CAM720 compatíveis diretamente pela rede local, sem depender da nuvem JOOAN para os recursos implementados.
+<h1 align="center">JOOAN Local Control</h1>
 
-## Instalação pelo Home Assistant
+<p align="center">
+  Controle, diagnóstico e mídia de câmeras JOOAN/CAM720 diretamente pela rede local no Home Assistant.
+</p>
 
-No Home Assistant:
+<p align="center">
+  <img alt="Version" src="https://img.shields.io/badge/version-0.3.1-blue">
+  <img alt="Stage" src="https://img.shields.io/badge/stage-experimental-orange">
+  <img alt="aarch64" src="https://img.shields.io/badge/aarch64-yes-success">
+  <img alt="amd64" src="https://img.shields.io/badge/amd64-yes-success">
+</p>
 
-1. Abra **Configurações > Apps > Loja de Apps**.
-2. Abra o menu de repositórios.
+<p align="center">
+  <img src="docs/images/dashboard-concept.jpg" alt="Conceito visual do painel completo do JOOAN Local Control" width="900">
+</p>
+
+<p align="center"><em>Conceito visual aprovado para a evolução do painel completo. A imagem representa a direção de UI e não uma captura da implementação atual.</em></p>
+
+## Instalação
+
+[![Adicionar repositório ao Home Assistant](https://my.home-assistant.io/badges/supervisor_add_addon_repository.svg)](https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https%3A%2F%2Fgithub.com%2Flucaslucian%2Fha-jooan-ptz)
+
+Se o botão não preencher o repositório automaticamente:
+
+1. Abra **Configurações → Apps → Loja de Apps**.
+2. Abra **⋮ → Repositórios**.
 3. Adicione:
-
-```text
-https://github.com/lucaslucian/ha-jooan-ptz
-```
-
+   `https://github.com/lucaslucian/ha-jooan-ptz`
 4. Instale **JOOAN Local Control**.
-5. Configure o IP local da câmera, usuário e senha.
-6. Inicie o App e abra a interface pelo menu lateral.
+5. Informe IP, usuário e senha local da câmera.
+6. Inicie o App e abra **JOOAN Local Control** pelo Home Assistant.
 
-## Recursos atuais — v0.3.0
+## O que o App faz hoje
 
-- Comunicação somente com IP privado/local configurado.
-- Autenticação local via `userid` + `MD5(password)`.
-- Validação com `/goform/getPlatformID`.
-- Estado de rede com `/goform/getNetWorkState`.
-- Identificação/capability probe com `/goform/getAPLanP2PSupport`.
-- PTZ local: cima, baixo, esquerda, direita e parar.
-- PTZ por pressionar/segurar: envia movimento no pressionamento e `stop` ao soltar.
-- Leitura de recursos do dispositivo na porta 9898.
-- Estado read-only de SD, gravação, movimento, tracking e iluminação quando reportado pela câmera.
-- Detecção de lente dupla por `deviceFeatures["10008"] == "double"`.
-- Confirmação das credenciais RTSP por `RtspConf`, somente no backend.
-- Probe das portas HTTP, 9898, RTSP e ONVIF.
-- Probe ONVIF somente leitura na porta configurável 8899.
-- Descoberta dos caminhos RTSP realmente disponíveis com `ffprobe`.
-- Leitura de codec, resolução e áudio dos streams.
-- Snapshots JPEG locais gerados diretamente do RTSP.
-- Interface via Home Assistant Ingress.
-- Watchdog de saúde pelo Supervisor.
-- Filtragem por allowlist para não expor propriedades desconhecidas ou segredos da câmera.
-- Senha, `userkey`, chave RTSP e outros segredos não são devolvidos pela API de diagnóstico.
-
-## Política local-only
-
-O App exige que `camera_ip` seja um endereço IP literal privado ou link-local. Destinos públicos de Internet são recusados deliberadamente.
-
-O backend não oferece proxy genérico de URL, CGI ou `singleCMD`. Cada comando é permitido individualmente.
-
-## Protocolos locais conhecidos
-
-| Porta | Uso |
+| Recurso | Estado |
 |---|---|
-| 80/TCP | CGI `/goform/`, autenticação, PTZ e informações |
-| 554/TCP | RTSP |
-| 9898/TCP | recursos/propriedades do dispositivo |
-| 8899/TCP | candidato ONVIF OEM; sondado de forma read-only |
-| 7788/UDP | descoberta proprietária; ainda não implementada |
+| Validação local da câmera | ✅ |
+| PTZ cima/baixo/esquerda/direita/stop | ✅ |
+| Informações do dispositivo | ✅ |
+| Estado de rede | ✅ |
+| Leitura de capacidades na porta 9898 | ✅ |
+| Estado de SD, gravação, detecção, tracking e luzes | ✅ leitura |
+| Detecção de lente dupla | ✅ |
+| RTSP e descoberta de streams | ✅ |
+| Codec, resolução e áudio via ffprobe | ✅ |
+| Snapshots JPEG via RTSP | ✅ |
+| Probe ONVIF read-only | ✅ |
+| Presets/Home via ONVIF | 🔬 pesquisa |
+| Vídeo contínuo no navegador | 🧭 planejado |
+| Playback do microSD | 🔬 pesquisa |
+| Talk-back | 🔬 pesquisa |
 
-## Diagnóstico profundo
+## Filosofia local-only
 
-Na inicialização o App inicia um diagnóstico profundo em background. Ele também pode ser executado manualmente pela interface.
+As funções implementadas usam somente a comunicação LAN da câmera. O backend:
 
-O diagnóstico:
+- exige IP literal RFC1918, ULA ou link-local;
+- recusa destinos de Internet pública;
+- não oferece proxy genérico de URL ou `singleCMD`;
+- mantém senha, `userkey`, chave RTSP e outros segredos fora da API web;
+- usa allowlists para comandos, caminhos RTSP e propriedades exibidas.
 
-- testa as portas locais;
-- consulta os endpoints HTTP já conhecidos;
-- sonda quatro caminhos RTSP candidatos;
-- usa FFmpeg/ffprobe sem expor a URL autenticada;
-- tenta `GetCapabilities` no ONVIF;
-- habilita snapshots apenas para caminhos RTSP fixos em allowlist.
+A câmera pode ser isolada da Internet e continuar usando os recursos locais implementados pelo projeto.
 
-## Documentação técnica
+## Dispositivo usado na engenharia reversa
 
-O inventário de endpoints, portas, propriedades observadas, pesquisa ONVIF/RTSP, comandos OEM encontrados e regras de segurança está em:
+A principal referência de hardware real do projeto é uma **JOOAN JA-A12 / CAM720**, dual-lens. JOOAN reutiliza nomes comerciais em revisões diferentes; por isso o projeto faz capability probing e evita assumir que todo modelo oferece os mesmos endpoints.
 
-- [docs/LOCAL_PROTOCOL.md](docs/LOCAL_PROTOCOL.md)
+## Interface
 
-O documento separa explicitamente:
+A direção visual definida para o painel completo é um dashboard integrado ao Home Assistant, com:
 
-- o que foi observado no firmware stock;
-- o que já foi confirmado pelo projeto;
-- o que foi corroborado por engenharia reversa externa;
-- o que ainda é hipótese.
+- cabeçalho de saúde/conectividade;
+- snapshots ou vídeo das lentes;
+- PTZ em card próprio;
+- informações do dispositivo;
+- status RTSP/ONVIF;
+- SD/gravação;
+- detecção e tracking;
+- iluminação;
+- diagnóstico local;
+- ações avançadas separadas das funções de leitura.
 
-## Origem do conhecimento
+Essa referência está documentada em [docs/UI_DESIGN.md](docs/UI_DESIGN.md).
 
-A implementação consolida o que já existia em:
+## Documentação
 
-- `lucaslucian/ha-jooan-ptz`
-- `lucaslucian/joan_camcontrol`
+- [Documentação do App](jooan_ptz/DOCS.md)
+- [Protocolo local / engenharia reversa](docs/LOCAL_PROTOCOL.md)
+- [Compatibilidade](docs/COMPATIBILITY.md)
+- [Direção visual do painel](docs/UI_DESIGN.md)
+- [Changelog](jooan_ptz/CHANGELOG.md)
 
-Também usamos como referência técnica pública, sem incorporar firmware/binaries:
+## Portas locais conhecidas
 
-- `ADCDS/jooan-w3u-local-firmware`
+| Porta | Protocolo | Uso |
+|---|---|---|
+| 80/TCP | HTTP | CGI, autenticação, PTZ e informações |
+| 554/TCP | RTSP | vídeo e áudio |
+| 9898/TCP | HTTP | capabilities e estado do dispositivo |
+| 8899/TCP | ONVIF candidato | probe read-only |
+| 7788/UDP | proprietário | descoberta em investigação |
 
-O protocolo não é uma API pública documentada pela JOOAN. Ele foi identificado por engenharia reversa e testes com câmera real, portanto pode variar entre modelos e revisões.
+## Pesquisa
 
-## Próximas etapas
+O projeto consolida informações obtidas em:
 
-- Transformar os streams RTSP confirmados em vídeo contínuo no navegador.
-- Validar ONVIF stock e investigar `GetProfiles`, `GetStatus` e `GetPresets` read-only.
-- Implementar presets/Home somente após confirmação local.
-- Investigar áudio de escuta e talk-back sem cloud.
-- Investigar gravações/cartão SD pela LAN sem modificar firmware.
-- Descrever e implementar com segurança a descoberta UDP 7788.
-- Validar controles de tracking, detecção, LED/floodlight e IR antes de habilitar escrita.
-- Expor controles e sensores como entidades nativas do Home Assistant, mantendo o App como backend local.
+- `lucaslucian/ha-jooan-ptz`;
+- `lucaslucian/joan_camcontrol`;
+- capturas reais de tráfego CAM720/JOOAN;
+- pesquisa pública sobre a família JA-A12/W3-U.
+
+O protocolo não é uma API pública oficial da JOOAN e pode mudar conforme hardware e firmware.

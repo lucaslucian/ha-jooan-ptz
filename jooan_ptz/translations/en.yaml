@@ -1,0 +1,28 @@
+configuration:
+  camera_ip:
+    name: Camera IP address
+    description: Local RFC1918, ULA or link-local IP address of the camera. Public addresses and hostnames are rejected.
+  camera_user:
+    name: Camera username
+    description: Local camera user. Most tested devices use admin.
+  camera_password:
+    name: Camera password
+    description: Local camera password. It is used only by the backend and is not returned by the dashboard API.
+  http_port:
+    name: HTTP / CGI port
+    description: Local HTTP port used by JOOAN CGI endpoints.
+  features_port:
+    name: Device features port
+    description: Local HTTP port used for get_deviceFeatures. Usually 9898.
+  rtsp_port:
+    name: RTSP port
+    description: Local RTSP media port. Usually 554.
+  onvif_port:
+    name: ONVIF candidate port
+    description: Port used for the read-only ONVIF capability probe. JA-A12 research suggests 8899.
+  validation_interval:
+    name: Validation interval
+    description: Seconds between lightweight camera health checks.
+  debug:
+    name: Debug logging
+    description: Enables additional diagnostic logging. Credentials and authentication keys remain redacted.
