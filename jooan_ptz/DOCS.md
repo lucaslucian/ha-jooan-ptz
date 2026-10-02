@@ -27,7 +27,7 @@ Na aba **Configuração** do App:
 | `features_port` | `9898` | capabilities/estado |
 | `rtsp_port` | `554` | mídia RTSP |
 | `onvif_port` | `8899` | candidato ONVIF |
-| `validation_interval` | `30` | intervalo de validação em segundos |
+| `validation_interval` | `30` | intervalo do heartbeat leve (TCP/80) em segundos |
 | `debug` | `false` | diagnóstico adicional nos logs |
 
 Para o primeiro teste, `debug: true` pode ajudar. Desative depois de concluir o diagnóstico normal.
@@ -121,9 +121,19 @@ O botão **Executar diagnóstico profundo** verifica:
 4. ONVIF;
 5. caminhos RTSP conhecidos;
 6. codec/resolução/áudio;
-7. capabilities e estado reportados pela câmera.
+7. capabilities e estado reportados pela câmera;
+8. ONVIF Device Information;
+9. data/hora e timezone ONVIF;
+10. interfaces de rede ONVIF;
+11. scopes e lista de serviços ONVIF;
+12. video sources e audio sources;
+13. profiles e StreamUri;
+14. PTZ nodes/configurations/status;
+15. presets existentes.
 
-Esse diagnóstico também é executado em background na inicialização.
+O diagnóstico completo é executado **uma vez na inicialização**. Depois disso, o processo em background faz somente um heartbeat TCP na porta HTTP configurada para saber se a câmera continua online.
+
+A interface também economiza tráfego: quando a aba/página do App não está visível, o navegador pausa polling de status e snapshots. Os snapshots só são atualizados quando a página está visível e o card de mídia está em uso/na tela.
 
 ## Segurança
 

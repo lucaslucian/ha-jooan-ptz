@@ -21,8 +21,8 @@ configuration:
     name: Porta candidata ONVIF
     description: Porta usada no probe ONVIF somente leitura. A pesquisa da JA-A12 indica 8899.
   validation_interval:
-    name: Intervalo de validação
-    description: Segundos entre verificações leves do estado da câmera.
+    name: Intervalo do heartbeat
+    description: Segundos entre heartbeats TCP leves na porta HTTP. O App não repete CGI, ONVIF, porta 9898 ou RTSP em segundo plano.
   debug:
     name: Log de depuração
     description: Ativa logs adicionais de diagnóstico. Credenciais e chaves de autenticação continuam mascaradas.

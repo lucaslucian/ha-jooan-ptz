@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <img alt="Version" src="https://img.shields.io/badge/version-0.4.0-blue">
+  <img alt="Version" src="https://img.shields.io/badge/version-0.5.0-blue">
   <img alt="Stage" src="https://img.shields.io/badge/stage-experimental-orange">
   <img alt="aarch64" src="https://img.shields.io/badge/aarch64-yes-success">
   <img alt="amd64" src="https://img.shields.io/badge/amd64-yes-success">
@@ -54,6 +54,16 @@ Se o botão não preencher o repositório automaticamente:
 | Vídeo contínuo no navegador | 🧭 planejado |
 | Playback do microSD | 🔬 pesquisa |
 | Talk-back | 🔬 pesquisa |
+
+## Uso de rede e atividade
+
+O App evita consultar a câmera sem necessidade:
+
+- na inicialização executa uma descoberta completa para preencher informações, capabilities, ONVIF e RTSP;
+- depois disso o processo em background usa somente um heartbeat TCP leve na porta HTTP;
+- a interface para de consultar `/api/status` quando a aba do App fica oculta;
+- snapshots só são atualizados quando a aba está visível **e** o card de mídia está na área visível da página;
+- diagnóstico completo só roda novamente quando solicitado manualmente.
 
 ## Filosofia local-only
 

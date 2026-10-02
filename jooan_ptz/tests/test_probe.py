@@ -4,7 +4,10 @@ import camera as camera_module
 from camera import JooanCamera
 from probe import (
     _extract_capability_services,
+    _extract_device_information,
+    _extract_network_interfaces,
     _extract_presets,
+    _extract_ptz_nodes,
     _extract_profiles,
     _extract_stream_uri,
     _safe_rtsp_descriptor,
@@ -178,3 +181,32 @@ def test_rtsp_probe_runs_sequentially(monkeypatch):
     assert result["streams"][-1]["path"] == "/media/live/profile0"
     assert result["streams"][-1]["source"] == "onvif"
     assert len(calls) == 5
+
+
+def test_extract_extended_onvif_diagnostics():
+    root = ET.fromstring(
+        """<Envelope>
+          <Manufacturer>JOOAN</Manufacturer>
+          <Model>JA-A12</Model>
+          <FirmwareVersion>1.2.3</FirmwareVersion>
+          <SerialNumber>serial</SerialNumber>
+          <HardwareId>hw</HardwareId>
+          <NetworkInterfaces token="eth0">
+            <Enabled>true</Enabled>
+            <Info><Name>eth0</Name><HwAddress>AA:BB:CC:DD:EE:FF</HwAddress><MTU>1500</MTU></Info>
+            <IPv4><Config><Manual><Address>10.0.0.10</Address><PrefixLength>24</PrefixLength></Manual></Config></IPv4>
+          </NetworkInterfaces>
+          <PTZNode token="node0">
+            <Name>PTZ</Name>
+            <HomeSupported>true</HomeSupported>
+            <MaximumNumberOfPresets>8</MaximumNumberOfPresets>
+          </PTZNode>
+        </Envelope>"""
+    )
+    assert _extract_device_information(root)["model"] == "JA-A12"
+    interfaces = _extract_network_interfaces(root)
+    assert interfaces[0]["token"] == "eth0"
+    assert interfaces[0]["ipv4"][0]["address"] == "10.0.0.10"
+    nodes = _extract_ptz_nodes(root)
+    assert nodes[0]["home_supported"] == "true"
+    assert nodes[0]["maximum_presets"] == "8"

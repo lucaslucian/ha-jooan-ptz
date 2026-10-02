@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.5.0
+
+- Added a low-impact background heartbeat that only opens TCP/80 to determine whether the camera is online.
+- Full CGI, port 9898, ONVIF and RTSP discovery now runs at startup and only when a user explicitly requests a diagnostic refresh.
+- Paused browser status polling and media refresh while the Home Assistant App tab/page is hidden.
+- Media snapshots refresh only while the page is visible and the media card is on screen.
+- Added read-only ONVIF diagnostics for device information, system date/time, network interfaces, scopes and service list.
+- Added ONVIF video-source and audio-source discovery.
+- Added PTZ node and PTZ configuration discovery, in addition to status and presets.
+- Kept all new diagnostics read-only and pinned to the configured private camera IP.
+
+
 ## 0.4.1
 
 - Fixed snapshots being recreated every 5 seconds by the status polling loop.

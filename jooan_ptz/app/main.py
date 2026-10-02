@@ -21,7 +21,9 @@ _snapshot_cache: dict[tuple[str, int, str], bytes] = {}
 _validation_started = False
 _state = {
     "configured": False,
+    "online": False,
     "authenticated": False,
+    "initial_scan_complete": False,
     "camera_info": None,
     "network_state": None,
     "lan_support": None,
@@ -32,6 +34,8 @@ _state = {
     "media_probe": None,
     "last_error": None,
     "last_check": None,
+    "last_seen": None,
+    "last_heartbeat": None,
     "last_deep_probe": None,
 }
 
@@ -112,7 +116,9 @@ def validate_camera(*, deep: bool = False) -> bool:
                 "reported_channel_count": (device_info or {}).get("channel_count", 1),
             }
 
+        now = time.time()
         values = {
+            "online": True,
             "authenticated": True,
             "camera_info": platform,
             "network_state": network,
@@ -120,7 +126,8 @@ def validate_camera(*, deep: bool = False) -> bool:
             "device_info": device_info,
             "stream_info": stream_info,
             "last_error": None,
-            "last_check": time.time(),
+            "last_check": now,
+            "last_seen": now,
         }
 
         if deep:
@@ -140,12 +147,27 @@ def validate_camera(*, deep: bool = False) -> bool:
                 values["media_probe"] = {"reachable": False, "streams": [], "error": redact_secrets(exc)}
             values["last_deep_probe"] = time.time()
 
+        values["initial_scan_complete"] = True
         update_state(**values)
         return True
     except Exception as exc:
         safe_error = redact_secrets(exc)
         _LOGGER.warning("JOOAN camera validation failed: %s", safe_error)
-        update_state(authenticated=False, last_error=safe_error, last_check=time.time())
+        online = False
+        try:
+            heartbeat = get_camera().heartbeat()
+            online = bool(heartbeat.get("online"))
+        except Exception:
+            pass
+        now = time.time()
+        update_state(
+            online=online,
+            authenticated=False,
+            initial_scan_complete=True,
+            last_error=safe_error,
+            last_check=now,
+            last_seen=now if online else _state.get("last_seen"),
+        )
         return False
 
 
@@ -156,11 +178,40 @@ def _validation_interval() -> int:
         return 30
 
 
+def heartbeat_camera() -> bool:
+    """Update only liveness between full/manual diagnostics."""
+    try:
+        heartbeat = get_camera().heartbeat()
+        now = time.time()
+        online = bool(heartbeat.get("online"))
+        values = {
+            "configured": True,
+            "online": online,
+            "last_heartbeat": now,
+        }
+        if online:
+            values["last_seen"] = now
+            if _state.get("authenticated"):
+                values["last_error"] = None
+        else:
+            values["last_error"] = heartbeat.get("error") or "Camera is offline"
+        update_state(**values)
+        return online
+    except Exception as exc:
+        update_state(
+            online=False,
+            last_heartbeat=time.time(),
+            last_error=redact_secrets(exc),
+        )
+        return False
+
+
 def validation_loop() -> None:
+    # Full discovery is intentionally performed only once at startup.
     validate_camera(deep=True)
     while True:
         time.sleep(_validation_interval())
-        validate_camera(deep=False)
+        heartbeat_camera()
 
 
 def start_validation() -> None:
@@ -195,7 +246,10 @@ def index():
 <div class="card"><h2>Rede</h2><pre id="network">Aguardando...</pre></div>
 
 <script>
-let authenticated=false,activeDirection=null,lastData=null;
+let authenticated=false,online=false,activeDirection=null,lastData=null;
+let statusTimer=null,snapshotTimer=null,mediaVisible=true;
+const STATUS_REFRESH_MS=5000;
+const SNAPSHOT_REFRESH_MS=15000;
 const buttons=[...document.querySelectorAll('[data-dir]')];
 function api(path){return new URL(path,window.location.href).toString()}
 function enableControls(enabled){buttons.forEach(b=>b.disabled=!enabled);document.getElementById('stop').disabled=!enabled}
@@ -226,7 +280,7 @@ async function loadSnapshot(img){
   }
 }
 async function refreshSnapshots(){
-  if(snapshotRefreshRunning)return;
+  if(document.hidden||!mediaVisible||snapshotRefreshRunning)return;
   snapshotRefreshRunning=true;
   const button=document.getElementById('snapshots');
   const previousText=button.textContent;
@@ -266,7 +320,7 @@ function renderMedia(data,force=false){
     const img=document.createElement('img');img.alt='Snapshot '+item.path;img.dataset.stream=stream;
     box.append(title,img,meta);root.appendChild(box)
   }
-  void refreshSnapshots()
+  if(!document.hidden&&mediaVisible)void refreshSnapshots()
 }
 async function deepProbe(){
   const b=document.getElementById('probe');b.disabled=true;b.textContent='Diagnosticando...';
@@ -282,23 +336,57 @@ document.getElementById('snapshots').addEventListener('click',refreshSnapshots);
 async function refresh(){
   try{
     const r=await fetch(api('api/status'),{cache:'no-store'});if(!r.ok)throw new Error('HTTP '+r.status);
-    const d=await r.json();lastData=d;authenticated=!!d.authenticated;enableControls(authenticated);
-    const status=document.getElementById('status');status.className='status '+(authenticated?'ok':'bad');
-    status.textContent=authenticated?'Câmera autenticada e acessível pela LAN':'Câmera indisponível ou credenciais inválidas';
+    const d=await r.json();lastData=d;online=!!d.online;authenticated=!!d.authenticated;enableControls(online&&authenticated);
+    const status=document.getElementById('status');status.className='status '+(online&&authenticated?'ok':'bad');
+    if(!online)status.textContent='Câmera offline';
+    else if(!authenticated)status.textContent='Câmera online, mas autenticação não validada';
+    else status.textContent='Câmera autenticada e acessível pela LAN';
     document.getElementById('device').textContent=d.device_info?JSON.stringify(d.device_info,null,2):'Informações não disponíveis';
     document.getElementById('capabilities').textContent=d.device_info?JSON.stringify({capabilities:d.device_info.capabilities,local_state:d.device_info.local_state},null,2):'Informações não disponíveis';
     document.getElementById('services').textContent=d.services?JSON.stringify(d.services,null,2):'Execute o diagnóstico profundo';
     document.getElementById('onvif').textContent=d.onvif_info?JSON.stringify(d.onvif_info,null,2):'Execute o diagnóstico profundo';
     document.getElementById('lan').textContent=JSON.stringify({lan_support:d.lan_support,stream_info:d.stream_info,media_probe:d.media_probe},null,2);
     document.getElementById('info').textContent=d.camera_info?JSON.stringify(d.camera_info,null,2):'Informações não disponíveis';
-    document.getElementById('network').textContent=d.network_state?JSON.stringify(d.network_state,null,2):'Informações não disponíveis';
+    document.getElementById('network').textContent=JSON.stringify({
+      online:d.online,
+      last_seen:d.last_seen,
+      last_heartbeat:d.last_heartbeat,
+      network_state:d.network_state
+    },null,2);
     document.getElementById('command').textContent=d.last_error?'Último erro: '+d.last_error:'';
     renderMedia(d);
   }catch(e){
     authenticated=false;enableControls(false);document.getElementById('status').textContent='App/API indisponível';document.getElementById('command').textContent='Erro: '+e.message
   }
 }
-enableControls(false);refresh();setInterval(refresh,5000)
+function stopActivePolling(){
+  if(statusTimer){clearInterval(statusTimer);statusTimer=null}
+  if(snapshotTimer){clearInterval(snapshotTimer);snapshotTimer=null}
+}
+function startActivePolling(){
+  stopActivePolling();
+  if(document.hidden)return;
+  void refresh();
+  statusTimer=setInterval(()=>{if(!document.hidden)void refresh()},STATUS_REFRESH_MS);
+  snapshotTimer=setInterval(()=>{
+    if(!document.hidden&&mediaVisible)void refreshSnapshots()
+  },SNAPSHOT_REFRESH_MS)
+}
+const mediaRoot=document.getElementById('media');
+if('IntersectionObserver' in window){
+  const observer=new IntersectionObserver(entries=>{
+    mediaVisible=entries.some(entry=>entry.isIntersecting);
+    if(mediaVisible&&!document.hidden)void refreshSnapshots()
+  },{threshold:0.05});
+  observer.observe(mediaRoot)
+}
+document.addEventListener('visibilitychange',()=>{
+  if(document.hidden)stopActivePolling();
+  else startActivePolling()
+});
+window.addEventListener('pagehide',stopActivePolling);
+window.addEventListener('pageshow',()=>{if(!document.hidden)startActivePolling()});
+enableControls(false);startActivePolling()
 </script></body></html>""", mimetype="text/html")
 
 
