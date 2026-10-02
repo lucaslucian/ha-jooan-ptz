@@ -93,14 +93,8 @@ RTSP_PATH_CANDIDATES = (
 )
 
 RTSP_DISCOVERED_PATH_RE = re.compile(
-    r"^/[A-Za-z0-9._~!RTSP_PATH_CANDIDATES = (
-    "/live/ch00_0",
-    "/live/ch00_1",
-    "/live/ch01_0",
-    "/live/ch01_1",
-)'()*+,;=:@%/-]{1,160}$"
+    r"^/[A-Za-z0-9._~!$&'()*+,;=:@%/-]{1,160}$"
 )
-
 
 class JooanCameraError(Exception):
     """Base error for local JOOAN communication."""
