@@ -5,6 +5,7 @@ import ipaddress
 import json
 import logging
 import re
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from urllib.parse import quote, urljoin
 
@@ -255,9 +256,21 @@ class JooanCamera:
 
         if addr.is_unspecified or addr.is_loopback or addr.is_multicast:
             raise ValueError("Camera IP must point to a LAN device")
-        if not (addr.is_private or addr.is_link_local):
+
+        if addr.version == 4:
+            allowed = any(
+                addr in ipaddress.ip_network(network)
+                for network in ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "169.254.0.0/16")
+            )
+        else:
+            allowed = any(
+                addr in ipaddress.ip_network(network)
+                for network in ("fc00::/7", "fe80::/10")
+            )
+
+        if not allowed:
             raise ValueError(
-                "Camera IP is not private/local. This app intentionally blocks public Internet targets"
+                "Camera IP is not RFC1918/ULA/link-local. This app intentionally blocks public Internet targets"
             )
         return raw
 
