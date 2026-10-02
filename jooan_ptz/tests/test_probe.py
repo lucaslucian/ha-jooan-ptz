@@ -148,7 +148,7 @@ def test_rtsp_probe_runs_sequentially(monkeypatch):
 
     calls = []
 
-    def fake_ffprobe(url):
+    def fake_ffprobe(url, timeout=None):
         calls.append(url)
         return {"available": True, "error": None, "streams": [{"codec_type": "video"}]}
 
