@@ -270,4 +270,18 @@ def test_profile_extraction_is_bounded():
         f'<Profiles token="p{i}"><Name>P{i}</Name></Profiles>' for i in range(20)
     ) + "</Envelope>"
     profiles = _extract_profiles(ET.fromstring(xml))
-    assert len(profiles) == 8
+    assert len(profiles) == 4
+
+
+def test_malformed_capability_xaddr_is_ignored():
+    root = ET.fromstring(
+        """<Envelope>
+          <Capabilities>
+            <Media><XAddr>http://[broken/onvif/Media</XAddr></Media>
+            <PTZ><XAddr>http://127.0.0.1:8899/onvif/Ptz</XAddr></PTZ>
+          </Capabilities>
+        </Envelope>"""
+    )
+    services = _extract_capability_services(root)
+    assert "media" not in services
+    assert services["ptz"]["path"] == "/onvif/Ptz"
