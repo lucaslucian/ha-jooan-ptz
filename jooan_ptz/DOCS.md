@@ -48,7 +48,7 @@ Movimentos confirmados:
 - direita;
 - stop.
 
-Ao manter uma direção pressionada, o movimento é iniciado. Ao soltar o botão, o App envia `stop`.
+Ao manter uma direção pressionada, o movimento é iniciado. Ao soltar o botão, o App envia `stop`. As requisições PTZ da interface levam uma sequência monotônica para impedir que uma direção atrasada seja executada depois de um `stop` mais novo. A interface também tenta `stop` ao perder foco, ser ocultada ou iniciar diagnóstico profundo.
 
 ### Informações e capabilities
 
@@ -131,7 +131,7 @@ O botão **Executar diagnóstico profundo** verifica:
 14. PTZ nodes/configurations/status;
 15. presets existentes.
 
-O diagnóstico completo é executado **uma vez na inicialização**. Depois disso, o processo em background usa somente ICMP ping para saber se a câmera continua online, sem abrir conexão em HTTP, RTSP, 9898 ou ONVIF.
+O diagnóstico completo é executado **uma vez na inicialização**. Depois disso, o processo em background usa somente ICMP ping para saber se a câmera continua online, sem abrir conexão em HTTP, RTSP, 9898 ou ONVIF. Se a câmera reiniciar ou voltar à rede e estiver online porém ainda não autenticada no App, uma validação CGI leve pode ser tentada com intervalo mínimo de 5 minutos; ONVIF/RTSP profundo não é repetido automaticamente.
 
 A interface também economiza tráfego: quando a aba/página do App não está visível, o navegador pausa polling de status e snapshots. Os snapshots só são atualizados quando a página está visível e o card de mídia está em uso/na tela. O diagnóstico profundo manual roda em background, uma instância por vez, sem manter a requisição HTTP do painel aberta durante todo o probe.
 
