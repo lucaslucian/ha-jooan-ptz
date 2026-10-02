@@ -1,46 +1,54 @@
-# JOOAN PTZ
+# JOOAN Local Control
 
-Controle local de câmeras JOOAN compatíveis através da rede LAN.
+Controle local de câmeras JOOAN/CAM720 compatíveis pela LAN.
 
 ## Configuração
 
-Configure no Home Assistant:
-
-- **Camera IP**: endereço IP da câmera na rede local.
-- **Camera User**: usuário da câmera. O padrão é `admin`, mas pode ser alterado.
-- **Camera Password**: senha atual da câmera.
-- **Debug**: habilitado por padrão durante a fase de desenvolvimento.
-
-A senha nunca é exibida nos logs. O add-on calcula localmente o `MD5` da senha para gerar o `userkey` exigido pela API CGI local.
+- **camera_ip**: IP privado/local da câmera. Hostnames e IPs públicos são rejeitados.
+- **camera_user**: usuário local da câmera. Normalmente `admin`.
+- **camera_password**: senha local da câmera.
+- **http_port**: porta CGI local. Padrão `80`.
+- **features_port**: porta de propriedades do dispositivo. Padrão `9898`.
+- **rtsp_port**: porta RTSP. Padrão `554`.
+- **validation_interval**: intervalo de validação em segundos.
+- **debug**: registra diagnóstico ocultando `userkey`.
 
 ## Validação
 
-Ao iniciar, o add-on verifica as credenciais usando o endpoint somente leitura:
+Ao iniciar, o App consulta `getPlatformID`, `getNetWorkState`, recursos na porta 9898 e `RtspConf`.
 
-`/goform/getPlatformID`
+A autenticação CGI usa:
 
-Se a resposta for válida, as informações retornadas pela câmera são mostradas no painel. O estado da rede também é consultado através de `/goform/getNetWorkState`.
+```text
+userid = usuário configurado
+userkey = MD5(senha)
+```
 
-Os controles PTZ permanecem desativados enquanto a câmera não estiver configurada, acessível ou autenticada.
+A senha e o hash não são exibidos nos logs.
 
-## PTZ disponível
+## PTZ
 
-- Cima
-- Baixo
-- Esquerda
-- Direita
-- Parar
+O endpoint confirmado é:
 
-## Debug
+```text
+/goform/SingleHandlebyCommand?singleCMD=up|down|left|right|stop
+```
 
-O debug está ativado por padrão nesta fase para facilitar a engenharia reversa. Os logs registram endpoint, código HTTP e corpo retornado pela câmera, mas não registram senha nem `userkey`.
+A interface envia o comando de direção ao pressionar e envia `stop` ao soltar.
 
-As respostas podem ajudar a identificar informações adicionais do dispositivo e futuramente descobrir dados relacionados a vídeo/stream.
+## RTSP
 
-## Privacidade e rede
+O App consulta `RtspConf` para confirmar credenciais RTSP, mas não devolve essas credenciais pela API web.
 
-O controle PTZ usa HTTP diretamente entre o add-on e a câmera na LAN. Não é necessário MQTT ou serviço de nuvem para os comandos locais confirmados.
+Caminhos conhecidos:
 
-## Limitações atuais
+```text
+/live/ch00_0
+/live/ch01_0
+```
 
-O stream de vídeo, home/reset e outros comandos ainda estão sendo investigados. O add-on não assume que exista um equivalente local para comandos descobertos originalmente via MQTT.
+O segundo caminho só é apresentado quando o dispositivo indica lente dupla.
+
+## Segurança
+
+A porta web não é publicada no host; a interface usa Home Assistant Ingress. O destino da câmera precisa ser um IP privado/link-local literal.
