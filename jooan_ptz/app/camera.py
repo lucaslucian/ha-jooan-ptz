@@ -448,6 +448,10 @@ class JooanCamera:
         data = self._parse_camera_response(response.text)
         properties = data.get("properties") or {}
         features = data.get("deviceFeatures") or {}
+        if not isinstance(properties, dict):
+            properties = {}
+        if not isinstance(features, dict):
+            features = {}
 
         lens_mode = features.get(FEATURE_KEY_LENS_MODE)
         channel_count = 2 if lens_mode == FEATURE_VALUE_DOUBLE_LENS else 1
@@ -583,7 +587,13 @@ class JooanCamera:
                 }
             )
             time.sleep(RTSP_PROBE_GAP)
-            return bool(result.get("available"))
+            return bool(
+                result.get("available")
+                and any(
+                    isinstance(stream, dict) and stream.get("codec_type") == "video"
+                    for stream in result.get("streams", [])
+                )
+            )
 
         for channel in range(channel_count):
             main_path = f"/live/ch{channel:02d}_0"
