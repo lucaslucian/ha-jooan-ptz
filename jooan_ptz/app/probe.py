@@ -3,10 +3,8 @@ from __future__ import annotations
 import http.client
 import json
 import logging
-import socket
 import subprocess
 import xml.etree.ElementTree as ET
-from dataclasses import dataclass
 from typing import Any
 from urllib.parse import urlsplit
 
@@ -19,22 +17,31 @@ ONVIF_PTZ = "http://www.onvif.org/ver20/ptz/wsdl"
 ONVIF_SCHEMA = "http://www.onvif.org/ver10/schema"
 
 
-@dataclass(slots=True)
-class PortProbe:
-    port: int
-    reachable: bool
-    error: str | None = None
+def icmp_probe(host: str, timeout: float = 1.5) -> dict[str, Any]:
+    """Check liveness without opening a camera service TCP socket.
 
-    def as_dict(self) -> dict[str, Any]:
-        return {"port": self.port, "reachable": self.reachable, "error": self.error}
-
-
-def tcp_probe(host: str, port: int, timeout: float = 1.5) -> PortProbe:
+    The tested JA-A12 can become unresponsive when clients open TCP
+    connections and close them without speaking the expected protocol.
+    ICMP avoids consuming HTTP/RTSP/ONVIF server connection slots.
+    """
+    seconds = max(1, int(round(timeout)))
     try:
-        with socket.create_connection((host, int(port)), timeout=timeout):
-            return PortProbe(int(port), True)
+        proc = subprocess.run(
+            ["ping", "-c", "1", "-W", str(seconds), host],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=max(timeout + 1.0, 2.0),
+            check=False,
+        )
+        return {
+            "online": proc.returncode == 0,
+            "method": "icmp",
+            "error": None if proc.returncode == 0 else "ICMP ping failed",
+        }
+    except subprocess.TimeoutExpired:
+        return {"online": False, "method": "icmp", "error": "ICMP ping timeout"}
     except OSError as exc:
-        return PortProbe(int(port), False, str(exc))
+        return {"online": False, "method": "icmp", "error": str(exc)}
 
 
 def _local_name(tag: str) -> str:
@@ -462,12 +469,9 @@ def onvif_probe(host: str, port: int = 8899, timeout: float = 3.0) -> dict[str, 
         "ptz": {},
         "error": None,
     }
-    port_status = tcp_probe(host, port, timeout=min(timeout, 1.5))
-    result["reachable"] = port_status.reachable
-    if not port_status.reachable:
-        result["error"] = port_status.error
-        return result
-
+    # Do not perform a connect-only TCP pre-probe here. Some stock JOOAN
+    # firmware appears to mishandle sockets that are opened and closed without
+    # an ONVIF request. Go straight to a valid SOAP request instead.
     device_request = _soap_envelope(
         ONVIF_DEVICE,
         "tds",
@@ -498,6 +502,8 @@ def onvif_probe(host: str, port: int = 8899, timeout: float = 3.0) -> dict[str, 
             }
         )
         device_response = response
+        if response["status"] is not None:
+            result["reachable"] = True
         if response["status"] == 200:
             break
 
