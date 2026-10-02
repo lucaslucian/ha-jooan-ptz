@@ -9,6 +9,7 @@
 - Added English and Brazilian Portuguese option translations.
 - Improved App Store description and panel title.
 - Added compatibility and UI design documentation.
+- Added the approved full-dashboard visual concept to the repository documentation.
 - Added CI validation for presentation files, translations and image formats.
 
 ## 0.3.0
