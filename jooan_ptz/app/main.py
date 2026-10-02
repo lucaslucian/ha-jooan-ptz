@@ -391,7 +391,7 @@ async function loadSnapshot(img){
   }
 }
 async function refreshSnapshots(){
-  if(document.hidden||!mediaVisible||snapshotRefreshRunning||lastData?.probe_running)return;
+  if(document.hidden||!mediaVisible||snapshotRefreshRunning||lastData?.probe_running||activeDirection)return;
   snapshotRefreshRunning=true;
   const button=document.getElementById('snapshots');
   const previousText=button.textContent;
@@ -612,9 +612,14 @@ def ptz(direction: str):
 @app.post("/api/test")
 def test():
     with _state_lock:
-        if _state.get("probe_running"):
+        if _state.get("probe_running") or _state.get("ptz_moving"):
             return jsonify({"ok": False, "busy": True}), 409
-    return jsonify({"ok": validate_camera(deep=False)})
+    if not _camera_io_lock.acquire(blocking=False):
+        return jsonify({"ok": False, "busy": True}), 409
+    try:
+        return jsonify({"ok": _validate_camera_locked(deep=False)})
+    finally:
+        _camera_io_lock.release()
 
 
 def _manual_probe_worker() -> None:
@@ -674,6 +679,13 @@ def _capture_snapshot_with_fallback(stream: str) -> tuple[bytes, bool]:
                 cached = cached_image
             else:
                 _snapshot_cache.pop(key, None)
+
+        with _state_lock:
+            ptz_moving = bool(_state.get("ptz_moving"))
+        if ptz_moving:
+            if cached is not None:
+                return cached, True
+            raise RuntimeError("Snapshot paused while PTZ is moving")
 
         if not _camera_io_lock.acquire(timeout=CAMERA_IO_LOCK_TIMEOUT):
             if cached is not None:
