@@ -1,4 +1,4 @@
-name: Build JOOAN PTZ Add-on
+name: Validate JOOAN Local Control
 
 on:
   push:
@@ -8,11 +8,10 @@ on:
 
 permissions:
   contents: read
-  packages: write
 
 jobs:
-  python-tests:
-    name: Python tests
+  python:
+    name: Python validation
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -23,25 +22,33 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install test dependencies
+      - name: Install dependencies
         run: python -m pip install pyyaml -r jooan_ptz/app/requirements.txt
 
       - name: Compile Python sources
         run: python -m compileall -q jooan_ptz/app
 
-  addon-build:
-    name: Build add-on (${{ matrix.arch }})
+      - name: Validate YAML
+        run: |
+          python - <<'PY'
+          import yaml
+          for path in ["repository.yaml", "jooan_ptz/config.yaml"]:
+              with open(path, encoding="utf-8") as file:
+                  yaml.safe_load(file)
+              print(f"OK: {path}")
+          PY
+
+  docker:
+    name: Container build (${{ matrix.arch }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         include:
-          - arch: amd64
-            platform: linux/amd64
-          - arch: aarch64
-            platform: linux/arm64
-          - arch: armv7
-            platform: linux/arm/v7
+          - platform: linux/amd64
+            arch: amd64
+          - platform: linux/arm64
+            arch: aarch64
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -52,44 +59,16 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Build add-on image
+      - name: Build app image
         uses: docker/build-push-action@v6
         with:
           context: ./jooan_ptz
           file: ./jooan_ptz/Dockerfile
           platforms: ${{ matrix.platform }}
-          build-args: |
-            BUILD_FROM=ghcr.io/home-assistant/${{ matrix.arch }}-base:3.22
           push: false
-          tags: local/jooan-ptz:${{ matrix.arch }}
+          build-args: |
+            BUILD_VERSION=0.2.0
+            BUILD_ARCH=${{ matrix.arch }}
+          tags: local/jooan-local-control:${{ matrix.arch }}
           cache-from: type=gha,scope=jooan-${{ matrix.arch }}
           cache-to: type=gha,mode=max,scope=jooan-${{ matrix.arch }}
-
-  config-check:
-    name: Add-on configuration checks
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Validate required files
-        run: |
-          test -f repository.yaml
-          test -f jooan_ptz/config.yaml
-          test -f jooan_ptz/build.yaml
-          test -f jooan_ptz/Dockerfile
-          test -f jooan_ptz/run.sh
-          test -f jooan_ptz/app/main.py
-          test -f jooan_ptz/app/camera.py
-          test -f jooan_ptz/app/requirements.txt
-
-      - name: Validate YAML
-        run: |
-          python3 -m pip install pyyaml
-          python3 - <<'PY'
-          import yaml
-          for path in ["repository.yaml", "jooan_ptz/config.yaml", "jooan_ptz/build.yaml"]:
-              with open(path, encoding="utf-8") as f:
-                  yaml.safe_load(f)
-              print(f"OK: {path}")
-          PY
