@@ -1,27 +1,35 @@
-name: JOOAN PTZ
-description: Local LAN PTZ control for JOOAN cameras
-version: "0.1.7"
+name: JOOAN Local Control
+description: Local-only LAN control for compatible JOOAN/CAM720 cameras
+version: "0.2.0"
 slug: jooan_ptz
+url: "https://github.com/lucaslucian/ha-jooan-ptz"
+stage: experimental
 init: false
 arch:
   - amd64
   - aarch64
-  - armv7
 startup: application
 boot: auto
-webui: "http://[HOST]:[PORT:8099]/"
 ingress: true
 ingress_port: 8099
 panel_icon: mdi:cctv
-ports:
-  8099/tcp: JOOAN PTZ web interface
+panel_title: JOOAN Camera
+panel_admin: true
 options:
-  camera_ip: ""
+  camera_ip: null
   camera_user: admin
-  camera_password: ""
-  debug: true
+  camera_password: null
+  http_port: 80
+  features_port: 9898
+  rtsp_port: 554
+  validation_interval: 30
+  debug: false
 schema:
   camera_ip: str
   camera_user: str
   camera_password: password
+  http_port: port
+  features_port: port
+  rtsp_port: port
+  validation_interval: "int(10,3600)"
   debug: bool
