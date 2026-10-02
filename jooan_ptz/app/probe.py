@@ -73,9 +73,13 @@ def _safe_rtsp_descriptor(uri: str | None) -> dict[str, Any] | None:
     path = parsed.path or "/"
     if not path.startswith("/") or ".." in path:
         return None
+    try:
+        reported_port = parsed.port
+    except ValueError:
+        reported_port = None
     return {
         "path": path,
-        "reported_port": parsed.port,
+        "reported_port": reported_port,
         "reported_host_is_loopback": parsed.hostname in {"127.0.0.1", "::1", "localhost"},
     }
 
@@ -173,10 +177,15 @@ def _extract_capability_services(root: ET.Element | None) -> dict[str, dict[str,
                 break
         if not xaddr:
             continue
+        parsed = urlsplit(xaddr)
+        try:
+            reported_port = parsed.port
+        except ValueError:
+            reported_port = None
         services[name] = {
             "path": _safe_service_path(xaddr),
-            "reported_scheme": urlsplit(xaddr).scheme or None,
-            "reported_port": urlsplit(xaddr).port,
+            "reported_scheme": parsed.scheme or None,
+            "reported_port": reported_port,
         }
     return services
 
