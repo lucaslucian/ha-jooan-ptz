@@ -2,6 +2,10 @@
 
 Este documento registra a referência visual escolhida para a evolução do painel completo do **JOOAN Local Control**.
 
+![Conceito visual do painel completo](images/dashboard-concept.jpg)
+
+> Esta imagem é a referência visual aprovada para o projeto. Ela é um conceito de interface, não uma captura da implementação atual. O frontend deve evoluir nessa direção sem exibir recursos que ainda não foram confirmados pelo backend.
+
 ## Estilo
 
 A interface deve parecer parte do ecossistema Home Assistant:
