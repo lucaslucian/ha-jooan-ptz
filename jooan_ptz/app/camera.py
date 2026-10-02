@@ -553,6 +553,19 @@ class JooanCamera:
     def probe_onvif(self) -> dict:
         return onvif_probe(self.ip, self.onvif_port)
 
+    def heartbeat(self) -> dict:
+        """Very cheap background liveness check.
+
+        It opens one TCP connection to the configured HTTP port and does not
+        call CGI, ONVIF, RTSP or the features service.
+        """
+        probe = tcp_probe(self.ip, self.http_port, timeout=1.5)
+        return {
+            "online": probe.reachable,
+            "port": self.http_port,
+            "error": probe.error,
+        }
+
     def probe_services(self) -> dict:
         return {
             "http": tcp_probe(self.ip, self.http_port).as_dict(),
