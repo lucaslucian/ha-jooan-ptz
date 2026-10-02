@@ -28,6 +28,11 @@ jobs:
       - name: Compile Python sources
         run: python -m compileall -q jooan_ptz/app
 
+      - name: Run tests
+        env:
+          PYTHONPATH: jooan_ptz/app
+        run: pytest -q jooan_ptz/tests
+
       - name: Validate YAML
         run: |
           python - <<'PY'
