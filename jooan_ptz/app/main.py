@@ -1,87 +1,96 @@
+from __future__ import annotations
+
 import json
 import logging
-import os
 import threading
 import time
 from pathlib import Path
 
-from flask import Flask, jsonify, Response
+from flask import Flask, Response, jsonify, request
 
-from camera import JooanCamera
+from camera import JooanAuthError, JooanCamera
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
 app = Flask(__name__)
 _LOGGER = logging.getLogger("jooan_ptz")
 CONFIG_PATH = Path("/data/options.json")
+_TRUSTED_INGRESS_IPS = {"172.30.32.2", "127.0.0.1", "::1"}
 
 _state_lock = threading.Lock()
+_validation_started = False
 _state = {
     "configured": False,
     "authenticated": False,
     "camera_info": None,
     "network_state": None,
+    "device_info": None,
+    "stream_info": None,
     "last_error": None,
     "last_check": None,
 }
 
 
-def load_config():
-    if CONFIG_PATH.exists():
-        return json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
-    return {
-        "camera_ip": os.environ.get("CAMERA_IP", ""),
-        "camera_user": os.environ.get("CAMERA_USER", "admin"),
-        "camera_password": os.environ.get("CAMERA_PASSWORD", ""),
-        "debug": True,
-    }
+def load_config() -> dict:
+    if not CONFIG_PATH.exists():
+        raise RuntimeError("Home Assistant options file was not found")
+    return json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
 
 
-def get_camera():
+def get_camera() -> JooanCamera:
     config = load_config()
-    if not config.get("camera_ip"):
-        raise ValueError("Camera IP is not configured")
     if not config.get("camera_user"):
         raise ValueError("Camera username is not configured")
     if not config.get("camera_password"):
         raise ValueError("Camera password is not configured")
     return JooanCamera(
-        config["camera_ip"],
+        config.get("camera_ip", ""),
         config.get("camera_user", "admin"),
         config.get("camera_password", ""),
-        debug=bool(config.get("debug", True)),
+        http_port=config.get("http_port", 80),
+        features_port=config.get("features_port", 9898),
+        rtsp_port=config.get("rtsp_port", 554),
+        debug=bool(config.get("debug", False)),
     )
 
 
-def update_state(**values):
+def update_state(**values) -> None:
     with _state_lock:
         _state.update(values)
 
 
-def validate_camera():
-    _LOGGER.info("Starting JOOAN camera credential check")
+def validate_camera() -> bool:
+    _LOGGER.info("Validating JOOAN camera over the local network")
     try:
         camera = get_camera()
         update_state(configured=True, last_error=None, last_check=time.time())
-        _LOGGER.info("Checking JOOAN camera authentication with getPlatformID")
         platform = camera.get_platform_id()
-        if isinstance(platform, dict) and platform.get("result") == "error_passwd":
-            raise PermissionError("Camera rejected the credentials")
-        _LOGGER.info("JOOAN getPlatformID returned a response")
+        network = device_info = stream_info = None
 
-        network = None
         try:
             network = camera.get_network_state()
         except Exception as exc:
             _LOGGER.warning("Could not read camera network state: %s", exc)
 
+        try:
+            info = camera.get_device_features()
+            device_info = info.as_dict()
+        except Exception as exc:
+            _LOGGER.warning("Could not read camera device features on port 9898: %s", exc)
+
+        try:
+            channels = (device_info or {}).get("channel_count", 1)
+            stream_info = camera.stream_summary(channels)
+        except Exception as exc:
+            _LOGGER.warning("Could not confirm local RTSP settings: %s", exc)
+            stream_info = {"available": False, "channel_count": (device_info or {}).get("channel_count", 1), "paths": [], "credentials_confirmed": False}
+
         update_state(
             authenticated=True,
             camera_info=platform,
             network_state=network,
+            device_info=device_info,
+            stream_info=stream_info,
             last_error=None,
             last_check=time.time(),
         )
@@ -92,60 +101,76 @@ def validate_camera():
         return False
 
 
-def validation_loop():
+def _validation_interval() -> int:
+    try:
+        return max(10, int(load_config().get("validation_interval", 30)))
+    except Exception:
+        return 30
+
+
+def validation_loop() -> None:
     while True:
-        time.sleep(30)
+        time.sleep(_validation_interval())
         validate_camera()
 
 
-def start_validation():
-    _LOGGER.info("Running initial JOOAN camera validation")
+def start_validation() -> None:
+    global _validation_started
+    if _validation_started:
+        return
+    _validation_started = True
     validate_camera()
-    _LOGGER.info("Starting periodic JOOAN camera validation (30s)")
     threading.Thread(target=validation_loop, name="camera-validation", daemon=True).start()
+
+
+@app.before_request
+def restrict_to_home_assistant_ingress():
+    remote = request.remote_addr or ""
+    if remote not in _TRUSTED_INGRESS_IPS:
+        _LOGGER.warning("Rejected non-Ingress request from %s", remote)
+        return jsonify({"error": "This interface is available only through Home Assistant Ingress"}), 403
+    return None
+
+
+@app.get("/healthz")
+def healthz():
+    return jsonify({"ok": True})
 
 
 @app.get("/")
 def index():
-    return Response(
-        """<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>JOOAN PTZ</title><style>body{font-family:system-ui,sans-serif;max-width:700px;margin:30px auto;padding:20px;text-align:center}.status{padding:12px;border-radius:10px;margin:15px 0}.ok{background:#dff5df}.bad{background:#f8dddd}.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;max-width:300px;margin:30px auto}button{font-size:28px;padding:20px;border-radius:12px;border:1px solid #777;background:#eee;cursor:pointer}button:disabled{opacity:.4;cursor:not-allowed}.stop{font-size:18px}pre{text-align:left;white-space:pre-wrap;word-break:break-word;background:#eee;padding:12px;border-radius:8px}</style></head><body><h1>JOOAN PTZ</h1><div id="status" class="status bad">Checking camera...</div><div class="grid"><div></div><button data-ptz="up" onclick="ptz('up')">↑</button><div></div><button data-ptz="left" onclick="ptz('left')">←</button><button data-ptz="stop" class="stop" onclick="ptz('stop')">STOP</button><button data-ptz="right" onclick="ptz('right')">→</button><div></div><button data-ptz="down" onclick="ptz('down')">↓</button><div></div></div><h2>Camera information</h2><pre id="info">Waiting for camera...</pre><h2>Network information</h2><pre id="network">Waiting for camera...</pre><p id="command"></p><script>let authenticated=false;function api(path){return new URL(path,window.location.href).toString()}function setButtons(e){document.querySelectorAll('[data-ptz]').forEach(b=>b.disabled=!e)}async function refresh(){try{const r=await fetch(api('api/status'),{cache:'no-store'});if(!r.ok)throw new Error('HTTP '+r.status);const d=await r.json();authenticated=!!d.authenticated;setButtons(authenticated);const s=document.getElementById('status');s.className='status '+(authenticated?'ok':'bad');s.textContent=authenticated?'Camera authenticated':'Camera unavailable or credentials invalid';document.getElementById('info').textContent=d.camera_info?JSON.stringify(d.camera_info,null,2):'No information available';document.getElementById('network').textContent=d.network_state?JSON.stringify(d.network_state,null,2):'No network information available';document.getElementById('command').textContent=d.last_error?'Error: '+d.last_error:''}catch(e){setButtons(false);document.getElementById('status').textContent='Add-on/API unavailable';document.getElementById('command').textContent='API error: '+e.message}}async function ptz(command){if(!authenticated)return;const s=document.getElementById('command');s.textContent='Sending '+command+'...';try{const r=await fetch(api('api/ptz/'+command),{method:'POST'}),text=await r.text();let d;try{d=JSON.parse(text)}catch{throw new Error('Camera/API returned invalid JSON: '+text.slice(0,120))}s.textContent=r.ok?'Result: '+(d.result||'success'):'Error: '+(d.error||'request failed');if(r.status===401){authenticated=false;setButtons(false)}}catch(e){s.textContent='Error: '+e.message}}setButtons(false);refresh();setInterval(refresh,5000)</script></body></html>""",
-        mimetype="text/html",
-    )
+    return Response("""<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>JOOAN Local Control</title>
+<style>:root{color-scheme:light dark;font-family:system-ui,sans-serif}body{max-width:860px;margin:0 auto;padding:20px}h1{margin-bottom:4px}.sub{opacity:.72;margin-top:0}.card{border:1px solid #7776;border-radius:14px;padding:16px;margin:14px 0}.status{padding:12px;border-radius:10px;font-weight:600}.ok{background:#2e7d3230}.bad{background:#c6282830}.grid{display:grid;grid-template-columns:repeat(3,88px);gap:10px;justify-content:center;margin:18px auto}button{font-size:28px;min-height:72px;border-radius:14px;border:1px solid #7778;cursor:pointer}button:disabled{opacity:.35;cursor:not-allowed}.stop{font-size:15px;font-weight:700}pre{white-space:pre-wrap;word-break:break-word;overflow:auto}small{opacity:.72}.pill{display:inline-block;padding:4px 8px;border-radius:999px;background:#7772;margin:2px}</style></head><body>
+<h1>JOOAN Local Control</h1><p class="sub">Controle direto pela LAN. O add-on bloqueia destinos de Internet pública.</p><div id="status" class="status bad">Verificando câmera...</div>
+<div class="card"><h2>PTZ</h2><small>Pressione e segure uma direção. Ao soltar, STOP é enviado automaticamente.</small><div class="grid"><div></div><button data-dir="up">↑</button><div></div><button data-dir="left">←</button><button id="stop" class="stop">STOP</button><button data-dir="right">→</button><div></div><button data-dir="down">↓</button><div></div></div><p id="command"></p></div>
+<div class="card"><h2>Dispositivo</h2><pre id="device">Aguardando...</pre></div><div class="card"><h2>Plataforma</h2><pre id="info">Aguardando...</pre></div><div class="card"><h2>Rede</h2><pre id="network">Aguardando...</pre></div><div class="card"><h2>RTSP local</h2><div id="stream">Aguardando...</div></div>
+<script>let authenticated=false,activeDirection=null;const buttons=[...document.querySelectorAll('[data-dir]')];function api(path){return new URL(path,window.location.href).toString()}function enableControls(enabled){buttons.forEach(b=>b.disabled=!enabled);document.getElementById('stop').disabled=!enabled}async function send(command){if(!authenticated)return;const out=document.getElementById('command');try{const r=await fetch(api('api/ptz/'+command),{method:'POST'});const d=await r.json();out.textContent=r.ok?'Comando: '+command:'Erro: '+(d.error||'falha na requisição');if(!r.ok&&r.status===401){authenticated=false;enableControls(false)}}catch(e){out.textContent='Erro: '+e.message}}buttons.forEach(button=>{const dir=button.dataset.dir;button.addEventListener('pointerdown',e=>{e.preventDefault();activeDirection=dir;button.setPointerCapture?.(e.pointerId);send(dir)});const stop=()=>{if(activeDirection===dir){activeDirection=null;send('stop')}};button.addEventListener('pointerup',stop);button.addEventListener('pointercancel',stop);button.addEventListener('lostpointercapture',stop)});document.getElementById('stop').addEventListener('click',()=>{activeDirection=null;send('stop')});window.addEventListener('blur',()=>{if(activeDirection){activeDirection=null;send('stop')}});async function refresh(){try{const r=await fetch(api('api/status'),{cache:'no-store'});if(!r.ok)throw new Error('HTTP '+r.status);const d=await r.json();authenticated=!!d.authenticated;enableControls(authenticated);const status=document.getElementById('status');status.className='status '+(authenticated?'ok':'bad');status.textContent=authenticated?'Câmera autenticada e acessível pela LAN':'Câmera indisponível ou credenciais inválidas';document.getElementById('device').textContent=d.device_info?JSON.stringify(d.device_info,null,2):'Informações não disponíveis';document.getElementById('info').textContent=d.camera_info?JSON.stringify(d.camera_info,null,2):'Informações não disponíveis';document.getElementById('network').textContent=d.network_state?JSON.stringify(d.network_state,null,2):'Informações não disponíveis';const s=d.stream_info||{};document.getElementById('stream').innerHTML=s.available?'<span class="pill">'+(s.channel_count||1)+' canal(is)</span> <span class="pill">RTSP confirmado</span><pre>'+JSON.stringify(s.paths||[],null,2)+'</pre>':'RTSP ainda não confirmado neste dispositivo.';document.getElementById('command').textContent=d.last_error?'Último erro: '+d.last_error:''}catch(e){authenticated=false;enableControls(false);document.getElementById('status').textContent='Add-on/API indisponível';document.getElementById('command').textContent='Erro: '+e.message}}enableControls(false);refresh();setInterval(refresh,5000)</script></body></html>""", mimetype="text/html")
 
 
 @app.get("/api/status")
 def status():
     with _state_lock:
-        return jsonify(_state)
+        return jsonify(dict(_state))
 
 
 @app.post("/api/ptz/<direction>")
-def ptz(direction):
+def ptz(direction: str):
     with _state_lock:
         if not _state["authenticated"]:
             return jsonify({"error": "Camera is not authenticated"}), 503
     try:
-        result = get_camera().command(direction)
-        if isinstance(result, dict) and result.get("result") == "error_passwd":
-            update_state(authenticated=False, last_error="Camera rejected the credentials")
-            return jsonify(result), 401
-        return jsonify(result)
-    except Exception as exc:
+        return jsonify(get_camera().command(direction))
+    except JooanAuthError as exc:
         update_state(authenticated=False, last_error=str(exc))
+        return jsonify({"error": str(exc)}), 401
+    except Exception as exc:
+        update_state(last_error=str(exc))
         return jsonify({"error": str(exc)}), 502
 
 
-@app.get("/api/test")
+@app.post("/api/test")
 def test():
     return jsonify({"ok": validate_camera()})
-
-
-@app.get("/api/network")
-def network():
-    with _state_lock:
-        if not _state["authenticated"]:
-            return jsonify({"error": "Camera is not authenticated"}), 503
-        return jsonify(_state["network_state"] or {})
 
 
 if __name__ == "__main__":
