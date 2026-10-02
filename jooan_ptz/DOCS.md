@@ -22,7 +22,7 @@ Na aba **Configuração** do App:
 |---|---:|---|
 | `camera_ip` | obrigatório | IP local literal da câmera |
 | `camera_user` | `admin` | usuário local |
-| `camera_password` | obrigatório | senha local |
+| `camera_password` | obrigatório | senha local usada pelos endpoints HTTP/CGI `/goform/`; não confundir com a chave/senha RTSP retornada pela própria câmera |
 | `http_port` | `80` | HTTP/CGI |
 | `features_port` | `9898` | capabilities/estado |
 | `rtsp_port` | `554` | mídia RTSP |
@@ -36,7 +36,7 @@ Para o primeiro teste, `debug: true` pode ajudar. Desative depois de concluir o 
 
 ### Estado geral
 
-O App valida `getPlatformID` e informa se a câmera está acessível e se as credenciais locais foram aceitas.
+O App valida as credenciais enviando o comando PTZ seguro `stop`. `getPlatformID` é consultado separadamente como informação opcional do dispositivo.
 
 ### PTZ
 
@@ -155,6 +155,10 @@ Verifique se `camera_ip` e `camera_password` foram preenchidos. Eles são obriga
 ### IP rejeitado
 
 O App foi propositalmente limitado a endereços locais. IP público e CGNAT não são aceitos como alvo.
+
+### Credenciais rejeitadas
+
+`camera_password` deve ser a senha **HTTP/CGI local** usada pelos endpoints `/goform/`. Alguns firmwares usam uma credencial RTSP separada; o App obtém essa credencial depois, através de `RtspConf`. Não coloque a chave RTSP no campo `camera_password`.
 
 ### PTZ funciona, mas RTSP não
 
