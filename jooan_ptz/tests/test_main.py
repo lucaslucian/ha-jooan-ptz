@@ -75,3 +75,41 @@ def test_snapshot_capture_is_serialized(monkeypatch):
 
     assert max_active == 1
     assert sorted(results) == [b"jpeg-ch00_0", b"jpeg-ch01_0"]
+
+
+def test_expired_snapshot_cache_is_not_returned(monkeypatch):
+    key = ("10.0.0.10", 554, "ch00_0")
+    main._snapshot_cache[key] = (
+        time.monotonic() - main.SNAPSHOT_CACHE_TTL - 1,
+        b"too-old",
+    )
+
+    class FakeCamera:
+        def snapshot(self, stream):
+            raise RuntimeError("capture failed")
+
+    monkeypatch.setattr(main, "get_camera", lambda: FakeCamera())
+    monkeypatch.setattr(main, "_snapshot_cache_key", lambda stream: key)
+
+    try:
+        main._capture_snapshot_with_fallback("ch00_0")
+    except RuntimeError as exc:
+        assert "capture failed" in str(exc)
+    else:
+        raise AssertionError("expired cache must not be returned")
+
+
+def test_snapshot_uses_stale_cache_while_camera_io_is_busy(monkeypatch):
+    key = ("10.0.0.10", 554, "ch00_0")
+    main._snapshot_cache[key] = (time.monotonic(), b"cached-frame")
+    monkeypatch.setattr(main, "_snapshot_cache_key", lambda stream: key)
+    monkeypatch.setattr(main, "CAMERA_IO_LOCK_TIMEOUT", 0.01)
+
+    main._camera_io_lock.acquire()
+    try:
+        image, stale = main._capture_snapshot_with_fallback("ch00_0")
+    finally:
+        main._camera_io_lock.release()
+
+    assert image == b"cached-frame"
+    assert stale is True
