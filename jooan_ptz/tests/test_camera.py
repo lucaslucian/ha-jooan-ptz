@@ -1,3 +1,4 @@
+import camera as camera_module
 import pytest
 
 from camera import (
@@ -109,3 +110,22 @@ def test_check_auth_uses_ptz_stop(monkeypatch):
     assert calls == [
         ("/goform/SingleHandlebyCommand", {"singleCMD": "stop"})
     ]
+
+
+def test_heartbeat_only_probes_http_port(monkeypatch):
+    camera = JooanCamera("10.0.0.10", "admin", "secret", http_port=8080)
+    calls = []
+
+    class Probe:
+        reachable = True
+        error = None
+
+    def fake_tcp_probe(host, port, timeout=1.5):
+        calls.append((host, port, timeout))
+        return Probe()
+
+    monkeypatch.setattr(camera_module, "tcp_probe", fake_tcp_probe)
+    result = camera.heartbeat()
+
+    assert result == {"online": True, "port": 8080, "error": None}
+    assert calls == [("10.0.0.10", 8080, 1.5)]
