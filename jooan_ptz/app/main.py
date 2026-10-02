@@ -132,7 +132,7 @@ def validate_camera(*, deep: bool = False) -> bool:
                 _LOGGER.warning("Could not probe ONVIF: %s", redact_secrets(exc))
                 values["onvif_info"] = {"reachable": False, "error": redact_secrets(exc)}
             try:
-                values["media_probe"] = camera.probe_rtsp_streams()
+                values["media_probe"] = camera.probe_rtsp_streams(values.get("onvif_info"))
             except Exception as exc:
                 _LOGGER.warning("Could not probe RTSP streams: %s", redact_secrets(exc))
                 values["media_probe"] = {"reachable": False, "streams": [], "error": redact_secrets(exc)}

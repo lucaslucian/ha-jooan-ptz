@@ -20,10 +20,10 @@ O objetivo do projeto é **operar a câmera pela LAN sem depender da nuvem para 
 | 80/TCP | HTTP | CONFIRMADO-STOCK | CGI `/goform/`, identificação, PTZ e configurações |
 | 554/TCP | RTSP | CONFIRMADO-PROJETO | vídeo e áudio locais |
 | 9898/TCP | HTTP | CONFIRMADO-STOCK | `get_deviceFeatures` e estado/capacidades |
-| 8899/TCP | HTTP/SOAP ONVIF | CORROBORADO-EXTERNO | serviço OEM ONVIF/PTZ em revisão JA-A12 |
+| 8899/TCP | HTTP/SOAP ONVIF | CONFIRMADO-STOCK | `/onvif/device_service` respondeu `GetCapabilities` com HTTP 200 no JA-A12 testado |
 | 7788/UDP | protocolo proprietário | HIPÓTESE/observação anterior | descoberta local; formato ainda não incorporado ao App |
 
-A v0.3.0 faz probe não destrutivo de 80, 554, 9898 e 8899. A porta 7788 permanece somente documentada até termos o pacote de descoberta completamente descrito.
+A v0.4.0 faz descoberta não destrutiva em 80, 554, 9898 e 8899. A porta 7788 permanece somente documentada até termos o pacote de descoberta completamente descrito.
 
 ## HTTP local stock — porta 80
 
@@ -249,7 +249,11 @@ Caminhos conhecidos/sondados:
 
 `ch00_0` e `ch01_0` já apareceram em testes anteriores da JA-A12. Os caminhos `*_1` são candidatos adicionais e são sondados pela v0.3.0 em vez de serem assumidos como válidos.
 
-A v0.3.0 usa `ffprobe` em TCP para descobrir quais caminhos realmente contêm streams e registra somente metadados seguros:
+Os testes manuais anteriores confirmaram `/live/ch00_0` e `/live/ch01_0` individualmente. No primeiro teste da v0.3.x, abrir quatro `ffprobe` simultâneos fez todos os candidatos falharem com `Invalid data found when processing input`, apesar de a porta 554 e as credenciais RTSP estarem válidas.
+
+A v0.4.0 passou a testar os candidatos **sequencialmente**, priorizando os dois caminhos já confirmados, e também pode acrescentar paths retornados por ONVIF `GetStreamUri`.
+
+O `ffprobe` em TCP registra somente metadados seguros:
 
 - codec;
 - tipo de stream;
@@ -276,11 +280,46 @@ Não existe parâmetro de URL arbitrária.
 
 ## ONVIF / porta 8899
 
-### Evidência externa
+### Validação no firmware stock
 
-O projeto público `ADCDS/jooan-w3u-local-firmware` trabalha com uma revisão específica JOOAN W3-U / JA-A12 e descreve o serviço OEM ONVIF/PTZ na porta 8899.
+**CONFIRMADO-STOCK.**
 
-Na revisão estudada por esse projeto, o adaptador ONVIF utiliza:
+No JA-A12 stock usado no desenvolvimento:
+
+- `8899/TCP` está acessível;
+- `POST /onvif/device_service` responde como serviço ONVIF;
+- `GetCapabilities` respondeu HTTP 200;
+- essa operação inicial não exigiu autenticação.
+
+Isso confirma que o ONVIF não é apenas artefato do retrofit externo: existe uma superfície ONVIF real no firmware stock testado.
+
+> O fato de `GetCapabilities` responder sem autenticação não prova que Media/PTZ de escrita também sejam anônimos. Cada operação deve ser testada separadamente.
+
+### Descoberta read-only v0.4
+
+A v0.4 amplia o probe para operações que não alteram estado:
+
+```text
+GetCapabilities
+GetProfiles
+GetStreamUri
+GetStatus
+GetPresets
+```
+
+Regras:
+
+- o App nunca segue o hostname retornado em um `XAddr`;
+- somente o **path** do serviço ONVIF é aproveitado;
+- todas as conexões continuam presas ao IP privado configurado da câmera;
+- URIs RTSP vindas de `GetStreamUri` são sanitizadas antes de chegar à UI;
+- usuário/senha RTSP não são retornados;
+- `GetStatus` e `GetPresets` são apenas leitura;
+- nenhum preset é criado, alterado, removido ou chamado nesta fase.
+
+### Evidência externa complementar
+
+O projeto público `ADCDS/jooan-w3u-local-firmware` trabalha com uma revisão específica JOOAN W3-U / JA-A12 e usa:
 
 ```text
 POST /onvif/Ptz
@@ -289,19 +328,7 @@ ContinuousMove
 Stop
 ```
 
-O projeto externo usa esse serviço localmente dentro da própria câmera após retrofit. Portanto isso é **forte evidência da existência do serviço OEM**, mas não garante que toda JA-A12 exponha exatamente a mesma superfície pela LAN no firmware stock.
-
-### Implementação atual
-
-A v0.3.0 executa somente um probe não destrutivo:
-
-- testa se 8899/TCP está aberta;
-- tenta caminhos Device Service conhecidos;
-- envia somente `GetCapabilities`;
-- registra status HTTP e se autenticação parece obrigatória;
-- não envia movimento ou alteração.
-
-PTZ continua usando o CGI já confirmado enquanto não validamos ONVIF stock na unidade real.
+Isso continua sendo útil para comparar nomes de serviços e comportamento PTZ, mas a implementação deste App prioriza o que for validado diretamente no firmware stock.
 
 ## Engenharia reversa pública da JA-A12/W3-U
 
@@ -423,7 +450,7 @@ O App também exige IP literal privado/link-local e rejeita destino público.
 
 ## Matriz atual do App
 
-| Recurso | v0.3.0 |
+| Recurso | v0.4.0 |
 |---|---|
 | validar câmera/credenciais | sim |
 | identificação LAN | sim |
@@ -434,9 +461,11 @@ O App também exige IP literal privado/link-local e rejeita destino público.
 | descobrir caminhos RTSP com ffprobe | sim |
 | snapshot RTSP | sim |
 | probe de portas | sim |
-| probe ONVIF GetCapabilities | sim |
-| ONVIF PTZ | ainda não |
-| presets | ainda não |
+| ONVIF GetCapabilities | sim, confirmado stock |
+| ONVIF GetProfiles/GetStreamUri | sim, read-only experimental |
+| ONVIF GetStatus/GetPresets | sim, read-only experimental |
+| ONVIF PTZ de escrita | ainda não |
+| presets de escrita/recall | ainda não |
 | live video no navegador | ainda não |
 | áudio de escuta no navegador | ainda não |
 | playback SD | ainda não |
@@ -446,12 +475,33 @@ O App também exige IP literal privado/link-local e rejeita destino público.
 
 ## Próximos testes no hardware stock
 
-1. confirmar o resultado do probe 8899;
-2. capturar resposta ONVIF e descobrir autenticação exigida;
-3. confirmar quais dos quatro caminhos RTSP existem e quais carregam áudio;
-4. comparar resolução/codec de cada stream;
-5. investigar `GetProfiles`, `GetPresets` e `GetStatus` apenas com operações read-only;
-6. capturar tráfego do CAM720 ao criar/usar preset;
-7. capturar tráfego ao alternar tracking, LED/floodlight e detecção;
+1. registrar os `XAddr`/paths devolvidos por `GetCapabilities`;
+2. validar `GetProfiles` e os tokens retornados;
+3. validar `GetStreamUri` e comparar os paths com `/live/ch00_0` e `/live/ch01_0`;
+4. repetir o RTSP de forma sequencial e confirmar codec/resolução/áudio dentro do App;
+5. validar `GetStatus` e `GetPresets` read-only;
+6. somente depois considerar `GotoPreset`/Home/ContinuousMove via ONVIF;
+7. capturar tráfego do CAM720 ao alternar tracking, LED/floodlight e detecção;
 8. investigar listagem/playback do microSD sem modificar firmware;
-9. descrever pacote UDP 7788 antes de habilitar descoberta automática.
+9. descrever o pacote UDP 7788 antes de habilitar descoberta automática.
+
+
+## Hardware stock — observações de 2026-10-02
+
+Sem registrar identificadores únicos do dispositivo, o teste stock confirmou:
+
+- modelo reportado: JA-A12;
+- codec declarado: H264;
+- modo de lentes: `double`;
+- motion detection principal e secundária disponíveis;
+- auto tracking, person tracking, person detection e vehicle detection reportados como capabilities;
+- LED, floodlight e luz auxiliar reportados;
+- gravação e cartão SD reportados;
+- várias agendas de gravação, notificação, luz, alarme e privacy/PTZ-hide presentes;
+- porta 80 acessível;
+- porta 554 acessível;
+- porta 9898 acessível;
+- porta 8899 acessível;
+- `/onvif/device_service` respondeu `GetCapabilities` com HTTP 200.
+
+Essas observações são de capability/state discovery. Um campo existir não significa que a escrita correspondente já esteja validada.
