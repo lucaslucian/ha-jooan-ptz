@@ -55,6 +55,16 @@ Se o botão não preencher o repositório automaticamente:
 | Playback do microSD | 🔬 pesquisa |
 | Talk-back | 🔬 pesquisa |
 
+## Uso de rede e atividade
+
+O App evita consultar a câmera sem necessidade:
+
+- na inicialização executa uma descoberta completa para preencher informações, capabilities, ONVIF e RTSP;
+- depois disso o processo em background usa somente um heartbeat TCP leve na porta HTTP;
+- a interface para de consultar `/api/status` quando a aba do App fica oculta;
+- snapshots só são atualizados quando a aba está visível **e** o card de mídia está na área visível da página;
+- diagnóstico completo só roda novamente quando solicitado manualmente.
+
 ## Filosofia local-only
 
 As funções implementadas usam somente a comunicação LAN da câmera. O backend:
