@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import threading
 import time
 from pathlib import Path
 
-from flask import Flask, Response, jsonify
+from flask import Flask, Response, jsonify, request
 
 from camera import JooanAuthError, JooanCamera, redact_secrets
 
@@ -18,11 +19,18 @@ CONFIG_PATH = Path("/data/options.json")
 _state_lock = threading.Lock()
 _camera_io_lock = threading.Lock()
 _probe_start_lock = threading.Lock()
+_ptz_order_lock = threading.Lock()
 _snapshot_lock = threading.Lock()
 _snapshot_cache: dict[tuple[str, int, str], tuple[float, bytes]] = {}
 SNAPSHOT_CACHE_TTL = 90.0
 CAMERA_IO_LOCK_TIMEOUT = 2.0
 DISCOVERY_GAP = 0.15
+RECOVERY_GRACE = 10.0
+RECOVERY_VALIDATION_INTERVAL = 300.0
+MAX_PTZ_CLIENTS = 64
+PTZ_DIRECTIONS = {"up", "down", "left", "right", "stop"}
+PTZ_CLIENT_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
+_ptz_sequences: dict[str, int] = {}
 _validation_started = False
 _state = {
     "configured": False,
@@ -44,6 +52,7 @@ _state = {
     "last_deep_probe": None,
     "probe_running": False,
     "probe_started_at": None,
+    "last_recovery_validation": None,
 }
 
 
@@ -238,12 +247,14 @@ def heartbeat_camera() -> bool:
         if online:
             values["last_seen"] = now
         else:
+            values["authenticated"] = False
             values["last_error"] = heartbeat.get("error") or "Camera is offline"
         update_state(**values)
         return online
     except Exception as exc:
         update_state(
             online=False,
+            authenticated=False,
             last_heartbeat=time.time(),
             last_error=redact_secrets(exc),
         )
@@ -260,6 +271,21 @@ def validation_loop() -> None:
     while True:
         time.sleep(_validation_interval())
         heartbeat_camera()
+        now = time.time()
+        with _state_lock:
+            should_recover = (
+                bool(_state.get("online"))
+                and not bool(_state.get("authenticated"))
+                and not bool(_state.get("probe_running"))
+                and (
+                    _state.get("last_recovery_validation") is None
+                    or now - float(_state["last_recovery_validation"]) >= RECOVERY_VALIDATION_INTERVAL
+                )
+            )
+        if should_recover:
+            update_state(last_recovery_validation=now)
+            time.sleep(RECOVERY_GRACE)
+            validate_camera(deep=False)
 
 
 def start_validation() -> None:
@@ -299,12 +325,17 @@ let statusTimer=null,snapshotTimer=null,mediaVisible=true;
 const STATUS_REFRESH_MS=5000;
 const SNAPSHOT_REFRESH_MS=15000;
 const buttons=[...document.querySelectorAll('[data-dir]')];
+const ptzClient=(globalThis.crypto?.randomUUID?.()||('ptz-'+Math.random().toString(36).slice(2)));
+let ptzSequence=0;
 function api(path){return new URL(path,window.location.href).toString()}
+function ptzUrl(command,sequence){const u=new URL(api('api/ptz/'+command));u.searchParams.set('client',ptzClient);u.searchParams.set('seq',String(sequence));return u.toString()}
 function enableControls(enabled){buttons.forEach(b=>b.disabled=!enabled);document.getElementById('stop').disabled=!enabled}
-async function send(command){if(!authenticated)return;const out=document.getElementById('command');try{const r=await fetch(api('api/ptz/'+command),{method:'POST'});const d=await r.json();out.textContent=r.ok?'Comando: '+command:'Erro: '+(d.error||'falha na requisição');if(!r.ok&&r.status===401){authenticated=false;enableControls(false)}}catch(e){out.textContent='Erro: '+e.message}}
+async function send(command,keepalive=false){if(!authenticated)return;const sequence=++ptzSequence;const out=document.getElementById('command');try{const r=await fetch(ptzUrl(command,sequence),{method:'POST',keepalive});const d=await r.json();if(!d.ignored)out.textContent=r.ok?'Comando: '+command:'Erro: '+(d.error||'falha na requisição');if(!r.ok&&r.status===401){authenticated=false;enableControls(false)}}catch(e){out.textContent='Erro: '+e.message}}
+function emergencyStop(){if(!activeDirection)return;activeDirection=null;void send('stop',true)}
 buttons.forEach(button=>{const dir=button.dataset.dir;button.addEventListener('pointerdown',e=>{e.preventDefault();activeDirection=dir;button.setPointerCapture?.(e.pointerId);send(dir)});const stop=()=>{if(activeDirection===dir){activeDirection=null;send('stop')}};button.addEventListener('pointerup',stop);button.addEventListener('pointercancel',stop);button.addEventListener('lostpointercapture',stop)});
 document.getElementById('stop').addEventListener('click',()=>{activeDirection=null;send('stop')});
-window.addEventListener('blur',()=>{if(activeDirection){activeDirection=null;send('stop')}});
+window.addEventListener('blur',emergencyStop);
+window.addEventListener('pagehide',emergencyStop);
 
 let mediaSignature='',snapshotRefreshRunning=false;
 function sleep(ms){return new Promise(resolve=>setTimeout(resolve,ms))}
@@ -314,13 +345,16 @@ async function loadSnapshot(img){
       api('api/snapshot/'+encodeURIComponent(img.dataset.stream)+'?t='+Date.now()),
       {cache:'no-store'}
     );
-    if(!response.ok)return false;
+    const state=img.parentElement?.querySelector('[data-snapshot-state]');
+    if(!response.ok){if(state)state.textContent='Falha ao atualizar; mantendo o último quadro';return false}
+    const stale=response.headers.get('X-JOOAN-Snapshot')==='stale';
     const blob=await response.blob();
     const objectUrl=URL.createObjectURL(blob);
     const previous=img.dataset.objectUrl;
     img.src=objectUrl;
     img.dataset.objectUrl=objectUrl;
     img.dataset.loaded='1';
+    if(state)state.textContent=stale?'Snapshot em cache (temporário)':'Snapshot atualizado';
     if(previous)URL.revokeObjectURL(previous);
     return true
   }catch(_){
@@ -341,17 +375,26 @@ async function refreshSnapshots(){
     }
   }finally{
     snapshotRefreshRunning=false;
-    button.disabled=false;button.textContent=previousText
+    button.disabled=!!lastData?.probe_running;button.textContent=previousText
   }
 }
 function renderMedia(data,force=false){
   const root=document.getElementById('media');
   const probe=data?.media_probe?.streams||[];
   const videoStreams=probe.filter(item=>item.available&&item.streams?.some(s=>s.codec_type==='video'));
-  const mainStreams=videoStreams.filter(item=>/_0$/.test(item.path));
-  const available=mainStreams.length?mainStreams:videoStreams;
+  const byChannel=new Map(),extras=[];
+  for(const item of videoStreams){
+    const match=item.path.match(/^\/live\/(ch\d{2})_([01])$/);
+    if(!match){extras.push(item);continue}
+    const existing=byChannel.get(match[1]);
+    if(!existing||match[2]==='0')byChannel.set(match[1],item)
+  }
+  const available=[...byChannel.values()];
+  const target=Math.max(1,Number(data?.media_probe?.reported_channel_count||available.length||1));
+  for(const item of extras){if(available.length>=target)break;available.push(item)}
   if(!available.length){
     mediaSignature='';
+    root.querySelectorAll('img[data-object-url]').forEach(img=>URL.revokeObjectURL(img.dataset.objectUrl));
     root.textContent='Nenhum stream RTSP confirmado ainda. Execute o diagnóstico profundo.';
     return
   }
@@ -365,8 +408,16 @@ function renderMedia(data,force=false){
     const box=document.createElement('div');box.className='media-item';
     const title=document.createElement('strong');title.textContent=item.path;
     const meta=document.createElement('pre');meta.textContent=JSON.stringify(item.streams,null,2);
-    const img=document.createElement('img');img.alt='Snapshot '+item.path;img.dataset.stream=stream;
-    box.append(title,img,meta);root.appendChild(box)
+    const snapshotCapable=/^\/live\/ch(?:00|01)_[01]$/.test(item.path);
+    if(snapshotCapable){
+      const img=document.createElement('img');img.alt='Snapshot '+item.path;img.dataset.stream=stream;
+      const state=document.createElement('small');state.dataset.snapshotState='1';state.textContent='Aguardando snapshot';
+      box.append(title,img,state,meta)
+    }else{
+      const state=document.createElement('small');state.textContent='Stream ONVIF detectado; snapshot não habilitado para este path';
+      box.append(title,state,meta)
+    }
+    root.appendChild(box)
   }
   if(!document.hidden&&mediaVisible&&!data?.probe_running)void refreshSnapshots()
 }
@@ -380,7 +431,7 @@ async function deepProbe(){
       await refresh();
       if(!lastData?.probe_running)break
     }
-    if(!lastData?.probe_running)await refreshSnapshots()
+    // refresh() updates media and triggers a snapshot only if the stream set changed.
   }catch(e){
     document.getElementById('command').textContent='Erro no diagnóstico: '+e.message
   }finally{
@@ -440,7 +491,7 @@ if('IntersectionObserver' in window){
   observer.observe(mediaRoot)
 }
 document.addEventListener('visibilitychange',()=>{
-  if(document.hidden)stopActivePolling();
+  if(document.hidden){emergencyStop();stopActivePolling()}
   else startActivePolling()
 });
 window.addEventListener('pagehide',stopActivePolling);
@@ -455,8 +506,52 @@ def status():
         return jsonify(dict(_state))
 
 
+def _register_ptz_sequence() -> tuple[str | None, int | None, bool]:
+    client_id = request.args.get("client")
+    sequence_raw = request.args.get("seq")
+    if client_id is None and sequence_raw is None:
+        return None, None, True
+    if (
+        client_id is None
+        or sequence_raw is None
+        or not PTZ_CLIENT_RE.fullmatch(client_id)
+    ):
+        return None, None, False
+    try:
+        sequence = int(sequence_raw)
+    except ValueError:
+        return None, None, False
+    if sequence < 0:
+        return None, None, False
+
+    with _ptz_order_lock:
+        previous = _ptz_sequences.get(client_id)
+        if previous is not None and sequence <= previous:
+            return client_id, sequence, False
+        if client_id not in _ptz_sequences and len(_ptz_sequences) >= MAX_PTZ_CLIENTS:
+            _ptz_sequences.pop(next(iter(_ptz_sequences)))
+        _ptz_sequences[client_id] = sequence
+    return client_id, sequence, True
+
+
+def _ptz_sequence_is_current(client_id: str | None, sequence: int | None) -> bool:
+    if client_id is None or sequence is None:
+        return True
+    with _ptz_order_lock:
+        return _ptz_sequences.get(client_id) == sequence
+
+
 @app.post("/api/ptz/<direction>")
 def ptz(direction: str):
+    if direction not in PTZ_DIRECTIONS:
+        return jsonify({"error": "Unsupported PTZ command"}), 400
+
+    client_id, sequence, accepted = _register_ptz_sequence()
+    if not accepted:
+        if client_id is not None and sequence is not None:
+            return jsonify({"ok": True, "ignored": True, "reason": "stale PTZ request"})
+        return jsonify({"error": "Invalid PTZ sequence"}), 400
+
     with _state_lock:
         if not _state["online"] or not _state["authenticated"]:
             return jsonify({"error": "Camera is not ready"}), 503
@@ -464,6 +559,10 @@ def ptz(direction: str):
     if not _camera_io_lock.acquire(timeout=CAMERA_IO_LOCK_TIMEOUT):
         return jsonify({"error": "Camera is busy with diagnostics or media"}), 503
     try:
+        # A newer STOP/direction may have arrived while this request waited for
+        # the camera lock. Never execute an older direction after a newer STOP.
+        if not _ptz_sequence_is_current(client_id, sequence):
+            return jsonify({"ok": True, "ignored": True, "reason": "superseded PTZ request"})
         return jsonify(get_camera().command(direction))
     except JooanAuthError as exc:
         safe_error = redact_secrets(exc)
@@ -498,11 +597,15 @@ def deep_probe():
             if _state.get("probe_running"):
                 return jsonify({"ok": True, "started": False, "running": True}), 202
         update_state(probe_running=True, probe_started_at=time.time())
-        threading.Thread(
-            target=_manual_probe_worker,
-            name="camera-manual-probe",
-            daemon=True,
-        ).start()
+        try:
+            threading.Thread(
+                target=_manual_probe_worker,
+                name="camera-manual-probe",
+                daemon=True,
+            ).start()
+        except Exception:
+            update_state(probe_running=False)
+            raise
     return jsonify({"ok": True, "started": True, "running": True}), 202
 
 
