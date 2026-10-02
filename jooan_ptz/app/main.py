@@ -206,13 +206,24 @@ window.addEventListener('blur',()=>{if(activeDirection){activeDirection=null;sen
 
 let mediaSignature='',snapshotRefreshRunning=false;
 function sleep(ms){return new Promise(resolve=>setTimeout(resolve,ms))}
-function loadSnapshot(img){
-  return new Promise(resolve=>{
-    const next=new Image();
-    next.onload=()=>{img.src=next.src;img.dataset.loaded='1';resolve(true)};
-    next.onerror=()=>resolve(false);
-    next.src=api('api/snapshot/'+encodeURIComponent(img.dataset.stream)+'?t='+Date.now())
-  })
+async function loadSnapshot(img){
+  try{
+    const response=await fetch(
+      api('api/snapshot/'+encodeURIComponent(img.dataset.stream)+'?t='+Date.now()),
+      {cache:'no-store'}
+    );
+    if(!response.ok)return false;
+    const blob=await response.blob();
+    const objectUrl=URL.createObjectURL(blob);
+    const previous=img.dataset.objectUrl;
+    img.src=objectUrl;
+    img.dataset.objectUrl=objectUrl;
+    img.dataset.loaded='1';
+    if(previous)URL.revokeObjectURL(previous);
+    return true
+  }catch(_){
+    return false
+  }
 }
 async function refreshSnapshots(){
   if(snapshotRefreshRunning)return;
@@ -243,6 +254,7 @@ function renderMedia(data,force=false){
   const signature=JSON.stringify(available.map(item=>({path:item.path,streams:item.streams})));
   if(!force&&signature===mediaSignature)return;
   mediaSignature=signature;
+  root.querySelectorAll('img[data-object-url]').forEach(img=>URL.revokeObjectURL(img.dataset.objectUrl));
   root.innerHTML='';
   for(const item of available){
     const stream=item.path.split('/').pop();
