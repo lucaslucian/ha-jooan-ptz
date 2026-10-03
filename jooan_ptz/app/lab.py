@@ -472,6 +472,81 @@ def onvif_imaging_discovery(camera, onvif_info: dict) -> dict[str, Any]:
     return result
 
 
+def onvif_imaging_path_probe(camera, onvif_info: dict) -> dict[str, Any]:
+    """Compare capability-derived and GetServices-advertised Imaging paths read-only."""
+    source_token = _video_source_token(onvif_info)
+    candidates: list[dict[str, str]] = []
+
+    capability_path = None
+    try:
+        capability_path = _service_path(onvif_info, "imaging")
+    except LabError:
+        pass
+    if capability_path:
+        candidates.append({"source": "GetCapabilities", "path": capability_path})
+
+    services_path = _service_path_by_namespace(onvif_info, ONVIF_IMAGING)
+    if services_path and all(item["path"] != services_path for item in candidates):
+        candidates.append({"source": "GetServices", "path": services_path})
+
+    if not candidates:
+        raise LabError("No ONVIF Imaging path was discovered")
+
+    result: dict[str, Any] = {
+        "operation": "onvif_imaging_path_probe",
+        "video_source_token": source_token,
+        "paths": [],
+    }
+    for candidate in candidates[:2]:
+        path = candidate["path"]
+        entry: dict[str, Any] = dict(candidate)
+        operations = (
+            (
+                "service_capabilities",
+                "GetServiceCapabilities",
+                "<timg:GetServiceCapabilities/>",
+            ),
+            (
+                "options",
+                "GetOptions",
+                "<timg:GetOptions>"
+                f"<timg:VideoSourceToken>{xml_escape(source_token)}</timg:VideoSourceToken>"
+                "</timg:GetOptions>",
+            ),
+            (
+                "settings",
+                "GetImagingSettings",
+                "<timg:GetImagingSettings>"
+                f"<timg:VideoSourceToken>{xml_escape(source_token)}</timg:VideoSourceToken>"
+                "</timg:GetImagingSettings>",
+            ),
+        )
+        for key, action, payload in operations:
+            response, root = _soap(
+                camera,
+                path=path,
+                namespace=ONVIF_IMAGING,
+                prefix="timg",
+                payload=payload,
+                action=action,
+            )
+            entry[key] = {
+                **_response_summary(response),
+                "ranges": _extract_ranges(root),
+                "values": _xml_rows(root, limit=48),
+            }
+            if response.get("status") is None or response.get("status") == 401:
+                break
+        result["paths"].append(entry)
+
+    result["alternate_path_present"] = len(result["paths"]) > 1
+    result["any_settings_readable"] = any(
+        bool((item.get("settings") or {}).get("accepted"))
+        for item in result["paths"]
+    )
+    return result
+
+
 def onvif_set_imaging(
     camera,
     onvif_info: dict,
