@@ -770,3 +770,121 @@ def test_oem_toggle_snapshot_system_group_exposes_timezone_only_from_allowlist()
     assert result["values"]["timezone"] == "-04:00"
     assert result["values"]["powerfrequency"] == 60
     assert "device_pwd" not in result["values"]
+
+
+
+def test_oem_write_plan_uses_only_confirmed_value_mappings():
+    class Camera:
+        def get_device_features(self):
+            class Info:
+                def as_dict(self):
+                    return {
+                        "properties": {
+                            "floodlight": 0,
+                            "mdarea": 33554431,
+                            "sub_mdarea": 33554431,
+                            "mdsensitivity": 2,
+                            "sub_mdsensitivity": 2,
+                            "autotrack": 0,
+                            "flipmirror": 0,
+                            "timezone": "GMT-04:00",
+                        }
+                    }
+            return Info()
+
+    result = lab.oem_write_plan(Camera(), target="floodlight", value="1")
+
+    assert result["requested"] == {"floodlight": 1}
+    assert result["differences"] == {
+        "floodlight": {"before": 0, "after": 1}
+    }
+    assert result["would_change"] is True
+    assert result["writer_ready"] is False
+    assert result["executed"] is False
+
+
+def test_oem_write_plan_motion_zones_pairs_main_and_sub_masks():
+    plan_off = lab._coerce_oem_write_plan("motion_zones", "off")
+    plan_on = lab._coerce_oem_write_plan("motion_zones", "on")
+
+    assert plan_off == {"mdarea": 0, "sub_mdarea": 0}
+    assert plan_on == {
+        "mdarea": 33554431,
+        "sub_mdarea": 33554431,
+    }
+
+
+def test_oem_write_plan_motion_sensitivity_pairs_main_and_sub():
+    assert lab._coerce_oem_write_plan("motion_sensitivity", "3") == {
+        "mdsensitivity": 3,
+        "sub_mdsensitivity": 3,
+    }
+
+
+def test_oem_write_plan_flipmirror_maps_boolean_to_confirmed_values():
+    assert lab._coerce_oem_write_plan("flipmirror", "on") == {"flipmirror": 3}
+    assert lab._coerce_oem_write_plan("flipmirror", "off") == {"flipmirror": 0}
+
+
+def test_oem_write_plan_timezone_requires_confirmed_gmt_shape():
+    assert lab._coerce_oem_write_plan("timezone", "gmt-04:00") == {
+        "timezone": "GMT-04:00"
+    }
+
+    try:
+        lab._coerce_oem_write_plan("timezone", "America/Manaus")
+    except lab.LabError as exc:
+        assert "GMT" in str(exc)
+    else:
+        raise AssertionError("IANA timezone must not be accepted as stock OEM value")
+
+
+def test_oem_write_surface_probe_returns_only_safe_fixed_getjsonconf_summary():
+    class Camera:
+        def get_device_features(self):
+            class Info:
+                def as_dict(self):
+                    return {
+                        "properties": {
+                            "floodlight": 2,
+                            "timezone": "GMT-04:00",
+                            "device_pwd": "must-not-leak",
+                        }
+                    }
+            return Info()
+
+        def _goform(self, endpoint, params):
+            assert endpoint == "/goform/getOtherSetttings"
+            assert params["singleCMD"] == "GetJsonConf"
+            return {
+                "result": "success",
+                "SystemInfo": {
+                    "ProductName": "JA-A12",
+                    "Password": "must-not-leak",
+                },
+                "UIDInfo": {"P2pID": "must-not-leak"},
+            }
+
+    result = lab.oem_write_surface_probe(Camera())
+
+    assert result["readback_9898"] == {
+        "floodlight": 2,
+        "timezone": "GMT-04:00",
+    }
+    assert result["get_json_conf"] == {
+        "accepted": True,
+        "parsed": True,
+        "result": "success",
+        "product_name": "JA-A12",
+    }
+    assert result["configuration_writer_discovered"] is False
+    assert "must-not-leak" not in str(result)
+
+
+def test_oem_write_plan_rejects_unknown_target():
+    try:
+        lab._coerce_oem_write_plan("arbitrary_singlecmd", "anything")
+    except lab.LabError as exc:
+        assert "Unsupported OEM write target" in str(exc)
+    else:
+        raise AssertionError("arbitrary write target must be rejected")
