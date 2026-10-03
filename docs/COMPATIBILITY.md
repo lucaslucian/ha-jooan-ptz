@@ -30,10 +30,11 @@ A família JOOAN/CAM720 contém várias revisões de hardware e firmware com nom
 | `GetProfiles` / `GetStreamUri` / `GetStatus` / `GetPresets` | Experimental read-only v0.4 |
 | ONVIF ContinuousMove/Stop | Laboratório v0.7; precisa validação no hardware stock |
 | ONVIF auxiliary IR | Laboratório v0.7; câmera anunciou Irlamp On/Off, escrita precisa validação |
-| ONVIF presets | GetPresets funciona, lista vazia na JA-A12; SetPreset = ActionNotSupported |
+| ONVIF presets | GetPresets vazio; SetPreset não suportado na JA-A12 |
 | ONVIF Events PullPoint | Validado: MotionAlarm/CellMotionDetector entregues localmente |
 | UDP 7788 | Observado, formato em pesquisa |
-| playback microSD | ONVIF Replay não suportado; investigação OEM ativa v0.12 |
+| playback microSD | ONVIF Replay não suportado; investigação OEM ativa v0.13 |
+| OEM toggle mapper | Baseline/diff read-only v0.13 |
 | talk-back | Em pesquisa |
 
 ## Outros modelos
