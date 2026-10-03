@@ -300,28 +300,16 @@
         <div class="card-heading">
           <div>
             <span class="section-kicker">ONVIF PRESETS</span>
-            <h2>Preset temporário de teste</h2>
+            <h2>Presets</h2>
           </div>
-          <span class="badge neutral">SetPreset não suportado na JA-A12 testada</span>
+          <span class="badge neutral">Encerrado na JA-A12</span>
         </div>
         <p class="helper">
-          <code>GetPresets</code> funciona. Qualquer preset retornado pela própria câmera pode ser selecionado
-          e testado com <code>GotoPreset</code>. A criação continua limitada ao nome fixo <code>HA_TEST</code>
-          e a exclusão continua permitida somente para <code>HA_TEST</code>.
+          <code>GetPresets</code> funciona, mas a câmera validada retorna lista vazia e
+          <code>SetPreset</code> responde <code>ActionNotSupported</code>. Mantemos apenas a leitura
+          para diagnóstico de outras revisões.
         </p>
-        <div class="lab-controls">
-          <label>Preset retornado pela câmera
-            <select id="labPresetSelect" class="lab-select" disabled>
-              <option value="">Nenhum preset listado</option>
-            </select>
-          </label>
-        </div>
-        <div class="toolbar">
-          <button id="labPresetList" class="button secondary">Listar presets</button>
-          <button id="labPresetCreate" class="button primary">Salvar posição como HA_TEST</button>
-          <button id="labPresetGoto" class="button secondary" disabled>Ir para preset selecionado</button>
-          <button id="labPresetDelete" class="button ghost" disabled>Excluir HA_TEST</button>
-        </div>
+        <button id="labPresetList" class="button secondary">Listar presets</button>
         <div id="labPresetSummary" class="lab-summary">Nenhum teste executado.</div>
       </article>
 
@@ -335,28 +323,12 @@
             <span class="badge neutral">Somente leitura</span>
           </div>
           <p class="helper">
-            GetOptions confirmou <code>Brightness</code>, <code>ColorSaturation</code>, <code>Contrast</code> e
-            <code>Sharpness</code> na faixa 1–255, mas GetImagingSettings e SetImagingSettings retornaram
-            <code>ActionNotSupported</code> na JA-A12 validada. Os controles permanecem apenas para testar outras revisões.
+            Os dois paths anunciados pela câmera respondem <code>GetOptions</code> com
+            Brightness/ColorSaturation/Contrast/Sharpness em 1–255, mas ambos rejeitam
+            <code>GetImagingSettings</code>; <code>SetImagingSettings</code> também é rejeitado.
+            Nesta JA-A12 o Imaging fica somente como capability read-only.
           </p>
-          <div class="lab-controls">
-            <label>Ajuste
-              <select id="labImagingSetting" class="lab-select">
-                <option value="Brightness">Brightness</option>
-                <option value="ColorSaturation">ColorSaturation</option>
-                <option value="Contrast">Contrast</option>
-                <option value="Sharpness">Sharpness</option>
-              </select>
-            </label>
-            <label>Valor (1–255)
-              <input id="labImagingValue" class="lab-select" type="number" min="1" max="255" step="1" value="128">
-            </label>
-          </div>
-          <div class="toolbar">
-            <button id="labImagingDiscover" class="button secondary">Consultar Imaging</button>
-            <button id="labImagingPathProbe" class="button secondary">Verificar caminhos Imaging</button>
-            <button id="labImagingSet" class="button primary">Aplicar ajuste temporário</button>
-          </div>
+          <button id="labImagingDiscover" class="button secondary">Consultar ranges Imaging</button>
         </article>
 
         <article class="card">
@@ -394,25 +366,36 @@
             <span class="section-kicker">ONVIF STORAGE</span>
             <h2>Recording / Search / Replay</h2>
           </div>
-          <span class="badge neutral">Somente leitura</span>
+          <span class="badge neutral">Inventário somente</span>
         </div>
         <p class="helper">
-          O hardware validado respondeu com uma gravação contendo vídeo, áudio e metadata e anunciou
-          replay RTP/RTSP/TCP. O segundo teste relê os tokens da própria câmera, consulta
-          <code>GetRecordingInformation</code> e solicita <code>GetReplayUri</code>, mas não abre o stream
-          e não expõe o URI bruto ao navegador.
+          A JA-A12 expõe <code>OnvifRecordingToken_1</code> com tracks Video/Audio/Metadata,
+          porém <code>GetRecordingJobs</code> retorna vazio e <code>GetReplayUri</code> responde
+          <code>ActionNotSupported</code>. Portanto o ONVIF serve para inventário, não para comandar
+          ou reproduzir gravações neste firmware.
+        </p>
+        <button id="labStorageDiscover" class="button secondary">Ler inventário ONVIF de gravação</button>
+      </article>
+
+      <article class="card">
+        <div class="card-heading">
+          <div>
+            <span class="section-kicker">OEM RECORDING / PORTA 9898</span>
+            <h2>Comparar estado de gravação do CAM720</h2>
+          </div>
+          <span class="badge success">Próximo alvo</span>
+        </div>
+        <p class="helper">
+          Este teste é somente leitura. Capture uma linha de base, altere <strong>uma única opção</strong>
+          de gravação no CAM720 (por exemplo 24/7, movimento ou agendado) e então compare.
+          O add-on relê diretamente <code>get_deviceFeatures</code> e mostra somente campos de gravação/SD.
         </p>
         <div class="toolbar">
-          <button id="labStorageDiscover" class="button secondary">Descobrir serviços de gravação</button>
-          <button id="labStorageJobs" class="button secondary">Inspecionar jobs de gravação</button>
-          <button id="labStorageRecordPulse" class="button primary">Gravar por 5 s e restaurar</button>
-          <button id="labStoragePlaybackProbe" class="button ghost">Inspecionar URI de replay</button>
+          <button id="labOemRecordingRead" class="button secondary">Ler estado OEM agora</button>
+          <button id="labOemRecordingBaseline" class="button primary">Capturar linha de base</button>
+          <button id="labOemRecordingCompare" class="button primary">Comparar com linha de base</button>
         </div>
-        <p class="helper">
-          O teste de 5 segundos só executa escrita se a câmera retornar exatamente um job existente em modo
-          <code>Idle</code>. Ele muda somente o modo para <code>Active</code>, lê estado/informações e força
-          retorno para <code>Idle</code> no bloco de finalização. Não cria nem remove gravações, tracks ou jobs.
-        </p>
+        <div id="labOemRecordingSummary" class="lab-summary">Linha de base ainda não capturada.</div>
       </article>
 
       <article class="card">
