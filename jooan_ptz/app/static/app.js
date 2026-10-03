@@ -209,8 +209,15 @@ async function loadSnapshot(img){
   }
 }
 
+function isVisibleInViewport(element){
+  if(!element)return true;
+  const rect=element.getBoundingClientRect();
+  return rect.bottom>0&&rect.top<window.innerHeight;
+}
+
 async function refreshSnapshots(root=null){
   if(document.hidden||snapshotRefreshRunning||lastData?.probe_running||lastData?.preview_active||activeDirection)return;
+  if(root&&!isVisibleInViewport(root))return;
   snapshotRefreshRunning=true;
   try{
     const scope=root||document;
