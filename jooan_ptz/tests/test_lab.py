@@ -706,3 +706,43 @@ def test_oem_toggle_snapshot_rejects_unknown_group():
         assert "Unsupported OEM toggle group" in str(exc)
     else:
         raise AssertionError("unknown OEM group must be rejected")
+
+
+
+def test_oem_toggle_snapshot_adds_wide_fingerprints_without_sensitive_values():
+    class Camera:
+        def get_device_features(self):
+            class Info:
+                def as_dict(self):
+                    return {
+                        "properties": {
+                            "md_enable": 1,
+                            "unknown_sensitivity": 5,
+                            "device_pwd": "secret-value",
+                            "wifi_ssid": "private-network",
+                            "AuthKey": "auth-secret",
+                        },
+                        "capabilities": {},
+                    }
+            return Info()
+
+    result = lab.oem_toggle_snapshot(Camera(), group="motion")
+    fingerprints = result["wide_fingerprints"]
+
+    assert "md_enable" in fingerprints
+    assert "unknown_sensitivity" in fingerprints
+    assert fingerprints["unknown_sensitivity"]["type"] == "int"
+    assert fingerprints["unknown_sensitivity"]["fingerprint"] != "5"
+    assert "device_pwd" not in fingerprints
+    assert "wifi_ssid" not in fingerprints
+    assert "AuthKey" not in fingerprints
+    assert "secret-value" not in str(result)
+    assert "private-network" not in str(result)
+    assert "auth-secret" not in str(result)
+
+
+def test_oem_property_fingerprint_changes_when_value_changes():
+    first = lab._oem_property_fingerprints({"candidate": 1})
+    second = lab._oem_property_fingerprints({"candidate": 2})
+
+    assert first["candidate"]["fingerprint"] != second["candidate"]["fingerprint"]
