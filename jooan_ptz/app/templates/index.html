@@ -302,7 +302,7 @@
             <span class="section-kicker">ONVIF PRESETS</span>
             <h2>Preset temporário de teste</h2>
           </div>
-          <span class="badge warning">Pode movimentar</span>
+          <span class="badge neutral">SetPreset não suportado na JA-A12 testada</span>
         </div>
         <p class="helper">
           O laboratório cria apenas o preset fixo <code>HA_TEST</code>. A exclusão é recusada para qualquer preset
@@ -328,8 +328,8 @@
           </div>
           <p class="helper">
             GetOptions confirmou <code>Brightness</code>, <code>ColorSaturation</code>, <code>Contrast</code> e
-            <code>Sharpness</code> na faixa 1–255. GetImagingSettings não é suportado; por isso a escrita abaixo
-            altera apenas um campo por vez e solicita <code>ForcePersistence=false</code>, sem readback automático.
+            <code>Sharpness</code> na faixa 1–255, mas GetImagingSettings e SetImagingSettings retornaram
+            <code>ActionNotSupported</code> na JA-A12 validada. Os controles permanecem apenas para testar outras revisões.
           </p>
           <div class="lab-controls">
             <label>Ajuste
@@ -388,11 +388,15 @@
           <span class="badge neutral">Somente leitura</span>
         </div>
         <p class="helper">
-          Usa somente serviços anunciados por <code>GetServices</code>. Consulta capabilities,
-          gravações existentes, resumo do conteúdo gravado e configuração de replay. Nenhuma gravação
-          é criada, alterada ou excluída.
+          O hardware validado respondeu com uma gravação contendo vídeo, áudio e metadata e anunciou
+          replay RTP/RTSP/TCP. O segundo teste relê os tokens da própria câmera, consulta
+          <code>GetRecordingInformation</code> e solicita <code>GetReplayUri</code>, mas não abre o stream
+          e não expõe o URI bruto ao navegador.
         </p>
-        <button id="labStorageDiscover" class="button primary">Descobrir serviços de gravação</button>
+        <div class="toolbar">
+          <button id="labStorageDiscover" class="button secondary">Descobrir serviços de gravação</button>
+          <button id="labStoragePlaybackProbe" class="button primary">Inspecionar gravação / URI de replay</button>
+        </div>
       </article>
 
       <article class="card">
