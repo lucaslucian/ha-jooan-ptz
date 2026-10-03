@@ -794,6 +794,26 @@ function renderOemToggleValues(values){
     :'<div class="setting-item"><div><strong>Nenhum campo retornado</strong><span>Este firmware não expôs propriedades do grupo selecionado.</span></div></div>';
 }
 
+function diffMotionAreaMask(before,after){
+  if(!Number.isInteger(before)||!Number.isInteger(after))return null;
+  const left=before>>>0;
+  const right=after>>>0;
+  const xor=(left^right)>>>0;
+  const changedBits=[];
+  for(let bit=0;bit<25;bit++){
+    if(xor&(1<<bit))changedBits.push(bit);
+  }
+  return {
+    before_hex:'0x'+left.toString(16).padStart(7,'0'),
+    after_hex:'0x'+right.toString(16).padStart(7,'0'),
+    before_bits:left.toString(2).padStart(25,'0'),
+    after_bits:right.toString(2).padStart(25,'0'),
+    changed_bits:changedBits,
+    active_zones_before:left.toString(2).split('1').length-1,
+    active_zones_after:right.toString(2).split('1').length-1
+  };
+}
+
 async function labOemToggle(action){
   const group=$('labOemToggleGroup').value;
   try{
@@ -844,10 +864,23 @@ async function labOemToggle(action){
         $('labOemToggleSummary').textContent='Nenhuma alteração OEM detectada.';
       }
 
+      const motionAreaChanges={};
+      if(group==='motion'){
+        for(const key of ['mdarea','sub_mdarea']){
+          if(Object.prototype.hasOwnProperty.call(changes,key)){
+            motionAreaChanges[key]=diffMotionAreaMask(
+              labOemToggleBaseline.values?.[key],
+              current?.[key]
+            );
+          }
+        }
+      }
+
       showLabResult({
         operation:'oem_toggle_compare',
         group,
         changes,
+        motion_area_bit_changes:motionAreaChanges,
         outside_group_changes:outsideGroupChanges,
         baseline:labOemToggleBaseline.values,
         current,
