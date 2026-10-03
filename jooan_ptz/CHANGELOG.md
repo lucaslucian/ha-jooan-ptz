@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.6.0
+
+- Rebuilt the Ingress panel into five user-facing sections: Overview, Cameras & PTZ, Detection, Recording and Diagnostics.
+- Replaced raw JSON as the primary UI with status cards, service health, friendly capability/state labels, stream metadata, SD/recording summaries and schedule summaries.
+- Kept full raw diagnostics available behind expandable technical details.
+- Added an on-demand local MJPEG preview bridge using FFmpeg; RTSP credentials never reach the browser.
+- Limited continuous video to one RTSP preview session at a time and automatically supersede the previous lens/session.
+- Prefer validated/ONVIF-discovered substreams for preview and fall back to the confirmed main stream when needed.
+- Added explicit manual substream validation for `/live/ch00_1` and `/live/ch01_1`.
+- Kept PTZ available during live preview while blocking snapshots/deep diagnostics from opening competing camera sessions.
+- Automatically starts live preview when the user begins PTZ from the camera tab, and stops preview when the page is hidden/unloaded.
+- Added 640px / 6fps server-side MJPEG scaling for a practical intermediate preview on Raspberry Pi-class hosts.
+- Added dedicated dashboard template/CSS/JavaScript files and CI JavaScript syntax validation.
+- Added tests for preview selection, stream lifecycle, substream validation, dashboard serving and snapshot fallback during live preview.
+
+
 ## 0.5.2
 
 - Serialized camera-facing CGI, port 9898, ONVIF and RTSP operations to prevent concurrent load on constrained firmware.
