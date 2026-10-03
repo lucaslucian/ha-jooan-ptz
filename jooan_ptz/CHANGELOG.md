@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.10.1
+
+- Fixed the Recording/Search/Replay playback probe route failing with `name 'onvif_recording_playback_probe' is not defined`; the function now has an explicit import in `main.py`.
+- Added a regression test ensuring the playback probe symbol is available to the Flask route.
+- Preset UI now lists every preset returned by `GetPresets` and allows `GotoPreset` for the selected camera-returned token.
+- Preset creation remains restricted to `HA_TEST`, and deletion remains restricted to `HA_TEST` only.
+- Added regression coverage proving `GotoPreset` accepts a non-`HA_TEST` preset only when the token was freshly returned by the camera.
+
+
 ## 0.10.0
 
 - Confirmed the validated JA-A12 rejects ONVIF `SetPreset` with `ActionNotSupported`; `GetPresets` remains usable and currently returns an empty list.
