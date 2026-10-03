@@ -326,8 +326,28 @@
             </div>
             <span class="badge neutral">Somente leitura</span>
           </div>
-          <p class="helper">Consulta GetImagingSettings e GetOptions e preserva a hierarquia do XML para identificar quais parâmetros correspondem às faixas retornadas. Escrita continua desabilitada.</p>
-          <button id="labImagingDiscover" class="button primary">Consultar Imaging</button>
+          <p class="helper">
+            GetOptions confirmou <code>Brightness</code>, <code>ColorSaturation</code>, <code>Contrast</code> e
+            <code>Sharpness</code> na faixa 1–255. GetImagingSettings não é suportado; por isso a escrita abaixo
+            altera apenas um campo por vez e solicita <code>ForcePersistence=false</code>, sem readback automático.
+          </p>
+          <div class="lab-controls">
+            <label>Ajuste
+              <select id="labImagingSetting" class="lab-select">
+                <option value="Brightness">Brightness</option>
+                <option value="ColorSaturation">ColorSaturation</option>
+                <option value="Contrast">Contrast</option>
+                <option value="Sharpness">Sharpness</option>
+              </select>
+            </label>
+            <label>Valor (1–255)
+              <input id="labImagingValue" class="lab-select" type="number" min="1" max="255" step="1" value="128">
+            </label>
+          </div>
+          <div class="toolbar">
+            <button id="labImagingDiscover" class="button secondary">Consultar Imaging</button>
+            <button id="labImagingSet" class="button primary">Aplicar ajuste temporário</button>
+          </div>
         </article>
 
         <article class="card">
@@ -339,9 +359,9 @@
             <span class="badge success">Prioridade</span>
           </div>
           <p class="helper">
-            O PullPoint já foi validado no hardware stock com <code>MotionAlarm/State=true</code> e
-            <code>CellMotionDetector/IsMotion=true</code>. O teste abaixo mantém uma assinatura curta,
-            faz pulls limitados e mostra tópico, source/data, timestamp e PropertyOperation quando disponíveis.
+            O PullPoint foi validado, mas o firmware repete snapshots <code>Initialized</code> em cada pull.
+            O resultado agora separa estado inicial, duplicatas e mudanças reais para evitar tratar snapshots
+            repetidos como novas detecções.
           </p>
           <div class="lab-controls">
             <label>Janela de escuta
