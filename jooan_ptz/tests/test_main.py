@@ -14,12 +14,15 @@ def setup_function():
         authenticated=False,
         probe_running=False,
         ptz_moving=False,
+        ptz_channel=None,
+        ptz_channel_source=None,
         preview_active=False,
         preview_channel=None,
         preview_stream=None,
         preview_source=None,
         preview_probe=None,
         preview_probe_running=False,
+        preview_last_error=None,
         last_error=None,
     )
 
@@ -329,9 +332,7 @@ def test_preview_prefers_validated_substream_over_onvif():
 def test_live_preview_streams_mjpeg_without_exposing_rtsp(monkeypatch):
     class FakeProcess:
         def __init__(self):
-            self.stdout = io.BytesIO(
-                b"--jooanframe\r\nContent-Type: image/jpeg\r\n\r\nJPEG\r\n"
-            )
+            self.stdout = io.BytesIO(b"TAIL")
             self.terminated = False
 
         def poll(self):
@@ -347,29 +348,27 @@ def test_live_preview_streams_mjpeg_without_exposing_rtsp(monkeypatch):
             self.terminated = True
 
     process = FakeProcess()
-    calls = []
-
-    class FakeCamera:
-        def start_mjpeg_preview(self, stream, width=640, fps=6):
-            calls.append((stream, width, fps))
-            return process
-
-    monkeypatch.setattr(main, "get_camera", lambda: FakeCamera())
+    first = b"--jooanframe\r\nContent-Type: image/jpeg\r\n\r\nJPEG\r\n"
+    monkeypatch.setattr(
+        main,
+        "_start_preview_process",
+        lambda channel: (
+            process,
+            first,
+            "/live/ch00_1",
+            "onvif_substream",
+        ),
+    )
     main.update_state(
         online=True,
         authenticated=True,
         probe_running=False,
         preview_probe_running=False,
-        onvif_info={
-            "profiles": [
-                {"stream": {"path": "/live/ch00_1"}}
-            ]
-        },
-        media_probe={"streams": []},
+        ptz_channel=0,
     )
 
     client = main.app.test_client()
-    response = client.get("/api/live/0")
+    response = client.get("/api/live/ptz")
 
     assert response.status_code == 200
     assert response.headers["Content-Type"].startswith(
@@ -377,7 +376,6 @@ def test_live_preview_streams_mjpeg_without_exposing_rtsp(monkeypatch):
     )
     assert response.headers["X-JOOAN-Preview-Stream"] == "/live/ch00_1"
     assert b"JPEG" in response.data
-    assert calls == [("ch00_1", 640, 6)]
     assert "rtsp://" not in response.get_data(as_text=True)
 
 
@@ -406,3 +404,53 @@ def test_deep_probe_is_rejected_while_live_preview_is_active():
 
     assert response.status_code == 409
     assert "preview" in response.get_json()["error"].lower()
+
+
+def test_ptz_channel_is_inferred_from_onvif_profile_mapping():
+    channel, source = main._infer_ptz_channel(
+        {
+            "profiles": [
+                {
+                    "token": "profile_0",
+                    "stream": {"path": "/live/ch00_0"},
+                },
+                {
+                    "token": "profile_1",
+                    "stream": {"path": "/live/ch00_1"},
+                },
+            ],
+            "ptz": {"profile_token": "profile_0"},
+        }
+    )
+
+    assert channel == 0
+    assert source == "onvif_profile_mapping"
+
+
+def test_preview_candidates_fall_back_from_substream_to_main():
+    main.update_state(
+        preview_probe={
+            "streams": [
+                {
+                    "path": "/live/ch00_1",
+                    "available": True,
+                    "streams": [{"codec_type": "video"}],
+                }
+            ]
+        },
+        onvif_info={"profiles": []},
+        media_probe={
+            "streams": [
+                {
+                    "path": "/live/ch00_0",
+                    "available": True,
+                    "streams": [{"codec_type": "video"}],
+                }
+            ]
+        },
+    )
+
+    assert main._preview_candidates(0) == [
+        ("/live/ch00_1", "validated_substream"),
+        ("/live/ch00_0", "confirmed_main"),
+    ]
