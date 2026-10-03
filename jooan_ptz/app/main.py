@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+import select
 import threading
 import time
 from pathlib import Path
@@ -73,12 +74,15 @@ _state = {
     "probe_started_at": None,
     "last_recovery_validation": None,
     "ptz_moving": False,
+    "ptz_channel": None,
+    "ptz_channel_source": None,
     "preview_active": False,
     "preview_channel": None,
     "preview_stream": None,
     "preview_source": None,
     "preview_probe": None,
     "preview_probe_running": False,
+    "preview_last_error": None,
 }
 
 
@@ -109,6 +113,27 @@ def get_camera() -> JooanCamera:
 def update_state(**values) -> None:
     with _state_lock:
         _state.update(values)
+
+
+def _infer_ptz_channel(onvif_info: dict | None) -> tuple[int | None, str | None]:
+    """Map the ONVIF PTZ profile back to the RTSP channel it controls."""
+    onvif_info = onvif_info or {}
+    ptz_profile = (onvif_info.get("ptz") or {}).get("profile_token")
+    if not ptz_profile:
+        return None, None
+
+    for profile in onvif_info.get("profiles", []):
+        if profile.get("token") != ptz_profile:
+            continue
+        path = (profile.get("stream") or {}).get("path")
+        if not isinstance(path, str):
+            continue
+        match = re.fullmatch(r"/live/ch(\d{2})_[01]", path)
+        if match:
+            channel = int(match.group(1))
+            if channel in (0, 1):
+                return channel, "onvif_profile_mapping"
+    return None, None
 
 
 def validate_camera(*, deep: bool = False) -> bool:
@@ -192,6 +217,11 @@ def _validate_camera_locked(*, deep: bool = False) -> bool:
             except Exception as exc:
                 _LOGGER.warning("Could not probe ONVIF: %s", redact_secrets(exc))
                 values["onvif_info"] = {"reachable": False, "error": redact_secrets(exc)}
+            ptz_channel, ptz_source = _infer_ptz_channel(values.get("onvif_info"))
+            if ptz_channel is not None:
+                values["ptz_channel"] = ptz_channel
+                values["ptz_channel_source"] = ptz_source
+
             try:
                 values["media_probe"] = camera.probe_rtsp_streams(
                     values.get("onvif_info"),
@@ -453,7 +483,7 @@ def _video_stream_available(item: dict | None) -> bool:
     )
 
 
-def _select_preview_stream(channel: int) -> tuple[str, str]:
+def _preview_candidates(channel: int) -> list[tuple[str, str]]:
     if channel not in (0, 1):
         raise ValueError("Unsupported preview channel")
 
@@ -466,20 +496,67 @@ def _select_preview_stream(channel: int) -> tuple[str, str]:
         onvif_info = dict(_state.get("onvif_info") or {})
         media_probe = dict(_state.get("media_probe") or {})
 
+    candidates: list[tuple[str, str]] = []
+
     for item in preview_probe.get("streams", []):
         if item.get("path") == sub_path and _video_stream_available(item):
-            return sub_path, "validated_substream"
+            candidates.append((sub_path, "validated_substream"))
+            break
 
-    for profile in onvif_info.get("profiles", []):
-        if (profile.get("stream") or {}).get("path") == sub_path:
-            return sub_path, "onvif_substream"
+    if not any(path == sub_path for path, _ in candidates):
+        for profile in onvif_info.get("profiles", []):
+            if (profile.get("stream") or {}).get("path") == sub_path:
+                candidates.append((sub_path, "onvif_substream"))
+                break
 
     for item in media_probe.get("streams", []):
         if item.get("path") == main_path and _video_stream_available(item):
-            return main_path, "confirmed_main"
+            candidates.append((main_path, "confirmed_main"))
+            break
 
-    # The main paths are already allowlisted and are the conservative fallback.
-    return main_path, "known_main_candidate"
+    if not any(path == main_path for path, _ in candidates):
+        candidates.append((main_path, "known_main_candidate"))
+
+    return candidates
+
+
+def _select_preview_stream(channel: int) -> tuple[str, str]:
+    return _preview_candidates(channel)[0]
+
+
+def _wait_for_preview_header(process, timeout: float = 4.0) -> bytes | None:
+    """Confirm FFmpeg emitted a multipart MJPEG header before claiming live."""
+    if process.stdout is None:
+        return None
+    try:
+        ready, _, _ = select.select([process.stdout], [], [], timeout)
+    except (OSError, ValueError):
+        return None
+    if not ready:
+        return None
+    try:
+        chunk = process.stdout.read(4096)
+    except OSError:
+        return None
+    if not chunk or b"--jooanframe" not in chunk[:512]:
+        return None
+    return chunk
+
+
+def _start_preview_process(channel: int):
+    camera = get_camera()
+    failures: list[str] = []
+    for path, source in _preview_candidates(channel):
+        stream = path.rsplit("/", 1)[-1]
+        process = camera.start_mjpeg_preview(stream, width=640, fps=6)
+        first_chunk = _wait_for_preview_header(process)
+        if first_chunk is not None:
+            return process, first_chunk, path, source
+        _terminate_process(process)
+        failures.append(path)
+    raise RuntimeError(
+        "MJPEG preview produced no frames for " + ", ".join(failures)
+    )
 
 
 def _terminate_process(process) -> None:
@@ -521,7 +598,12 @@ def _preview_probe_worker() -> None:
                 channel_count = int(
                     (_state.get("device_info") or {}).get("channel_count", 1)
                 )
-            result = get_camera().probe_preview_substreams(channel_count)
+                ptz_channel = _state.get("ptz_channel")
+            targets = [int(ptz_channel)] if ptz_channel in (0, 1) else None
+            result = get_camera().probe_preview_substreams(
+                channel_count,
+                channels=targets,
+            )
             update_state(preview_probe=result)
     except Exception as exc:
         update_state(
@@ -569,8 +651,7 @@ def stop_live_preview():
     return jsonify({"ok": True, "stopped": stopped})
 
 
-@app.get("/api/live/<int:channel>")
-def live_preview(channel: int):
+def _live_preview_response(channel: int):
     global _preview_process, _preview_generation
 
     if channel not in (0, 1):
@@ -582,19 +663,17 @@ def live_preview(channel: int):
         if _state.get("probe_running") or _state.get("preview_probe_running"):
             return jsonify({"error": "Camera diagnostics are running"}), 409
 
-    # Serialize preview replacement so concurrent browser reconnects can never
-    # leave two RTSP/ffmpeg preview sessions alive at the same time.
     with _preview_start_lock:
         _stop_live_preview()
 
         if not _camera_io_lock.acquire(timeout=CAMERA_IO_LOCK_TIMEOUT):
             return jsonify({"error": "Camera is busy"}), 409
         try:
-            path, source = _select_preview_stream(channel)
-            stream = path.rsplit("/", 1)[-1]
-            process = get_camera().start_mjpeg_preview(stream, width=640, fps=6)
+            process, first_chunk, path, source = _start_preview_process(channel)
         except Exception as exc:
-            return jsonify({"error": redact_secrets(exc)}), 502
+            safe_error = redact_secrets(exc)
+            update_state(preview_active=False, preview_last_error=safe_error)
+            return jsonify({"error": safe_error}), 502
         finally:
             _camera_io_lock.release()
 
@@ -608,11 +687,13 @@ def live_preview(channel: int):
             preview_channel=channel,
             preview_stream=path,
             preview_source=source,
+            preview_last_error=None,
         )
 
     def generate():
         global _preview_process
         try:
+            yield first_chunk
             if process.stdout is None:
                 return
             while True:
@@ -642,6 +723,20 @@ def live_preview(channel: int):
             "X-JOOAN-Preview-Source": source,
         },
     )
+
+
+@app.get("/api/live/ptz")
+def live_ptz_preview():
+    with _state_lock:
+        channel = _state.get("ptz_channel")
+    if channel not in (0, 1):
+        channel = 0
+    return _live_preview_response(int(channel))
+
+
+@app.get("/api/live/<int:channel>")
+def live_preview(channel: int):
+    return _live_preview_response(channel)
 
 
 def _manual_probe_worker() -> None:
