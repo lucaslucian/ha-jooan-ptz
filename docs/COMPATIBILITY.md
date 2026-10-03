@@ -23,7 +23,8 @@ A família JOOAN/CAM720 contém várias revisões de hardware e firmware com nom
 | porta 9898 / `get_deviceFeatures` | Validado |
 | dual-lens | Detectado |
 | SD / recording / motion / tracking / light state | Detectado |
-| substreams `*_1` | Experimental |
+| `ch00_1` | Detectado via ONVIF `GetStreamUri` (640×360, 15 fps, 256 kbps); validação RTSP contínua pendente |
+| `ch01_1` | Experimental; validação manual adicionada na v0.6 |
 | ONVIF 8899 | Validado: `/onvif/device_service` respondeu `GetCapabilities` com HTTP 200 |
 | `GetProfiles` / `GetStreamUri` / `GetStatus` / `GetPresets` | Experimental read-only v0.4 |
 | UDP 7788 | Observado, formato em pesquisa |

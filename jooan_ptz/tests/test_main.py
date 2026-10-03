@@ -1,3 +1,4 @@
+import io
 import threading
 import time
 
@@ -5,6 +6,7 @@ import main
 
 
 def setup_function():
+    main._stop_live_preview()
     main._snapshot_cache.clear()
     main._ptz_sequences.clear()
     main.update_state(
@@ -12,6 +14,12 @@ def setup_function():
         authenticated=False,
         probe_running=False,
         ptz_moving=False,
+        preview_active=False,
+        preview_channel=None,
+        preview_stream=None,
+        preview_source=None,
+        preview_probe=None,
+        preview_probe_running=False,
         last_error=None,
     )
 
@@ -259,3 +267,142 @@ def test_light_test_rejects_while_ptz_is_moving(monkeypatch):
 
     assert response.status_code == 409
     assert response.get_json()["busy"] is True
+
+
+def test_dashboard_template_is_served():
+    client = main.app.test_client()
+    response = client.get("/")
+
+    assert response.status_code == 200
+    body = response.get_data(as_text=True)
+    assert "Câmeras & PTZ" in body
+    assert "static/app.css" in body
+    assert "static/app.js" in body
+
+
+def test_preview_prefers_onvif_substream():
+    main.update_state(
+        onvif_info={
+            "profiles": [
+                {
+                    "name": "SubStream",
+                    "stream": {"path": "/live/ch00_1"},
+                    "video": {"width": 640, "height": 360},
+                }
+            ]
+        },
+        media_probe={
+            "streams": [
+                {
+                    "path": "/live/ch00_0",
+                    "available": True,
+                    "streams": [{"codec_type": "video"}],
+                }
+            ]
+        },
+    )
+
+    assert main._select_preview_stream(0) == ("/live/ch00_1", "onvif_substream")
+
+
+def test_preview_prefers_validated_substream_over_onvif():
+    main.update_state(
+        preview_probe={
+            "streams": [
+                {
+                    "path": "/live/ch01_1",
+                    "available": True,
+                    "streams": [{"codec_type": "video"}],
+                }
+            ]
+        },
+        onvif_info={"profiles": []},
+        media_probe={"streams": []},
+    )
+
+    assert main._select_preview_stream(1) == (
+        "/live/ch01_1",
+        "validated_substream",
+    )
+
+
+def test_live_preview_streams_mjpeg_without_exposing_rtsp(monkeypatch):
+    class FakeProcess:
+        def __init__(self):
+            self.stdout = io.BytesIO(
+                b"--jooanframe\r\nContent-Type: image/jpeg\r\n\r\nJPEG\r\n"
+            )
+            self.terminated = False
+
+        def poll(self):
+            return 0 if self.terminated else None
+
+        def terminate(self):
+            self.terminated = True
+
+        def wait(self, timeout=None):
+            return 0
+
+        def kill(self):
+            self.terminated = True
+
+    process = FakeProcess()
+    calls = []
+
+    class FakeCamera:
+        def start_mjpeg_preview(self, stream, width=640, fps=6):
+            calls.append((stream, width, fps))
+            return process
+
+    monkeypatch.setattr(main, "get_camera", lambda: FakeCamera())
+    main.update_state(
+        online=True,
+        authenticated=True,
+        probe_running=False,
+        preview_probe_running=False,
+        onvif_info={
+            "profiles": [
+                {"stream": {"path": "/live/ch00_1"}}
+            ]
+        },
+        media_probe={"streams": []},
+    )
+
+    client = main.app.test_client()
+    response = client.get("/api/live/0")
+
+    assert response.status_code == 200
+    assert response.headers["Content-Type"].startswith(
+        "multipart/x-mixed-replace"
+    )
+    assert response.headers["X-JOOAN-Preview-Stream"] == "/live/ch00_1"
+    assert b"JPEG" in response.data
+    assert calls == [("ch00_1", 640, 6)]
+    assert "rtsp://" not in response.get_data(as_text=True)
+
+
+def test_snapshot_uses_cache_while_live_preview_is_active(monkeypatch):
+    key = ("10.0.0.10", 554, "ch00_0")
+    main._snapshot_cache[key] = (time.monotonic(), b"cached-live-frame")
+    monkeypatch.setattr(main, "_snapshot_cache_key", lambda stream: key)
+    main.update_state(preview_active=True, ptz_moving=False)
+
+    class FakeCamera:
+        def snapshot(self, stream):
+            raise AssertionError("snapshot RTSP must not open during live preview")
+
+    monkeypatch.setattr(main, "get_camera", lambda: FakeCamera())
+    image, stale = main._capture_snapshot_with_fallback("ch00_0")
+
+    assert image == b"cached-live-frame"
+    assert stale is True
+
+
+def test_deep_probe_is_rejected_while_live_preview_is_active():
+    main.update_state(preview_active=True, ptz_moving=False, probe_running=False)
+    client = main.app.test_client()
+
+    response = client.post("/api/probe")
+
+    assert response.status_code == 409
+    assert "preview" in response.get_json()["error"].lower()

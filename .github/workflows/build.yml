@@ -37,6 +37,9 @@ jobs:
           PYTHONPATH: jooan_ptz/app
         run: pytest -q jooan_ptz/tests
 
+      - name: Validate dashboard JavaScript
+        run: node --check jooan_ptz/app/static/app.js
+
       - name: Validate YAML
         run: |
           python - <<'PY'
@@ -67,6 +70,9 @@ jobs:
               base / "icon.png",
               base / "logo.png",
               Path("docs/images/dashboard-concept.jpg"),
+              Path("jooan_ptz/app/templates/index.html"),
+              Path("jooan_ptz/app/static/app.css"),
+              Path("jooan_ptz/app/static/app.js"),
           ]
           for path in required:
               if not path.is_file():
@@ -120,7 +126,7 @@ jobs:
           platforms: ${{ matrix.platform }}
           push: false
           build-args: |
-            BUILD_VERSION=0.5.2
+            BUILD_VERSION=0.6.0
             BUILD_ARCH=${{ matrix.arch }}
           tags: local/jooan-local-control:${{ matrix.arch }}
           cache-from: type=gha,scope=jooan-${{ matrix.arch }}

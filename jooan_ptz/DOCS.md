@@ -34,6 +34,15 @@ Para o primeiro teste, `debug: true` pode ajudar. Desative depois de concluir o 
 
 ## O que aparece no painel
 
+A interface v0.6 organiza os dados já coletados em cinco áreas:
+
+- **Visão geral** — saúde, dispositivo, armazenamento, serviços e estados principais;
+- **Câmeras & PTZ** — preview ao vivo, snapshots, seleção de lente e PTZ;
+- **Detecção** — movimento, pessoa, veículo, tracking, luzes e alertas em modo leitura;
+- **Gravação** — SD, gravação e resumo de agendas;
+- **Diagnóstico** — serviços, ONVIF amigável e JSON bruto recolhido em detalhes expansíveis.
+
+
 ### Estado geral
 
 O App valida as credenciais enviando o comando PTZ seguro `stop`. `getPlatformID` é consultado separadamente como informação opcional do dispositivo.
@@ -96,6 +105,20 @@ As credenciais RTSP e a URL autenticada não são devolvidas ao navegador.
 ### Snapshots
 
 O FFmpeg gera um JPEG diretamente do RTSP para cada stream confirmado. A interface permite atualizar os snapshots sem revelar a senha RTSP.
+
+### Preview ao vivo
+
+A v0.6 adiciona preview ao vivo sob demanda no painel. O navegador não recebe a URL RTSP nem as credenciais: o backend abre um único stream RTSP e o FFmpeg o converte para MJPEG local de baixa taxa (até 640 px e 6 fps).
+
+Regras de proteção:
+
+- no máximo **um preview contínuo** fica ativo por vez;
+- trocar de lente encerra o preview anterior antes de abrir o próximo;
+- o App prefere um substream `*_1` validado/descoberto por ONVIF;
+- se não houver substream conhecido, usa o stream principal confirmado e reduz resolução/FPS no bridge;
+- PTZ continua permitido durante o preview;
+- snapshots, diagnóstico profundo e validações pesadas ficam suspensos enquanto o preview contínuo está ativo;
+- ao ocultar/sair da página, a interface solicita o encerramento do preview.
 
 ### ONVIF
 
@@ -194,7 +217,7 @@ A porta 8899 foi validada na JA-A12 usada no desenvolvimento, mas JOOAN possui r
 
 Ainda não estão implementados como recursos estáveis:
 
-- live video contínuo dentro do painel;
+- live video de baixa latência em formato nativo H.264/WebRTC (a v0.6 usa bridge MJPEG local);
 - presets/Home;
 - alteração de tracking/detecção;
 - controle de IR/floodlight;

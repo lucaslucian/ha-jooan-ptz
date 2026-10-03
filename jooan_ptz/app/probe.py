@@ -935,3 +935,56 @@ def capture_snapshot(url: str, timeout: float = 10.0) -> bytes:
     if proc.returncode != 0 or not proc.stdout:
         raise RuntimeError("could not capture RTSP snapshot")
     return proc.stdout
+
+
+def start_mjpeg_rtsp(
+    url: str,
+    *,
+    width: int = 640,
+    fps: int = 6,
+    quality: int = 7,
+) -> subprocess.Popen[bytes]:
+    """Start one low-rate MJPEG bridge for an already allowlisted RTSP URL.
+
+    The authenticated RTSP URL is passed only to ffmpeg and is never returned
+    to the browser. stderr is discarded deliberately so ffmpeg cannot echo the
+    URL (and credentials) into application logs.
+    """
+    safe_width = max(320, min(int(width), 960))
+    safe_fps = max(2, min(int(fps), 10))
+    safe_quality = max(3, min(int(quality), 12))
+    return subprocess.Popen(
+        [
+            "ffmpeg",
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-rtsp_transport",
+            "tcp",
+            "-fflags",
+            "nobuffer",
+            "-flags",
+            "low_delay",
+            "-analyzeduration",
+            "500000",
+            "-probesize",
+            "65536",
+            "-i",
+            url,
+            "-map",
+            "0:v:0",
+            "-an",
+            "-vf",
+            f"fps={safe_fps},scale={safe_width}:-2:flags=fast_bilinear",
+            "-q:v",
+            str(safe_quality),
+            "-f",
+            "mpjpeg",
+            "-boundary_tag",
+            "jooanframe",
+            "pipe:1",
+        ],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        bufsize=0,
+    )

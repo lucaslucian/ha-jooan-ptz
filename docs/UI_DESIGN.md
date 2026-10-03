@@ -4,7 +4,7 @@ Este documento registra a referência visual escolhida para a evolução do pain
 
 ![Conceito visual do painel completo](images/dashboard-concept.jpg)
 
-> Esta imagem é a referência visual aprovada para o projeto. Ela é um conceito de interface, não uma captura da implementação atual. O frontend deve evoluir nessa direção sem exibir recursos que ainda não foram confirmados pelo backend.
+> Esta imagem continua sendo a referência visual aprovada. A v0.6 já implementa a primeira versão do dashboard nessa direção, mantendo recursos ainda não confirmados como leitura/diagnóstico em vez de controles de escrita.
 
 ## Estilo
 
@@ -126,6 +126,23 @@ Inicialmente read-only. Toggles só devem aparecer após validação de escrita 
 5. Diagnóstico avançado não deve dominar a tela principal.
 6. O painel deve continuar útil mesmo com a Internet da câmera bloqueada.
 
-## Próxima implementação visual
+## Implementado na v0.6
 
-A próxima refatoração do frontend deverá substituir o HTML monolítico atual por componentes/cards seguindo esta especificação, preservando todos os endpoints e regras de segurança existentes.
+- frontend separado em template, CSS e JavaScript;
+- abas de Visão geral, Câmeras & PTZ, Detecção, Gravação e Diagnóstico;
+- cards amigáveis para estado, serviços e capabilities;
+- JSON bruto recolhido em detalhes expansíveis;
+- duas lentes apresentadas como canais separados;
+- preview contínuo local sob demanda;
+- seleção automática de substream quando validado/disponível;
+- PTZ ao lado do preview;
+- suporte a tema claro/escuro;
+- layout responsivo.
+
+## Próximos refinamentos
+
+- validar o substream da segunda lente;
+- medir CPU/latência do bridge MJPEG no Raspberry Pi;
+- decidir se MJPEG permanece como preview padrão ou se evolui para HLS/WebRTC/go2rtc;
+- adicionar controles de escrita apenas conforme os comandos locais forem validados;
+- adicionar presets somente após validação explícita de criação/chamada/remoção.
