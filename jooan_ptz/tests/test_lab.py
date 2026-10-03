@@ -513,3 +513,113 @@ def test_imaging_path_probe_checks_capability_and_getservices_paths(monkeypatch)
         "GetImagingSettings",
     ]
     assert all(call["action"] != "SetImagingSettings" for call in calls)
+
+
+
+def test_recording_job_discovery_reads_existing_job_configuration_and_state(monkeypatch):
+    calls = []
+    jobs_root = ET.fromstring(
+        "<Envelope><JobItem><JobToken>job_1</JobToken><JobConfiguration>"
+        "<RecordingToken>OnvifRecordingToken_1</RecordingToken><Mode>Idle</Mode>"
+        "<Priority>1</Priority></JobConfiguration></JobItem></Envelope>"
+    )
+
+    def fake_soap(camera, **kwargs):
+        calls.append(kwargs)
+        action = kwargs["action"]
+        if action == "GetRecordingJobs":
+            return ok_response(), jobs_root
+        if action == "GetRecordingJobConfiguration":
+            return ok_response(), ET.fromstring(
+                "<Envelope><JobConfiguration><RecordingToken>OnvifRecordingToken_1</RecordingToken>"
+                "<Mode>Idle</Mode><Priority>1</Priority></JobConfiguration></Envelope>"
+            )
+        if action == "GetRecordingJobState":
+            return ok_response(), ET.fromstring(
+                "<Envelope><State><RecordingToken>OnvifRecordingToken_1</RecordingToken>"
+                "<State>Idle</State></State></Envelope>"
+            )
+        raise AssertionError(action)
+
+    monkeypatch.setattr(lab, "_soap", fake_soap)
+    result = lab.onvif_recording_job_discovery(FakeCamera(), storage_info())
+
+    assert result["job_count"] == 1
+    assert result["jobs"] == [{
+        "token": "job_1",
+        "mode": "Idle",
+        "recording_token": "OnvifRecordingToken_1",
+        "priority": "1",
+    }]
+    assert [call["action"] for call in calls] == [
+        "GetRecordingJobs",
+        "GetRecordingJobConfiguration",
+        "GetRecordingJobState",
+    ]
+
+
+def test_recording_pulse_only_toggles_existing_idle_job_and_restores(monkeypatch):
+    discovery = {
+        "jobs": [{
+            "token": "job_1",
+            "mode": "Idle",
+            "recording_token": "OnvifRecordingToken_1",
+            "priority": "1",
+        }]
+    }
+    calls = []
+
+    monkeypatch.setattr(lab, "onvif_recording_job_discovery", lambda camera, info: discovery)
+    monkeypatch.setattr(
+        lab,
+        "_recording_info_by_token",
+        lambda camera, info, token: {"accepted": True, "recording_status": "stub"},
+    )
+    monkeypatch.setattr(
+        lab,
+        "_recording_job_read",
+        lambda camera, **kwargs: {"accepted": True, "values": [{"name": "State", "value": "Active"}]},
+    )
+    monkeypatch.setattr(lab.time, "sleep", lambda _: None)
+
+    def fake_soap(camera, **kwargs):
+        calls.append(kwargs)
+        assert kwargs["action"] == "SetRecordingJobMode"
+        return ok_response(), ET.fromstring("<Envelope/>")
+
+    monkeypatch.setattr(lab, "_soap", fake_soap)
+    result = lab.onvif_recording_pulse(FakeCamera(), storage_info(), seconds=9)
+
+    assert result["seconds"] == 5
+    assert result["executed"] is True
+    assert result["created_objects"] is False
+    assert result["deleted_objects"] is False
+    assert result["job_configuration_changed"] is False
+    assert len(calls) == 2
+    assert "<trc:Mode>Active</trc:Mode>" in calls[0]["payload"]
+    assert "<trc:Mode>Idle</trc:Mode>" in calls[1]["payload"]
+
+
+def test_recording_pulse_refuses_non_idle_job_without_write(monkeypatch):
+    monkeypatch.setattr(
+        lab,
+        "onvif_recording_job_discovery",
+        lambda camera, info: {
+            "jobs": [{
+                "token": "job_1",
+                "mode": "Active",
+                "recording_token": "OnvifRecordingToken_1",
+                "priority": "1",
+            }]
+        },
+    )
+    monkeypatch.setattr(
+        lab,
+        "_soap",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("must not write")),
+    )
+
+    result = lab.onvif_recording_pulse(FakeCamera(), storage_info(), seconds=5)
+
+    assert result["executed"] is False
+    assert "not Idle" in result["reason"]
