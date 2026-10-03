@@ -40,7 +40,7 @@ const formatTime=value=>{
 const formatMb=value=>{
   const number=Number(value);
   if(!Number.isFinite(number))return '—';
-  if(number>=1024)return (number/1024).toFixed(number>=10240?0:1)+' GB';
+  if(number>=1000)return (number/1000).toFixed(number>=10000?1:2)+' GB';
   return number.toFixed(0)+' MB';
 };
 const videoInfo=item=>(item?.streams||[]).find(s=>s.codec_type==='video')||{};
@@ -97,10 +97,12 @@ function renderOverview(data){
   const onvif=data.onvif_info||{};
   const media=data.media_probe||{};
   const total=device.sdcard_total_mb;
+  const networkRaw=data.network_state?.NETWORKSTATE;
+  const networkFriendly=networkRaw==='CONNECTBUTT'?'Conectada':(networkRaw||'Sem estado reportado');
 
   $('overviewCards').innerHTML=[
     {label:'Dispositivo',value:device.model||data.lan_support?.model||'—',sub:(device.channel_count||'—')+' canais · '+(device.capabilities?.codec||'codec desconhecido')},
-    {label:'Rede',value:data.online?'Online':'Offline',sub:data.network_state?.NETWORKSTATE||'Sem estado reportado'},
+    {label:'Rede',value:data.online?'Online':'Offline',sub:networkFriendly},
     {label:'Armazenamento',value:formatMb(total),sub:device.sdcard_free_mb===0?'0 MB livre reportado · sem interpretar como cheio':formatMb(device.sdcard_free_mb)+' livre'},
     {label:'Mídia',value:media.reachable?'RTSP ativo':'Sem RTSP',sub:(media.reported_channel_count||device.channel_count||'—')+' canais · porta '+(media.port||554)}
   ].map(item=>'<div class="stat-card"><span class="label">'+esc(item.label)+'</span><div><div class="value">'+esc(item.value)+'</div><div class="subvalue">'+esc(item.sub)+'</div></div></div>').join('');
@@ -116,7 +118,7 @@ function renderOverview(data){
     ['Rastreamento pessoa','person_tracking','person_track_enable']
   ];
   $('quickFeatures').innerHTML=quick.map(([label,cap,key])=>{
-    const supported=device.capabilities?.[cap]!==false;
+    const supported=device.capabilities?.[cap]===true;
     const enabled=boolState(state[key]);
     return '<div class="feature-item"><div class="feature-label"><strong>'+esc(label)+'</strong><span>'+
       (supported?'Suportado pela câmera':'Não detectado')+'</span></div>'+statusBadge(enabled)+'</div>';
@@ -249,7 +251,7 @@ function renderDetection(data){
   ];
   $('lightingGrid').innerHTML=lights.map(([label,cap,key])=>{
     const value=state[key];
-    const supported=cap?capabilities[cap]!==false:true;
+    const supported=cap?capabilities[cap]===true:Object.prototype.hasOwnProperty.call(state,key);
     const enabled=boolState(value);
     return '<div class="setting-item"><div><strong>'+esc(label)+'</strong><span>'+(supported?'Estado reportado':'Não detectado')+'</span></div>'+
       '<span class="setting-value">'+(enabled?'Ativo':'Inativo')+'</span></div>';
@@ -431,7 +433,7 @@ async function stopLivePreview(){
   $('startLive').disabled=false;
   $('stopLive').disabled=true;
   try{await fetch(api('api/live/stop'),{method:'POST',keepalive:true})}catch(_){}
-  if(!$('singleSnapshot').src)$('previewEmpty').hidden=false;
+  if(!$('singleSnapshot').hasAttribute('src'))$('previewEmpty').hidden=false;
   if($('previewMessage').textContent.includes('preview'))$('previewMessage').textContent='Preview parado.';
 }
 
