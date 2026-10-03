@@ -454,3 +454,8 @@ def test_preview_candidates_fall_back_from_substream_to_main():
         ("/live/ch00_1", "validated_substream"),
         ("/live/ch00_0", "confirmed_main"),
     ]
+
+
+
+def test_recording_playback_probe_is_imported_by_main():
+    assert callable(main.onvif_recording_playback_probe)
