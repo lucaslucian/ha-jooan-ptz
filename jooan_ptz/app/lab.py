@@ -996,6 +996,278 @@ def onvif_recording_playback_probe(
     }
 
 
+def _recording_jobs(root) -> list[dict[str, Any]]:
+    jobs: list[dict[str, Any]] = []
+    if root is None:
+        return jobs
+    for node in root.iter():
+        if _local_name(node.tag) != "JobItem":
+            continue
+        token = None
+        mode = None
+        recording_token = None
+        priority = None
+        for child in node.iter():
+            local = _local_name(child.tag)
+            text = (child.text or "").strip()
+            if not text:
+                continue
+            if local == "JobToken" and token is None:
+                token = text
+            elif local == "Mode" and mode is None:
+                mode = text
+            elif local == "RecordingToken" and recording_token is None:
+                recording_token = text
+            elif local == "Priority" and priority is None:
+                priority = text
+        if token and LAB_TOKEN_RE.fullmatch(token):
+            jobs.append({
+                "token": token,
+                "mode": mode,
+                "recording_token": recording_token,
+                "priority": priority,
+            })
+        if len(jobs) >= 8:
+            break
+    return jobs
+
+
+def _recording_job_read(
+    camera,
+    *,
+    path: str,
+    token: str,
+    action: str,
+) -> dict[str, Any]:
+    token = _safe_token(token, label="recording job token")
+    if action == "GetRecordingJobConfiguration":
+        payload = (
+            "<trc:GetRecordingJobConfiguration>"
+            f"<trc:JobToken>{xml_escape(token)}</trc:JobToken>"
+            "</trc:GetRecordingJobConfiguration>"
+        )
+    elif action == "GetRecordingJobState":
+        payload = (
+            "<trc:GetRecordingJobState>"
+            f"<trc:JobToken>{xml_escape(token)}</trc:JobToken>"
+            "</trc:GetRecordingJobState>"
+        )
+    else:
+        raise LabError("Unsupported recording job read operation")
+
+    response, root = _soap(
+        camera,
+        path=path,
+        namespace=ONVIF_RECORDING,
+        prefix="trc",
+        payload=payload,
+        action=action,
+        timeout=5.0,
+    )
+    return {
+        **_response_summary(response),
+        "values": _xml_rows(root),
+        "hierarchy": _xml_tree(root),
+    }
+
+
+def onvif_recording_job_discovery(camera, onvif_info: dict) -> dict[str, Any]:
+    """Read existing recording jobs and their configuration/state."""
+    path = _service_path_by_namespace(onvif_info, ONVIF_RECORDING)
+    if not path:
+        raise LabError("Recording service was not advertised")
+
+    response, root = _soap(
+        camera,
+        path=path,
+        namespace=ONVIF_RECORDING,
+        prefix="trc",
+        payload="<trc:GetRecordingJobs/>",
+        action="GetRecordingJobs",
+        timeout=5.0,
+    )
+    summary = _response_summary(response)
+    jobs = _recording_jobs(root) if summary["accepted"] else []
+    details = []
+    for job in jobs[:4]:
+        token = job["token"]
+        details.append({
+            **job,
+            "configuration": _recording_job_read(
+                camera,
+                path=path,
+                token=token,
+                action="GetRecordingJobConfiguration",
+            ),
+            "state": _recording_job_read(
+                camera,
+                path=path,
+                token=token,
+                action="GetRecordingJobState",
+            ),
+        })
+
+    return {
+        "operation": "onvif_recording_job_discovery",
+        "path": path,
+        "jobs": jobs,
+        "job_count": len(jobs),
+        "details": details,
+        "get_jobs": summary,
+    }
+
+
+def _recording_info_by_token(
+    camera,
+    onvif_info: dict,
+    recording_token: str,
+) -> dict[str, Any]:
+    search_path = _service_path_by_namespace(onvif_info, ONVIF_SEARCH)
+    if not search_path:
+        return {"accepted": False, "error": "Search service was not advertised"}
+    token = _safe_token(recording_token, label="recording token")
+    response, root = _soap(
+        camera,
+        path=search_path,
+        namespace=ONVIF_SEARCH,
+        prefix="tse",
+        payload=(
+            "<tse:GetRecordingInformation>"
+            f"<tse:RecordingToken>{xml_escape(token)}</tse:RecordingToken>"
+            "</tse:GetRecordingInformation>"
+        ),
+        action="GetRecordingInformation",
+        timeout=5.0,
+    )
+    return {
+        **_response_summary(response),
+        "values": _xml_rows(root),
+        "hierarchy": _xml_tree(root),
+    }
+
+
+def onvif_recording_pulse(
+    camera,
+    onvif_info: dict,
+    *,
+    seconds: int = 5,
+) -> dict[str, Any]:
+    """Activate one existing idle recording job briefly, then restore Idle.
+
+    This never creates/deletes recordings, tracks or jobs and never edits job
+    configuration. A write is attempted only when exactly one existing job is
+    returned and its current mode is explicitly Idle.
+    """
+    seconds = max(1, min(int(seconds), 5))
+    discovery = onvif_recording_job_discovery(camera, onvif_info)
+    jobs = discovery.get("jobs") or []
+    if len(jobs) != 1:
+        return {
+            "operation": "onvif_recording_pulse",
+            "seconds": seconds,
+            "executed": False,
+            "reason": "Exactly one existing recording job is required",
+            "discovery": discovery,
+        }
+
+    job = jobs[0]
+    job_token = _safe_token(job.get("token"), label="recording job token")
+    mode = str(job.get("mode") or "")
+    recording_token = str(job.get("recording_token") or "")
+    if mode != "Idle":
+        return {
+            "operation": "onvif_recording_pulse",
+            "seconds": seconds,
+            "executed": False,
+            "reason": f"Recording job mode is {mode or 'unknown'}, not Idle",
+            "job": job,
+            "discovery": discovery,
+        }
+    if not LAB_TOKEN_RE.fullmatch(recording_token):
+        return {
+            "operation": "onvif_recording_pulse",
+            "seconds": seconds,
+            "executed": False,
+            "reason": "Recording job did not expose a safe recording token",
+            "job": job,
+            "discovery": discovery,
+        }
+
+    path = _service_path_by_namespace(onvif_info, ONVIF_RECORDING)
+    before_info = _recording_info_by_token(camera, onvif_info, recording_token)
+
+    active_response = None
+    active_state = None
+    active_info = None
+    restore_response = None
+    restored_state = None
+    after_info = None
+    try:
+        active_response, _ = _soap(
+            camera,
+            path=path,
+            namespace=ONVIF_RECORDING,
+            prefix="trc",
+            payload=(
+                "<trc:SetRecordingJobMode>"
+                f"<trc:JobToken>{xml_escape(job_token)}</trc:JobToken>"
+                "<trc:Mode>Active</trc:Mode>"
+                "</trc:SetRecordingJobMode>"
+            ),
+            action="SetRecordingJobMode",
+            timeout=5.0,
+        )
+        if _response_summary(active_response)["accepted"]:
+            active_state = _recording_job_read(
+                camera,
+                path=path,
+                token=job_token,
+                action="GetRecordingJobState",
+            )
+            active_info = _recording_info_by_token(camera, onvif_info, recording_token)
+            time.sleep(seconds)
+    finally:
+        if active_response is not None and _response_summary(active_response)["accepted"]:
+            restore_response, _ = _soap(
+                camera,
+                path=path,
+                namespace=ONVIF_RECORDING,
+                prefix="trc",
+                payload=(
+                    "<trc:SetRecordingJobMode>"
+                    f"<trc:JobToken>{xml_escape(job_token)}</trc:JobToken>"
+                    "<trc:Mode>Idle</trc:Mode>"
+                    "</trc:SetRecordingJobMode>"
+                ),
+                action="SetRecordingJobMode",
+                timeout=5.0,
+            )
+            restored_state = _recording_job_read(
+                camera,
+                path=path,
+                token=job_token,
+                action="GetRecordingJobState",
+            )
+            after_info = _recording_info_by_token(camera, onvif_info, recording_token)
+
+    return {
+        "operation": "onvif_recording_pulse",
+        "seconds": seconds,
+        "executed": bool(active_response and _response_summary(active_response)["accepted"]),
+        "job": job,
+        "before_recording_information": before_info,
+        "activate": _response_summary(active_response or {}),
+        "active_state": active_state,
+        "active_recording_information": active_info,
+        "restore_idle": _response_summary(restore_response or {}),
+        "restored_state": restored_state,
+        "after_recording_information": after_info,
+        "created_objects": False,
+        "deleted_objects": False,
+        "job_configuration_changed": False,
+    }
+
+
 def _read_service_operation(
     camera,
     *,
