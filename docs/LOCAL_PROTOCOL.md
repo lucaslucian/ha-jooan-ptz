@@ -420,18 +420,22 @@ Capturas do aplicativo/cloud indicam que esta família anuncia recursos como:
 
 Esses campos são **pistas de capacidade**, não dependências do App local. A implementação só deve habilitar um controle quando existir um caminho LAN confirmado para leitura/escrita.
 
-## Comando proibido: `SetDiagMode`
+## `SetDiagMode` — uso experimental restrito
 
-Pesquisas públicas recentes sobre câmeras JOOAN/CAM720 mostram que algumas revisões possuem um modo de diagnóstico acionado através de `SingleHandlebyCommand`.
+Pesquisas públicas sobre câmeras JOOAN/CAM720 mostram que algumas revisões possuem um modo de diagnóstico acionado através de `SingleHandlebyCommand`. Esse mecanismo pode abrir um callback de diagnóstico poderoso e por isso não pode ser tratado como um comando comum.
 
-Esse caminho não tem utilidade para o Home Assistant e amplia desnecessariamente a superfície de ataque.
+Política do projeto a partir da v0.7:
 
-Política do projeto:
+- continua proibido criar endpoint `singleCMD` genérico;
+- o navegador nunca fornece `authserverip`, porta, código de autorização ou payload arbitrário;
+- a primeira implementação do laboratório expõe somente `SetDiagMode enable=0`, para forçar o modo desligado;
+- ativação futura só poderá ocorrer através de um callback sink dedicado controlado pelo backend;
+- o callback deverá usar IP privado fixado/validado, código efêmero, timeout curto e fechamento automático;
+- o sink não poderá encaminhar shell, comandos do navegador ou bytes arbitrários para a câmera;
+- toda ativação deverá possuir caminho automático de desativação/expiração.
 
-- nunca criar endpoint `singleCMD` genérico;
-- nunca permitir `SetDiagMode`;
-- nunca encaminhar comandos arbitrários fornecidos pelo navegador;
-- novos comandos entram individualmente na allowlist após validação.
+Assim podemos pesquisar o mecanismo sem transformar o App em uma interface de execução genérica.
+
 
 ## Proteção de segredos
 
@@ -450,7 +454,7 @@ O App também exige IP literal privado/link-local e rejeita destino público.
 
 ## Matriz atual do App
 
-| Recurso | v0.5.2 |
+| Recurso | v0.7.0 |
 |---|---|
 | validar câmera/credenciais | sim |
 | identificação LAN | sim |
@@ -464,12 +468,13 @@ O App também exige IP literal privado/link-local e rejeita destino público.
 | ONVIF GetCapabilities | sim, confirmado stock |
 | ONVIF GetProfiles/GetStreamUri | sim, read-only experimental |
 | ONVIF GetStatus/GetPresets | sim, read-only experimental |
-| ONVIF PTZ de escrita | ainda não |
-| presets de escrita/recall | ainda não |
+| ONVIF PTZ de escrita | laboratório: ContinuousMove/Stop experimental |
+| presets de escrita/recall | laboratório: HA_TEST experimental |
 | live video no navegador | ainda não |
 | áudio de escuta no navegador | ainda não |
 | playback SD | ainda não |
-| alterar tracking/detecção/luz | ainda não |
+| IR auxiliary command | laboratório: Irlamp On/Off experimental |
+| alterar tracking/detecção/floodlight | setter stock ainda não confirmado |
 | talk-back | ainda não |
 | descoberta UDP 7788 | ainda não |
 
