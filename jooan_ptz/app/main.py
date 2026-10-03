@@ -11,6 +11,19 @@ from pathlib import Path
 from flask import Flask, Response, jsonify, render_template, request
 
 from camera import JooanAuthError, JooanCamera, redact_secrets
+from lab import (
+    LabError,
+    disable_diag_mode,
+    onvif_continuous_move,
+    onvif_create_test_preset,
+    onvif_delete_test_preset,
+    onvif_event_discovery,
+    onvif_goto_preset,
+    onvif_imaging_discovery,
+    onvif_ir_lamp,
+    onvif_list_presets,
+    onvif_pull_events,
+)
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
@@ -470,6 +483,140 @@ def test():
         return jsonify({"ok": _validate_camera_locked(deep=False)})
     finally:
         _camera_io_lock.release()
+
+
+def _lab_context() -> tuple[JooanCamera, dict]:
+    with _state_lock:
+        if not _state.get("online") or not _state.get("authenticated"):
+            raise LabError("Camera is not ready")
+        if _state.get("probe_running") or _state.get("preview_probe_running"):
+            raise LabError("Camera diagnostics are running")
+        if _state.get("preview_active"):
+            raise LabError("Stop live preview before running laboratory actions")
+        if _state.get("ptz_moving"):
+            raise LabError("Stop CGI PTZ movement before running laboratory actions")
+        onvif_info = dict(_state.get("onvif_info") or {})
+    return get_camera(), onvif_info
+
+
+def _lab_execute(callback):
+    try:
+        camera, onvif_info = _lab_context()
+    except LabError as exc:
+        return jsonify({"error": str(exc)}), 409
+
+    if not _camera_io_lock.acquire(blocking=False):
+        return jsonify({"error": "Camera is busy"}), 409
+    try:
+        return jsonify(callback(camera, onvif_info))
+    except LabError as exc:
+        return jsonify({"error": str(exc)}), 400
+    except JooanAuthError as exc:
+        safe_error = redact_secrets(exc)
+        update_state(authenticated=False, last_error=safe_error)
+        return jsonify({"error": safe_error}), 401
+    except Exception as exc:
+        safe_error = redact_secrets(exc)
+        _LOGGER.warning("Laboratory action failed: %s", safe_error)
+        return jsonify({"error": safe_error}), 502
+    finally:
+        _camera_io_lock.release()
+
+
+@app.post("/api/lab/onvif/ptz")
+def lab_onvif_ptz():
+    payload = request.get_json(silent=True) or {}
+    direction = str(payload.get("direction") or "")
+    try:
+        speed = float(payload.get("speed", 0.25))
+        duration_ms = int(payload.get("duration_ms", 250))
+    except (TypeError, ValueError):
+        return jsonify({"error": "Invalid PTZ speed/duration"}), 400
+
+    update_state(ptz_moving=True)
+    try:
+        return _lab_execute(
+            lambda camera, onvif_info: onvif_continuous_move(
+                camera,
+                onvif_info,
+                direction=direction,
+                speed=speed,
+                duration_ms=duration_ms,
+            )
+        )
+    finally:
+        update_state(ptz_moving=False)
+
+
+@app.post("/api/lab/onvif/ir")
+def lab_onvif_ir():
+    payload = request.get_json(silent=True) or {}
+    enabled = payload.get("enabled")
+    if not isinstance(enabled, bool):
+        return jsonify({"error": "enabled must be boolean"}), 400
+    return _lab_execute(
+        lambda camera, onvif_info: onvif_ir_lamp(
+            camera,
+            onvif_info,
+            enabled=enabled,
+        )
+    )
+
+
+@app.get("/api/lab/onvif/presets")
+def lab_onvif_presets_list():
+    return _lab_execute(onvif_list_presets)
+
+
+@app.post("/api/lab/onvif/presets")
+def lab_onvif_presets_action():
+    payload = request.get_json(silent=True) or {}
+    action = str(payload.get("action") or "")
+    token = str(payload.get("token") or "")
+
+    if action == "create":
+        return _lab_execute(onvif_create_test_preset)
+    if action == "goto":
+        return _lab_execute(
+            lambda camera, onvif_info: onvif_goto_preset(
+                camera,
+                onvif_info,
+                token=token,
+            )
+        )
+    if action == "delete":
+        return _lab_execute(
+            lambda camera, onvif_info: onvif_delete_test_preset(
+                camera,
+                onvif_info,
+                token=token,
+            )
+        )
+    return jsonify({"error": "Unsupported preset laboratory action"}), 400
+
+
+@app.post("/api/lab/onvif/imaging")
+def lab_onvif_imaging():
+    return _lab_execute(onvif_imaging_discovery)
+
+
+@app.post("/api/lab/onvif/events")
+def lab_onvif_events():
+    payload = request.get_json(silent=True) or {}
+    action = str(payload.get("action") or "discover")
+    if action == "discover":
+        return _lab_execute(onvif_event_discovery)
+    if action == "pull":
+        return _lab_execute(onvif_pull_events)
+    return jsonify({"error": "Unsupported ONVIF event laboratory action"}), 400
+
+
+@app.post("/api/lab/diag/disable")
+def lab_diag_disable():
+    # Only the fixed SetDiagMode disable operation is exposed. Active callback
+    # mode will not be added until a callback sink can be pinned to a safe
+    # private HA address without exposing an arbitrary command channel.
+    return _lab_execute(lambda camera, _onvif_info: disable_diag_mode(camera))
 
 
 def _video_stream_available(item: dict | None) -> bool:
