@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.13.1
+
+- Clarified that the OEM recording mapper and OEM toggle mapper use independent baselines.
+- Renamed baseline and compare buttons so the target is explicit: recording versus the selected toggle group.
+- Recording compare now remains disabled until a recording baseline has been captured.
+- Toggle compare now remains disabled until a baseline has been captured for the currently selected group.
+- Changing the toggle group clears its baseline and disables comparison until a new baseline is captured.
+- Fixed the generic laboratory availability refresh from unintentionally re-enabling compare buttons without a valid baseline.
+
+
 ## 0.13.0
 
 - Simplified the Laboratory tab around features that remain useful on the validated JA-A12.
