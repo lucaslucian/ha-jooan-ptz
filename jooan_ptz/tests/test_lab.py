@@ -664,3 +664,45 @@ def test_oem_recording_snapshot_exposes_only_recording_sd_fields():
     assert result["playback_fast_forward"] == "4x|16x"
     assert result["channel_count"] == 2
     assert result["capabilities"] == {"recording": True, "sdcard": True}
+
+
+
+def test_oem_toggle_snapshot_is_group_allowlisted():
+    class Camera:
+        def get_device_features(self):
+            class Info:
+                def as_dict(self):
+                    return {
+                        "properties": {
+                            "autotrack": 1,
+                            "person_track_enable": 0,
+                            "record_enable": 1,
+                            "device_id": "must-not-leak",
+                        },
+                        "capabilities": {
+                            "automatic_tracking": True,
+                            "person_tracking": True,
+                            "recording": True,
+                        },
+                    }
+            return Info()
+
+    result = lab.oem_toggle_snapshot(Camera(), group="tracking")
+
+    assert result["operation"] == "oem_toggle_snapshot"
+    assert result["group"] == "tracking"
+    assert result["values"] == {
+        "autotrack": 1,
+        "person_track_enable": 0,
+    }
+    assert "record_enable" not in result["values"]
+    assert "device_id" not in result["values"]
+
+
+def test_oem_toggle_snapshot_rejects_unknown_group():
+    try:
+        lab.oem_toggle_snapshot(object(), group="anything")
+    except lab.LabError as exc:
+        assert "Unsupported OEM toggle group" in str(exc)
+    else:
+        raise AssertionError("unknown OEM group must be rejected")
