@@ -146,16 +146,17 @@ Nenhuma dessas operações altera a câmera. PTZ de escrita continua usando apen
 
 ## Laboratório experimental
 
-A v0.9 mantém qualquer nova escrita separada da operação normal. Os testes só rodam por ação explícita na aba **Laboratório** e usam a mesma serialização de I/O que protege a câmera contra concorrência.
+A v0.10 mantém qualquer nova escrita separada da operação normal. Os testes só rodam por ação explícita na aba **Laboratório** e usam a mesma serialização de I/O que protege a câmera contra concorrência.
 
 Testes disponíveis inicialmente:
 
 - ONVIF `ContinuousMove` com velocidade entre 0,1 e 1,0, duração máxima de 800 ms e tentativa de `Stop` no bloco de finalização;
 - ONVIF `SendAuxiliaryCommand` apenas para `tt:Irlamp|On` / `tt:Irlamp|Off` quando esses comandos tiverem sido anunciados em `GetNodes`;
-- presets ONVIF: listar, criar somente o preset fixo `HA_TEST`, chamar apenas token presente no readback e excluir somente `HA_TEST`;
-- Imaging: `GetOptions` confirmou `Brightness`, `ColorSaturation`, `Contrast` e `Sharpness` em 1–255; o laboratório permite um `SetImagingSettings` allowlisted por vez com `ForcePersistence=false`. `GetImagingSettings` continua não suportado pelo firmware, portanto não há readback/restore automático;
+- presets ONVIF: `GetPresets` funciona, mas `SetPreset` retornou `ActionNotSupported` na JA-A12 validada; o laboratório mantém a criação fixa `HA_TEST` apenas para testar outras revisões;
+- Imaging: `GetOptions` confirmou `Brightness`, `ColorSaturation`, `Contrast` e `Sharpness` em 1–255, mas `GetImagingSettings` e `SetImagingSettings` retornaram `ActionNotSupported` na JA-A12 validada;
 - ONVIF Events: `GetServiceCapabilities`, `GetEventProperties` e PullPoint com janelas limitadas de 5/15/30 segundos;
-- descoberta read-only de Recording/Search/Replay somente quando os serviços forem anunciados por `GetServices`;
+- descoberta read-only de Recording/Search/Replay somente quando os serviços forem anunciados por `GetServices`; a JA-A12 validada retornou uma gravação com tracks Video/Audio/Metadata e replay RTP/RTSP/TCP;
+- probe read-only de `GetRecordingInformation` + `GetReplayUri`: o token é relido da câmera antes do uso e o URI bruto nunca é devolvido ao navegador;
 - inventário dos estados OEM da porta 9898 que ainda não possuem setter stock confirmado;
 - `SetDiagMode` em dois testes guardados: forçar `enable=0` e um callback ativo de curta duração através de sink dedicado na porta 49000.
 
@@ -265,7 +266,7 @@ Ainda não estão implementados como recursos estáveis:
 - presets/Home;
 - alteração de tracking/detecção;
 - controle de IR/floodlight;
-- playback do microSD;
+- playback real do microSD (v0.10 apenas solicita e sanitiza o URI ONVIF; ainda não abre o stream);
 - talk-back;
 - descoberta UDP 7788.
 
