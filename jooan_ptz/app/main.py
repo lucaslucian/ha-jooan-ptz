@@ -16,6 +16,8 @@ from lab import (
     disable_diag_mode,
     oem_recording_snapshot,
     oem_toggle_snapshot,
+    oem_write_plan,
+    oem_write_surface_probe,
     onvif_continuous_move,
     onvif_create_test_preset,
     onvif_delete_test_preset,
@@ -654,6 +656,27 @@ def lab_oem_toggles():
     group = str(payload.get("group") or "")
     return _lab_execute(
         lambda camera, _onvif_info: oem_toggle_snapshot(camera, group=group)
+    )
+
+
+@app.post("/api/lab/oem/write-surface")
+def lab_oem_write_surface():
+    return _lab_execute(
+        lambda camera, _onvif_info: oem_write_surface_probe(camera)
+    )
+
+
+@app.post("/api/lab/oem/write-plan")
+def lab_oem_write_plan():
+    payload = request.get_json(silent=True) or {}
+    target = str(payload.get("target") or "")
+    value = payload.get("value")
+    return _lab_execute(
+        lambda camera, _onvif_info: oem_write_plan(
+            camera,
+            target=target,
+            value=value,
+        )
     )
 
 
