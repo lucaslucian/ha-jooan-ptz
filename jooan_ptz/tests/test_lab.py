@@ -1,6 +1,7 @@
 import xml.etree.ElementTree as ET
 
 import lab
+from camera import redact_secrets
 
 
 class FakeCamera:
@@ -160,3 +161,25 @@ def test_only_ha_test_preset_can_be_deleted(monkeypatch):
         assert "Only the HA_TEST preset" in str(exc)
     else:
         raise AssertionError("non-test preset deletion must be rejected")
+
+
+def test_diag_callback_ip_is_restricted_to_camera_subnet():
+    assert lab.validate_diag_callback_ip("10.0.0.10", "10.0.0.2") == "10.0.0.2"
+
+    for candidate in ("10.0.1.2", "8.8.8.8", "127.0.0.1"):
+        try:
+            lab.validate_diag_callback_ip("10.0.0.10", candidate)
+        except lab.LabError:
+            pass
+        else:
+            raise AssertionError(f"unsafe callback IP accepted: {candidate}")
+
+
+def test_diagnostic_authcode_is_redacted_from_urls():
+    value = redact_secrets(
+        "http://10.0.0.10/goform/SingleHandlebyCommand?"
+        "singleCMD=SetDiagMode&authcode=123456&userkey=abcdef"
+    )
+    assert "123456" not in value
+    assert "abcdef" not in value
+    assert "authcode=<redacted>" in value
