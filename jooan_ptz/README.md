@@ -12,7 +12,8 @@ Controle e diagnóstico **local** para câmeras JOOAN/CAM720 compatíveis no Hom
 - diagnóstico HTTP, RTSP, porta 9898 e ONVIF;
 - informações de dispositivo, SD, gravação, detecção, tracking e iluminação;
 - suporte a câmera dual-lens quando reportado pelo firmware;
-- interface protegida pelo Home Assistant Ingress.
+- interface protegida pelo Home Assistant Ingress;
+- laboratório v0.7 para testes ONVIF PTZ, IR, presets, Imaging e Events sem expor comandos arbitrários.
 
 ### Local-first
 
