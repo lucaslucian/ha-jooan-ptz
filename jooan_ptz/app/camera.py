@@ -12,7 +12,7 @@ from urllib.parse import quote, urljoin
 
 import requests
 
-from probe import capture_snapshot, ffprobe_rtsp, icmp_probe, onvif_probe
+from probe import capture_snapshot, ffprobe_rtsp, icmp_probe, onvif_probe, start_mjpeg_rtsp
 
 _LOGGER = logging.getLogger("jooan_ptz.camera")
 
@@ -618,6 +618,47 @@ class JooanCamera:
             "reported_channel_count": channel_count,
             "streams": results,
         }
+
+    def probe_preview_substreams(self, channel_count: int = 2) -> dict:
+        """Validate low-bandwidth substreams only when explicitly requested."""
+        username, password = self.get_rtsp_credentials()
+        channel_count = max(1, min(int(channel_count or 1), 2))
+        results: list[dict] = []
+        for channel in range(channel_count):
+            path = f"/live/ch{channel:02d}_1"
+            url = self.build_rtsp_url_path(path, username, password)
+            result = ffprobe_rtsp(url, timeout=5.0)
+            results.append({"path": path, "source": "preview_validation", **result})
+            if channel + 1 < channel_count:
+                time.sleep(RTSP_PROBE_GAP)
+        return {
+            "probe_mode": "substreams-only",
+            "reported_channel_count": channel_count,
+            "streams": results,
+            "reachable": any(
+                item.get("available")
+                and any(
+                    isinstance(stream, dict) and stream.get("codec_type") == "video"
+                    for stream in item.get("streams", [])
+                )
+                for item in results
+            ),
+        }
+
+    def start_mjpeg_preview(
+        self,
+        stream: str,
+        *,
+        width: int = 640,
+        fps: int = 6,
+    ):
+        """Bridge one allowlisted RTSP stream to low-rate MJPEG."""
+        path = stream if stream.startswith("/") else f"/live/{stream}"
+        if path not in RTSP_PATH_CANDIDATES:
+            raise ValueError("Unsupported RTSP preview stream")
+        username, password = self.get_rtsp_credentials()
+        url = self.build_rtsp_url_path(path, username, password)
+        return start_mjpeg_rtsp(url, width=width, fps=fps)
 
     def probe_onvif(self) -> dict:
         return onvif_probe(self.ip, self.onvif_port)
