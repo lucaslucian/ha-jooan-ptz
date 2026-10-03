@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <img alt="Version" src="https://img.shields.io/badge/version-0.8.0-blue">
+  <img alt="Version" src="https://img.shields.io/badge/version-0.9.0-blue">
   <img alt="Stage" src="https://img.shields.io/badge/stage-experimental-orange">
   <img alt="aarch64" src="https://img.shields.io/badge/aarch64-yes-success">
   <img alt="amd64" src="https://img.shields.io/badge/amd64-yes-success">
@@ -51,8 +51,8 @@ Se o botão não preencher o repositório automaticamente:
 | Snapshots JPEG via RTSP | ✅ após stream confirmado |
 | ONVIF 8899 `/onvif/device_service` | ✅ validado no JA-A12 stock |
 | ONVIF GetProfiles/GetStreamUri/GetStatus/GetPresets | 🔬 read-only v0.4 |
-| Laboratório ONVIF PTZ / IR / presets | 🧪 v0.7, ação manual |
-| ONVIF Events / PullPoint | 🧪 descoberta local v0.7 |
+| Laboratório ONVIF PTZ / IR / presets / Imaging | 🧪 ações manuais allowlisted v0.9 |
+| ONVIF Events / PullPoint | ✅ movimento local confirmado; snapshots/transições separados v0.9 |
 | SetDiagMode | 🧪 somente desligamento seguro no laboratório |
 | Vídeo contínuo no navegador | 🧪 MJPEG local sob demanda v0.6 |
 | Playback do microSD | 🔬 pesquisa |
@@ -99,7 +99,7 @@ A direção visual definida para o painel completo é um dashboard integrado ao 
 - diagnóstico local;
 - ações avançadas separadas das funções de leitura.
 
-Na v0.7 o painel possui Visão geral, Câmeras & PTZ, Detecção, Gravação, Diagnóstico e Laboratório. A área experimental concentra as novas escritas e testes de eventos, mantendo a operação normal separada. A referência completa continua documentada em [docs/UI_DESIGN.md](docs/UI_DESIGN.md).
+Na v0.9 o painel possui Visão geral, Câmeras & PTZ, Detecção, Gravação, Diagnóstico e Laboratório. A área experimental concentra as novas escritas e testes de eventos, mantendo a operação normal separada. A referência completa continua documentada em [docs/UI_DESIGN.md](docs/UI_DESIGN.md).
 
 ## Documentação
 

@@ -31,6 +31,7 @@ LAB_MAX_XML_ROWS = 96
 LAB_MAX_PULL_SECONDS = 30
 LAB_TOKEN_RE = re.compile(r"^[A-Za-z0-9_.:-]{1,96}$")
 LAB_DIRECTIONS = {"up", "down", "left", "right"}
+LAB_IMAGING_FIELDS = {"Brightness", "ColorSaturation", "Contrast", "Sharpness"}
 
 
 class LabError(RuntimeError):
@@ -470,6 +471,59 @@ def onvif_imaging_discovery(camera, onvif_info: dict) -> dict[str, Any]:
     return result
 
 
+def onvif_set_imaging(
+    camera,
+    onvif_info: dict,
+    *,
+    setting: str,
+    value: int,
+) -> dict[str, Any]:
+    """Write one allowlisted imaging value within the range proven by GetOptions.
+
+    GetImagingSettings is not implemented by the validated stock firmware, so
+    this experiment intentionally changes only one optional setting at a time
+    and requests non-persistent application. There is no automatic readback.
+    """
+    setting = str(setting or "")
+    if setting not in LAB_IMAGING_FIELDS:
+        raise LabError("Unsupported imaging setting")
+    try:
+        value = int(value)
+    except (TypeError, ValueError) as exc:
+        raise LabError("Imaging value must be an integer") from exc
+    if not 1 <= value <= 255:
+        raise LabError("Imaging value must be between 1 and 255")
+
+    path = _service_path(onvif_info, "imaging")
+    source_token = _video_source_token(onvif_info)
+    payload = (
+        "<timg:SetImagingSettings>"
+        f"<timg:VideoSourceToken>{xml_escape(source_token)}</timg:VideoSourceToken>"
+        "<timg:ImagingSettings>"
+        f"<tt:{setting}>{value}</tt:{setting}>"
+        "</timg:ImagingSettings>"
+        "<timg:ForcePersistence>false</timg:ForcePersistence>"
+        "</timg:SetImagingSettings>"
+    )
+    response, root = _soap(
+        camera,
+        path=path,
+        namespace=ONVIF_IMAGING,
+        prefix="timg",
+        payload=payload,
+        action="SetImagingSettings",
+    )
+    return {
+        "operation": "onvif_set_imaging",
+        "setting": setting,
+        "value": value,
+        "force_persistence": False,
+        "readback_available": False,
+        **_response_summary(response),
+        "response": _xml_rows(root, limit=24),
+    }
+
+
 def onvif_event_discovery(camera, onvif_info: dict) -> dict[str, Any]:
     path = _service_path(onvif_info, "events")
     operations = (
@@ -579,13 +633,84 @@ def _notification_messages(root) -> list[dict[str, Any]]:
     return messages
 
 
+def _event_signature(message: dict[str, Any]) -> tuple:
+    def pairs(name: str) -> tuple[tuple[str, str], ...]:
+        return tuple(
+            (str(item.get("name") or ""), str(item.get("value") or ""))
+            for item in (message.get(name) or [])
+            if isinstance(item, dict)
+        )
+
+    return (
+        str(message.get("topic") or ""),
+        str(message.get("property_operation") or ""),
+        pairs("source"),
+        pairs("key"),
+        pairs("data"),
+        message.get("motion"),
+    )
+
+
+def _summarize_event_messages(messages: list[dict[str, Any]]) -> dict[str, Any]:
+    unique: list[dict[str, Any]] = []
+    seen: set[tuple] = set()
+    duplicate_count = 0
+    initial_states: dict[str, bool] = {}
+    latest_states: dict[str, bool] = {}
+    state_changes: list[dict[str, Any]] = []
+
+    for message in messages:
+        signature = _event_signature(message)
+        if signature in seen:
+            duplicate_count += 1
+        else:
+            seen.add(signature)
+            unique.append(message)
+
+        topic = str(message.get("topic") or "")
+        motion = message.get("motion")
+        operation = str(message.get("property_operation") or "")
+        if not topic or motion is None:
+            continue
+        motion = bool(motion)
+        if operation.lower() == "initialized" and topic not in initial_states:
+            initial_states[topic] = motion
+
+        previous = latest_states.get(topic)
+        if previous is not None and previous != motion:
+            state_changes.append({
+                "topic": topic,
+                "from": previous,
+                "to": motion,
+                "utc_time": message.get("utc_time"),
+                "property_operation": message.get("property_operation"),
+                "pull_index": message.get("pull_index"),
+            })
+        latest_states[topic] = motion
+
+    initialization_only = bool(messages) and all(
+        str(message.get("property_operation") or "").lower() == "initialized"
+        for message in messages
+    )
+    return {
+        "unique_messages": unique,
+        "unique_message_count": len(unique),
+        "duplicate_message_count": duplicate_count,
+        "initial_states": initial_states,
+        "latest_states": latest_states,
+        "state_changes": state_changes,
+        "motion_transition_observed": bool(state_changes),
+        "initialization_only": initialization_only,
+    }
+
+
 def onvif_pull_events(
     camera,
     onvif_info: dict,
     *,
     listen_seconds: int = 5,
 ) -> dict[str, Any]:
-    """Create a bounded PullPoint subscription and collect a few short pulls."""
+    """Create a bounded PullPoint subscription and distinguish snapshots from transitions."""
     listen_seconds = max(1, min(int(listen_seconds), LAB_MAX_PULL_SECONDS))
     events_path = _service_path(onvif_info, "events")
     lifetime = min(listen_seconds + 15, 45)
@@ -617,7 +742,7 @@ def onvif_pull_events(
     deadline = time.monotonic() + listen_seconds
     max_pulls = max(1, min(6, (listen_seconds + 4) // 5))
 
-    for _ in range(max_pulls):
+    for pull_index in range(max_pulls):
         remaining = deadline - time.monotonic()
         if remaining <= 0:
             break
@@ -640,16 +765,15 @@ def onvif_pull_events(
         pulls.append(summary)
         if not summary["accepted"]:
             break
-        messages.extend(_notification_messages(pull_root))
+        batch = _notification_messages(pull_root)
+        for message in batch:
+            message["pull_index"] = pull_index
+        messages.extend(batch)
         if len(messages) >= LAB_MAX_EVENT_MESSAGES:
             messages = messages[:LAB_MAX_EVENT_MESSAGES]
             break
 
-    motion_values = [
-        item.get("motion")
-        for item in messages
-        if item.get("motion") is not None
-    ]
+    event_summary = _summarize_event_messages(messages)
     return {
         "operation": "onvif_pull_events",
         "listen_seconds": listen_seconds,
@@ -659,7 +783,10 @@ def onvif_pull_events(
         "subscription_path": pull_path,
         "messages": messages,
         "message_count": len(messages),
-        "motion_observed": any(value is True for value in motion_values),
+        "motion_true_reported": any(
+            item.get("motion") is True for item in messages
+        ),
+        **event_summary,
     }
 
 

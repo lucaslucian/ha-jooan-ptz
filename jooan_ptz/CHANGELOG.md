@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.9.0
+
+- Confirmed that the stock firmware repeats ONVIF motion property snapshots with `PropertyOperation=Initialized` across successive PullMessages calls.
+- Event results now distinguish initial state, repeated duplicate snapshots and real per-topic state transitions so Home Assistant work will not treat every initialized snapshot as a new detection.
+- Added unique message counts, duplicate counts, latest/initial states and transition summaries to the PullPoint laboratory.
+- Kept raw event messages for diagnostics and added pull indexes to show which PullMessages response produced each item.
+- Confirmed Imaging options for `Brightness`, `ColorSaturation`, `Contrast` and `Sharpness`, each in the camera-reported range 1–255.
+- Added a guarded ONVIF `SetImagingSettings` experiment for only those four fields, one integer value at a time, requesting `ForcePersistence=false`.
+- Imaging writes remain experimental because this firmware returns `ActionNotSupported` for `GetImagingSettings`, so there is no automatic readback/restore path.
+- Firmware, reset and Wi-Fi operations remain excluded.
+
+
 ## 0.8.0
 
 - Confirmed stock ONVIF PullPoint delivery of both `VideoSource/MotionAlarm` with `State=true` and `RuleEngine/CellMotionDetector/Motion` with `IsMotion=true`.

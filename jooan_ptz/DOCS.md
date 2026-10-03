@@ -146,14 +146,14 @@ Nenhuma dessas operações altera a câmera. PTZ de escrita continua usando apen
 
 ## Laboratório experimental
 
-A v0.8 mantém qualquer nova escrita separada da operação normal. Os testes só rodam por ação explícita na aba **Laboratório** e usam a mesma serialização de I/O que protege a câmera contra concorrência.
+A v0.9 mantém qualquer nova escrita separada da operação normal. Os testes só rodam por ação explícita na aba **Laboratório** e usam a mesma serialização de I/O que protege a câmera contra concorrência.
 
 Testes disponíveis inicialmente:
 
 - ONVIF `ContinuousMove` com velocidade entre 0,1 e 1,0, duração máxima de 800 ms e tentativa de `Stop` no bloco de finalização;
 - ONVIF `SendAuxiliaryCommand` apenas para `tt:Irlamp|On` / `tt:Irlamp|Off` quando esses comandos tiverem sido anunciados em `GetNodes`;
 - presets ONVIF: listar, criar somente o preset fixo `HA_TEST`, chamar apenas token presente no readback e excluir somente `HA_TEST`;
-- Imaging read-only com `GetImagingSettings` + `GetOptions`, incluindo hierarquia e faixas Min/Max preservadas;
+- Imaging: `GetOptions` confirmou `Brightness`, `ColorSaturation`, `Contrast` e `Sharpness` em 1–255; o laboratório permite um `SetImagingSettings` allowlisted por vez com `ForcePersistence=false`. `GetImagingSettings` continua não suportado pelo firmware, portanto não há readback/restore automático;
 - ONVIF Events: `GetServiceCapabilities`, `GetEventProperties` e PullPoint com janelas limitadas de 5/15/30 segundos;
 - descoberta read-only de Recording/Search/Replay somente quando os serviços forem anunciados por `GetServices`;
 - inventário dos estados OEM da porta 9898 que ainda não possuem setter stock confirmado;
@@ -172,7 +172,7 @@ O laboratório **não implementa**:
 
 ### Eventos e futura integração Home Assistant
 
-O PullPoint foi confirmado no hardware stock. A câmera entregou `tns1:VideoSource/MotionAlarm` com `State=true` e `tns1:RuleEngine/CellMotionDetector/Motion` com `IsMotion=true`. A v0.8 preserva Source/Key/Data, `UtcTime` e `PropertyOperation` quando presentes e pode escutar por 5, 15 ou 30 segundos usando poucos pulls limitados.
+O PullPoint foi confirmado no hardware stock. A câmera entregou `tns1:VideoSource/MotionAlarm` com `State=true` e `tns1:RuleEngine/CellMotionDetector/Motion` com `IsMotion=true`. Nos testes de 30 segundos, porém, o firmware repetiu esses dois estados com `PropertyOperation=Initialized` a cada PullMessages. A v0.9 preserva os dados brutos, mas também deduplica snapshots idênticos e separa estado inicial de transições reais por tópico.
 
 Isso confirma um caminho LAN viável para uma futura integração Home Assistant sem polling contínuo: o backend poderá manter uma assinatura e atualizar entidades/eventos de movimento diretamente. Pessoa e veículo ainda não foram confirmados como tópicos ONVIF distintos.
 

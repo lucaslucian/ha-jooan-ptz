@@ -637,8 +637,18 @@ async function labPresetAction(action){
 }
 
 async function labImaging(){
-  try{await labRequest('api/lab/onvif/imaging')}
+  try{await labRequest('api/lab/onvif/imaging',{action:'discover'})}
   catch(error){showLabResult('Imaging: '+error.message)}
+  finally{if(lastData)updateLabAvailability(lastData)}
+}
+
+async function labImagingSet(){
+  try{
+    const setting=$('labImagingSetting').value;
+    const value=Number($('labImagingValue').value);
+    if(!Number.isInteger(value)||value<1||value>255)throw new Error('Use um valor inteiro entre 1 e 255');
+    await labRequest('api/lab/onvif/imaging',{action:'set',setting,value});
+  }catch(error){showLabResult('Imaging write: '+error.message)}
   finally{if(lastData)updateLabAvailability(lastData)}
 }
 
@@ -772,6 +782,7 @@ $('labPresetCreate').addEventListener('click',()=>labPresetAction('create'));
 $('labPresetGoto').addEventListener('click',()=>labPresetAction('goto'));
 $('labPresetDelete').addEventListener('click',()=>labPresetAction('delete'));
 $('labImagingDiscover').addEventListener('click',labImaging);
+$('labImagingSet').addEventListener('click',labImagingSet);
 $('labEventsDiscover').addEventListener('click',()=>labEvents('discover'));
 $('labEventsPull').addEventListener('click',()=>labEvents('pull'));
 $('labStorageDiscover').addEventListener('click',labStorage);

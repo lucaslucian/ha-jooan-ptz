@@ -1,6 +1,6 @@
 name: JOOAN Local Control
 description: Local LAN control, RTSP snapshots and diagnostics for compatible JOOAN/CAM720 cameras
-version: "0.8.0"
+version: "0.9.0"
 slug: jooan_ptz
 url: "https://github.com/lucaslucian/ha-jooan-ptz"
 stage: experimental
