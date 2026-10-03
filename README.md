@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <img alt="Version" src="https://img.shields.io/badge/version-0.14.1-blue">
+  <img alt="Version" src="https://img.shields.io/badge/version-0.15.0-blue">
   <img alt="Stage" src="https://img.shields.io/badge/stage-experimental-orange">
   <img alt="aarch64" src="https://img.shields.io/badge/aarch64-yes-success">
   <img alt="amd64" src="https://img.shields.io/badge/amd64-yes-success">
@@ -53,6 +53,7 @@ Se o botão não preencher o repositório automaticamente:
 | ONVIF GetProfiles/GetStreamUri/GetStatus/GetPresets | 🔬 read-only v0.4 |
 | Laboratório ONVIF PTZ / IR | ✅ PTZ validado; IR aceito pelo firmware |
 | ONVIF Events / PullPoint | ✅ movimento local confirmado; snapshots/transições separados v0.9 |
+| OEM write discovery | 🧪 planos allowlisted + readback; setter de configuração ainda não comprovado |
 | SetDiagMode | 🧪 somente desligamento seguro no laboratório |
 | Vídeo contínuo no navegador | 🧪 MJPEG local sob demanda v0.6 |
 | Playback do microSD | 🔬 ONVIF inventaria tracks, mas jobs/replay não funcionam; investigação OEM v0.13 |
