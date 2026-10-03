@@ -20,6 +20,7 @@ from lab import (
     onvif_event_discovery,
     onvif_goto_preset,
     onvif_imaging_discovery,
+    onvif_set_imaging,
     onvif_ir_lamp,
     onvif_list_presets,
     onvif_pull_events,
@@ -595,7 +596,22 @@ def lab_onvif_presets_action():
 
 @app.post("/api/lab/onvif/imaging")
 def lab_onvif_imaging():
-    return _lab_execute(onvif_imaging_discovery)
+    payload = request.get_json(silent=True) or {}
+    action = str(payload.get("action") or "discover")
+    if action == "discover":
+        return _lab_execute(onvif_imaging_discovery)
+    if action == "set":
+        setting = str(payload.get("setting") or "")
+        value = payload.get("value")
+        return _lab_execute(
+            lambda camera, onvif_info: onvif_set_imaging(
+                camera,
+                onvif_info,
+                setting=setting,
+                value=value,
+            )
+        )
+    return jsonify({"error": "Unsupported ONVIF imaging laboratory action"}), 400
 
 
 @app.post("/api/lab/onvif/events")
