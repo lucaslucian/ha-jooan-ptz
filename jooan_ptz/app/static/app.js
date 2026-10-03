@@ -608,6 +608,16 @@ function updateLabAvailability(data){
     if(button.id==='labPresetGoto'||button.id==='labPresetDelete')return;
     button.disabled=!ready;
   });
+
+  const recordingCompare=$('labOemRecordingCompare');
+  if(recordingCompare)recordingCompare.disabled=!ready||!labOemRecordingBaseline;
+
+  const toggleCompare=$('labOemToggleCompare');
+  const selectedGroup=$('labOemToggleGroup')?.value||'';
+  if(toggleCompare){
+    toggleCompare.disabled=!ready||!labOemToggleBaseline||labOemToggleBaseline.group!==selectedGroup;
+  }
+
   updateLabPresetButtons();
 }
 
@@ -835,8 +845,9 @@ async function labOemToggle(action){
 
 function resetOemToggleBaseline(){
   labOemToggleBaseline=null;
-  $('labOemToggleSummary').textContent='Grupo alterado. Capture uma nova linha de base.';
+  $('labOemToggleSummary').textContent='Grupo alterado. Capture a baseline deste grupo antes de comparar.';
   $('labOemToggleCurrent').innerHTML='';
+  if(lastData)updateLabAvailability(lastData);
 }
 
 async function labDiagProbe(){
