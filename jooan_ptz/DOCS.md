@@ -146,15 +146,16 @@ Nenhuma dessas operações altera a câmera. PTZ de escrita continua usando apen
 
 ## Laboratório experimental
 
-A v0.7 separa qualquer nova escrita da operação normal. Os testes só rodam por ação explícita na aba **Laboratório** e usam a mesma serialização de I/O que protege a câmera contra concorrência.
+A v0.8 mantém qualquer nova escrita separada da operação normal. Os testes só rodam por ação explícita na aba **Laboratório** e usam a mesma serialização de I/O que protege a câmera contra concorrência.
 
 Testes disponíveis inicialmente:
 
 - ONVIF `ContinuousMove` com velocidade entre 0,1 e 1,0, duração máxima de 800 ms e tentativa de `Stop` no bloco de finalização;
 - ONVIF `SendAuxiliaryCommand` apenas para `tt:Irlamp|On` / `tt:Irlamp|Off` quando esses comandos tiverem sido anunciados em `GetNodes`;
 - presets ONVIF: listar, criar somente o preset fixo `HA_TEST`, chamar apenas token presente no readback e excluir somente `HA_TEST`;
-- Imaging read-only com `GetImagingSettings` + `GetOptions`;
-- ONVIF Events: `GetServiceCapabilities`, `GetEventProperties` e teste PullPoint com assinatura de 15 segundos;
+- Imaging read-only com `GetImagingSettings` + `GetOptions`, incluindo hierarquia e faixas Min/Max preservadas;
+- ONVIF Events: `GetServiceCapabilities`, `GetEventProperties` e PullPoint com janelas limitadas de 5/15/30 segundos;
+- descoberta read-only de Recording/Search/Replay somente quando os serviços forem anunciados por `GetServices`;
 - inventário dos estados OEM da porta 9898 que ainda não possuem setter stock confirmado;
 - `SetDiagMode` em dois testes guardados: forçar `enable=0` e um callback ativo de curta duração através de sink dedicado na porta 49000.
 
@@ -171,9 +172,11 @@ O laboratório **não implementa**:
 
 ### Eventos e futura integração Home Assistant
 
-A câmera já anuncia o serviço ONVIF Events. O teste PullPoint existe para descobrir se o firmware stock entrega eventos de movimento/pessoa/veículo localmente. Se isso for confirmado no hardware, a evolução preferida é manter uma assinatura local no backend e publicar entidades/eventos para o Home Assistant, evitando polling contínuo e sem depender do push cloud da JOOAN.
+O PullPoint foi confirmado no hardware stock. A câmera entregou `tns1:VideoSource/MotionAlarm` com `State=true` e `tns1:RuleEngine/CellMotionDetector/Motion` com `IsMotion=true`. A v0.8 preserva Source/Key/Data, `UtcTime` e `PropertyOperation` quando presentes e pode escutar por 5, 15 ou 30 segundos usando poucos pulls limitados.
 
-O campo OEM `msgpush_enable` e suas agendas continuam sendo observados separadamente. Eles podem ajudar a mapear o mecanismo de notificação do fabricante, mas não são tratados como substituto do ONVIF Events até existir um caminho LAN confirmado.
+Isso confirma um caminho LAN viável para uma futura integração Home Assistant sem polling contínuo: o backend poderá manter uma assinatura e atualizar entidades/eventos de movimento diretamente. Pessoa e veículo ainda não foram confirmados como tópicos ONVIF distintos.
+
+O campo OEM `msgpush_enable` e suas agendas continuam sendo observados separadamente. Eles podem ajudar a mapear o mecanismo de notificação do fabricante, mas não são necessários para o evento de movimento local já confirmado.
 
 ## Diagnóstico profundo
 
@@ -210,7 +213,7 @@ O App foi desenhado para reduzir a superfície de risco da engenharia reversa:
 - PTZ usa allowlist;
 - caminhos RTSP usam allowlist;
 - propriedades da porta 9898 usam allowlist;
-- `SetDiagMode` é explicitamente recusado pelos testes;
+- `SetDiagMode` não possui proxy genérico: apenas OFF fixo e o callback restrito do laboratório são expostos;
 - senha, `userkey`, RTSP key, `AuthKey`, `device_pwd` e `security_password` não são expostos pela API do painel.
 
 ## Primeiro teste recomendado
