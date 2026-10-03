@@ -20,6 +20,7 @@ from lab import (
     onvif_event_discovery,
     onvif_goto_preset,
     onvif_imaging_discovery,
+    onvif_imaging_path_probe,
     onvif_set_imaging,
     onvif_ir_lamp,
     onvif_list_presets,
@@ -601,6 +602,8 @@ def lab_onvif_imaging():
     action = str(payload.get("action") or "discover")
     if action == "discover":
         return _lab_execute(onvif_imaging_discovery)
+    if action == "path_probe":
+        return _lab_execute(onvif_imaging_path_probe)
     if action == "set":
         setting = str(payload.get("setting") or "")
         value = payload.get("value")
