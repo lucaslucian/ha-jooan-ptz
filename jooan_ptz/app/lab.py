@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import hashlib
 import ipaddress
+import json
 import re
 import secrets
 import socket
@@ -98,6 +100,55 @@ class LabError(RuntimeError):
     """Raised when an experimental action cannot be executed safely."""
 
 
+OEM_FINGERPRINT_DENY_SUBSTRINGS = (
+    "password",
+    "passwd",
+    "pwd",
+    "secret",
+    "userkey",
+    "authkey",
+    "auth_key",
+    "credential",
+    "token",
+    "private",
+    "ssid",
+    "wifi",
+    "wlan",
+)
+
+
+def _oem_property_fingerprints(properties: dict[str, Any]) -> dict[str, dict[str, str]]:
+    """Fingerprint non-sensitive OEM properties without returning their values.
+
+    The wide fingerprint map is used only to discover that an unknown property
+    changed outside the selected allowlisted group. Sensitive/network-looking
+    keys are omitted entirely.
+    """
+    result: dict[str, dict[str, str]] = {}
+    for raw_key, value in properties.items():
+        key = str(raw_key)
+        lowered = key.lower()
+        if any(part in lowered for part in OEM_FINGERPRINT_DENY_SUBSTRINGS):
+            continue
+        try:
+            encoded = json.dumps(
+                value,
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+                default=str,
+            ).encode("utf-8")
+        except Exception:
+            encoded = repr(type(value).__name__).encode("utf-8")
+        result[key] = {
+            "fingerprint": hashlib.sha256(encoded).hexdigest()[:16],
+            "type": type(value).__name__,
+        }
+        if len(result) >= 256:
+            break
+    return result
+
+
 def oem_toggle_snapshot(camera, *, group: str) -> dict[str, Any]:
     """Read one allowlisted OEM feature group from the stock 9898 endpoint.
 
@@ -119,6 +170,7 @@ def oem_toggle_snapshot(camera, *, group: str) -> dict[str, Any]:
         "keys": list(keys),
         "values": values,
         "present_count": len(values),
+        "wide_fingerprints": _oem_property_fingerprints(properties),
         "capabilities": info.get("capabilities") or {},
     }
 

@@ -794,6 +794,26 @@ function renderOemToggleValues(values){
     :'<div class="setting-item"><div><strong>Nenhum campo retornado</strong><span>Este firmware não expôs propriedades do grupo selecionado.</span></div></div>';
 }
 
+function diffMotionAreaMask(before,after){
+  if(!Number.isInteger(before)||!Number.isInteger(after))return null;
+  const left=before>>>0;
+  const right=after>>>0;
+  const xor=(left^right)>>>0;
+  const changedBits=[];
+  for(let bit=0;bit<25;bit++){
+    if(xor&(1<<bit))changedBits.push(bit);
+  }
+  return {
+    before_hex:'0x'+left.toString(16).padStart(7,'0'),
+    after_hex:'0x'+right.toString(16).padStart(7,'0'),
+    before_bits:left.toString(2).padStart(25,'0'),
+    after_bits:right.toString(2).padStart(25,'0'),
+    changed_bits:changedBits,
+    active_zones_before:left.toString(2).split('1').length-1,
+    active_zones_after:right.toString(2).split('1').length-1
+  };
+}
+
 async function labOemToggle(action){
   const group=$('labOemToggleGroup').value;
   try{
@@ -802,14 +822,19 @@ async function labOemToggle(action){
     renderOemToggleValues(current);
 
     if(action==='baseline'){
-      labOemToggleBaseline={group,values:current};
+      labOemToggleBaseline={
+        group,
+        values:current,
+        wideFingerprints:{...(payload?.wide_fingerprints||{})}
+      };
       $('labOemToggleSummary').textContent=
         'Linha de base de '+group+' capturada. Altere uma única opção no CAM720 e clique em comparar.';
       showLabResult({
         operation:'oem_toggle_baseline',
         group,
         baseline:current,
-        keys:payload?.keys||[]
+        keys:payload?.keys||[],
+        wide_property_count:Object.keys(payload?.wide_fingerprints||{}).length
       });
       return;
     }
@@ -820,13 +845,43 @@ async function labOemToggle(action){
         throw new Error('O grupo mudou desde a linha de base; capture uma nova linha de base');
       }
       const changes=diffPlainObjects(labOemToggleBaseline.values,current);
-      $('labOemToggleSummary').textContent=Object.keys(changes).length
-        ?Object.keys(changes).length+' campo(s) alterado(s) em '+group+'.'
-        :'Nenhuma alteração detectada no grupo '+group+'.';
+      const wideBefore=labOemToggleBaseline.wideFingerprints||{};
+      const wideAfter=payload?.wide_fingerprints||{};
+      const wideChanges=diffPlainObjects(wideBefore,wideAfter);
+      const groupKeys=new Set(payload?.keys||[]);
+      const outsideGroupChanges=Object.keys(wideChanges)
+        .filter(key=>!groupKeys.has(key))
+        .sort();
+
+      if(Object.keys(changes).length){
+        $('labOemToggleSummary').textContent=
+          Object.keys(changes).length+' campo(s) alterado(s) em '+group+'.';
+      }else if(outsideGroupChanges.length){
+        $('labOemToggleSummary').textContent=
+          'Nenhum campo do grupo mudou, mas '+outsideGroupChanges.length+
+          ' propriedade(s) OEM fora do grupo mudaram.';
+      }else{
+        $('labOemToggleSummary').textContent='Nenhuma alteração OEM detectada.';
+      }
+
+      const motionAreaChanges={};
+      if(group==='motion'){
+        for(const key of ['mdarea','sub_mdarea']){
+          if(Object.prototype.hasOwnProperty.call(changes,key)){
+            motionAreaChanges[key]=diffMotionAreaMask(
+              labOemToggleBaseline.values?.[key],
+              current?.[key]
+            );
+          }
+        }
+      }
+
       showLabResult({
         operation:'oem_toggle_compare',
         group,
         changes,
+        motion_area_bit_changes:motionAreaChanges,
+        outside_group_changes:outsideGroupChanges,
         baseline:labOemToggleBaseline.values,
         current,
         keys:payload?.keys||[]

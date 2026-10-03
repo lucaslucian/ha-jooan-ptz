@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.14.0
+
+- Added privacy-safe wide OEM property fingerprints to the toggle mapper.
+- The mapper can now report property names that changed outside the selected allowlisted group, without returning their values.
+- Keys that look like passwords, credentials, authentication material, tokens, Wi-Fi/SSID data or other secrets are omitted from the wide fingerprint map.
+- This prevents silent misses when a CAM720 setting is stored in an OEM property that has not yet been added to a known group.
+- Motion-area comparisons now decode `mdarea` and `sub_mdarea` as 25-bit masks, reporting before/after bit strings, changed bit indexes and active-zone counts.
+- Hardware evidence so far: `33554431 = 0x1ffffff` represents all 25 motion zones enabled; clearing the two opposite corner zones produced `16777214 = 0x0fffffe`, clearing bits 24 and 0.
+- Smart-detection sensitivity tests can now reveal an unknown outside-group property if the CAM720 stores that setting outside person_detect/vehicle_detect/pdarea.
+
+
 ## 0.13.1
 
 - Clarified that the OEM recording mapper and OEM toggle mapper use independent baselines.
