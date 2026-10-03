@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.8.0
+
+- Confirmed stock ONVIF PullPoint delivery of both `VideoSource/MotionAlarm` with `State=true` and `RuleEngine/CellMotionDetector/Motion` with `IsMotion=true`.
+- Extended event listening to bounded 5/15/30 second windows with multiple short PullMessages calls, message counts and a derived motion observation flag.
+- Preserve ONVIF event Source/Key/Data sections plus `UtcTime` and `PropertyOperation` when the camera provides them.
+- Added hierarchical Imaging output and named Min/Max range extraction so GetOptions no longer loses the parent setting names.
+- Added read-only discovery for ONVIF Recording, Search and Replay services advertised by GetServices.
+- Recording discovery uses only read operations: GetServiceCapabilities/GetRecordings, GetRecordingSummary and GetReplayConfiguration.
+- Firmware update, factory reset, Wi-Fi changes and arbitrary command proxies remain explicitly excluded.
+
+
 ## 0.7.0
 
 - Added a dedicated **Laboratório** tab for explicit, manual protocol experiments; normal operation remains unchanged.

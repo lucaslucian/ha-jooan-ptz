@@ -326,7 +326,7 @@
             </div>
             <span class="badge neutral">Somente leitura</span>
           </div>
-          <p class="helper">Consulta GetImagingSettings e GetOptions. Só criaremos SetImagingSettings depois de conhecer valores atuais e faixas aceitas pela câmera.</p>
+          <p class="helper">Consulta GetImagingSettings e GetOptions e preserva a hierarquia do XML para identificar quais parâmetros correspondem às faixas retornadas. Escrita continua desabilitada.</p>
           <button id="labImagingDiscover" class="button primary">Consultar Imaging</button>
         </article>
 
@@ -339,15 +339,41 @@
             <span class="badge success">Prioridade</span>
           </div>
           <p class="helper">
-            Primeiro descobre os tipos de evento. O teste PullPoint cria uma assinatura de 15 segundos,
-            busca uma leva de eventos e deixa a assinatura expirar automaticamente.
+            O PullPoint já foi validado no hardware stock com <code>MotionAlarm/State=true</code> e
+            <code>CellMotionDetector/IsMotion=true</code>. O teste abaixo mantém uma assinatura curta,
+            faz pulls limitados e mostra tópico, source/data, timestamp e PropertyOperation quando disponíveis.
           </p>
+          <div class="lab-controls">
+            <label>Janela de escuta
+              <select id="labEventsDuration" class="lab-select">
+                <option value="5">5 s</option>
+                <option value="15">15 s</option>
+                <option value="30">30 s</option>
+              </select>
+            </label>
+          </div>
           <div class="toolbar">
             <button id="labEventsDiscover" class="button secondary">Descobrir eventos</button>
-            <button id="labEventsPull" class="button primary">Escutar por ~5 s</button>
+            <button id="labEventsPull" class="button primary">Escutar eventos</button>
           </div>
         </article>
       </div>
+
+      <article class="card">
+        <div class="card-heading">
+          <div>
+            <span class="section-kicker">ONVIF STORAGE</span>
+            <h2>Recording / Search / Replay</h2>
+          </div>
+          <span class="badge neutral">Somente leitura</span>
+        </div>
+        <p class="helper">
+          Usa somente serviços anunciados por <code>GetServices</code>. Consulta capabilities,
+          gravações existentes, resumo do conteúdo gravado e configuração de replay. Nenhuma gravação
+          é criada, alterada ou excluída.
+        </p>
+        <button id="labStorageDiscover" class="button primary">Descobrir serviços de gravação</button>
+      </article>
 
       <article class="card">
         <div class="card-heading">

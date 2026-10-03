@@ -22,9 +22,13 @@ from probe import (
 
 ONVIF_IMAGING = "http://www.onvif.org/ver20/imaging/wsdl"
 ONVIF_EVENTS = "http://www.onvif.org/ver10/events/wsdl"
+ONVIF_RECORDING = "http://www.onvif.org/ver10/recording/wsdl"
+ONVIF_SEARCH = "http://www.onvif.org/ver10/search/wsdl"
+ONVIF_REPLAY = "http://www.onvif.org/ver10/replay/wsdl"
 LAB_TEST_PRESET_NAME = "HA_TEST"
-LAB_MAX_EVENT_MESSAGES = 32
+LAB_MAX_EVENT_MESSAGES = 64
 LAB_MAX_XML_ROWS = 96
+LAB_MAX_PULL_SECONDS = 30
 LAB_TOKEN_RE = re.compile(r"^[A-Za-z0-9_.:-]{1,96}$")
 LAB_DIRECTIONS = {"up", "down", "left", "right"}
 
@@ -64,6 +68,66 @@ def _video_source_token(onvif_info: dict) -> str:
     if not sources:
         raise LabError("ONVIF did not report a video source token")
     return _safe_token(sources[0].get("token"), label="video source token")
+
+
+def _services_list(onvif_info: dict) -> list[dict[str, Any]]:
+    diagnostics = onvif_info.get("device_diagnostics") or {}
+    entry = diagnostics.get("services_list") or {}
+    data = entry.get("data") or []
+    return [item for item in data if isinstance(item, dict)]
+
+
+def _service_path_by_namespace(onvif_info: dict, namespace: str) -> str | None:
+    for service in _services_list(onvif_info):
+        if service.get("namespace") == namespace:
+            path = _safe_service_path(service.get("path"))
+            if path:
+                return path
+    return None
+
+
+def _extract_ranges(root) -> list[dict[str, Any]]:
+    ranges: list[dict[str, Any]] = []
+    if root is None:
+        return ranges
+    for node in root.iter():
+        direct: dict[str, str] = {}
+        for child in list(node):
+            local = _local_name(child.tag)
+            if local in {"Min", "Max"} and child.text:
+                direct[local.lower()] = child.text.strip()
+        if "min" in direct and "max" in direct:
+            ranges.append({
+                "name": _local_name(node.tag),
+                "min": direct["min"],
+                "max": direct["max"],
+            })
+            if len(ranges) >= 32:
+                break
+    return ranges
+
+
+def _xml_tree(node, *, depth: int = 0, max_depth: int = 5) -> dict[str, Any] | None:
+    if node is None or depth > max_depth:
+        return None
+    result: dict[str, Any] = {"name": _local_name(node.tag)}
+    text = (node.text or "").strip()
+    if text:
+        result["value"] = text[:300]
+    if node.attrib:
+        result["attributes"] = {
+            str(key): str(value)[:180]
+            for key, value in node.attrib.items()
+            if value is not None
+        }
+    children = []
+    for child in list(node)[:64]:
+        parsed = _xml_tree(child, depth=depth + 1, max_depth=max_depth)
+        if parsed:
+            children.append(parsed)
+    if children:
+        result["children"] = children
+    return result
 
 
 def _response_summary(response: dict[str, Any]) -> dict[str, Any]:
@@ -398,6 +462,8 @@ def onvif_imaging_discovery(camera, onvif_info: dict) -> dict[str, Any]:
         result[key] = {
             **_response_summary(response),
             "values": _xml_rows(root),
+            "ranges": _extract_ranges(root),
+            "hierarchy": _xml_tree(root),
         }
         if response.get("status") is None or response.get("status") == 401:
             break
@@ -439,6 +505,22 @@ def _subscription_path(root, fallback: str) -> str:
     return fallback
 
 
+def _simple_items(section) -> list[dict[str, str]]:
+    items: list[dict[str, str]] = []
+    if section is None:
+        return items
+    for child in section.iter():
+        if _local_name(child.tag) != "SimpleItem":
+            continue
+        name = str(child.attrib.get("Name") or "")[:120]
+        value = str(child.attrib.get("Value") or "")[:240]
+        if name:
+            items.append({"name": name, "value": value})
+            if len(items) >= 32:
+                break
+    return items
+
+
 def _notification_messages(root) -> list[dict[str, Any]]:
     messages: list[dict[str, Any]] = []
     if root is None:
@@ -447,31 +529,66 @@ def _notification_messages(root) -> list[dict[str, Any]]:
         if _local_name(node.tag) != "NotificationMessage":
             continue
         topic = None
-        items: list[dict[str, str]] = []
+        message_node = None
         for child in node.iter():
             local = _local_name(child.tag)
             if local == "Topic" and child.text:
                 topic = child.text.strip()[:240]
-            elif local == "SimpleItem":
-                name = str(child.attrib.get("Name") or "")[:120]
-                value = str(child.attrib.get("Value") or "")[:240]
-                if name:
-                    items.append({"name": name, "value": value})
-                    if len(items) >= 32:
-                        break
-        messages.append({"topic": topic, "items": items})
+            elif local == "Message" and child is not node:
+                message_node = child
+
+        source: list[dict[str, str]] = []
+        data: list[dict[str, str]] = []
+        key: list[dict[str, str]] = []
+        utc_time = None
+        property_operation = None
+        if message_node is not None:
+            utc_time = message_node.attrib.get("UtcTime")
+            property_operation = message_node.attrib.get("PropertyOperation")
+            for section in list(message_node):
+                local = _local_name(section.tag)
+                if local == "Source":
+                    source = _simple_items(section)
+                elif local == "Data":
+                    data = _simple_items(section)
+                elif local == "Key":
+                    key = _simple_items(section)
+
+        items = (source + key + data)[:32]
+        motion = None
+        for item in items:
+            if item["name"].lower() in {"state", "ismotion", "motionactive"}:
+                value = item["value"].strip().lower()
+                if value in {"true", "1", "on", "active"}:
+                    motion = True
+                elif value in {"false", "0", "off", "inactive"}:
+                    motion = False
+
+        messages.append({
+            "topic": topic,
+            "utc_time": utc_time,
+            "property_operation": property_operation,
+            "source": source,
+            "key": key,
+            "data": data,
+            "items": items,
+            "motion": motion,
+        })
         if len(messages) >= LAB_MAX_EVENT_MESSAGES:
             break
     return messages
 
 
-def onvif_pull_events(camera, onvif_info: dict) -> dict[str, Any]:
-    """Create a short-lived PullPoint subscription and pull one batch.
-
-    The subscription requests a 15-second lifetime and is intentionally allowed
-    to expire instead of leaving a persistent listener on the camera.
-    """
+def onvif_pull_events(
+    camera,
+    onvif_info: dict,
+    *,
+    listen_seconds: int = 5,
+) -> dict[str, Any]:
+    """Create a bounded PullPoint subscription and collect a few short pulls."""
+    listen_seconds = max(1, min(int(listen_seconds), LAB_MAX_PULL_SECONDS))
     events_path = _service_path(onvif_info, "events")
+    lifetime = min(listen_seconds + 15, 45)
     create_response, create_root = _soap(
         camera,
         path=events_path,
@@ -479,7 +596,7 @@ def onvif_pull_events(camera, onvif_info: dict) -> dict[str, Any]:
         prefix="tev",
         payload=(
             "<tev:CreatePullPointSubscription>"
-            "<tev:InitialTerminationTime>PT15S</tev:InitialTerminationTime>"
+            f"<tev:InitialTerminationTime>PT{lifetime}S</tev:InitialTerminationTime>"
             "</tev:CreatePullPointSubscription>"
         ),
         action="CreatePullPointSubscription",
@@ -489,33 +606,146 @@ def onvif_pull_events(camera, onvif_info: dict) -> dict[str, Any]:
     if not create_summary["accepted"]:
         return {
             "operation": "onvif_pull_events",
+            "listen_seconds": listen_seconds,
             "subscription": create_summary,
             "messages": [],
         }
 
     pull_path = _subscription_path(create_root, events_path)
-    pull_response, pull_root = _soap(
-        camera,
-        path=pull_path,
-        namespace=ONVIF_EVENTS,
-        prefix="tev",
-        payload=(
-            "<tev:PullMessages>"
-            "<tev:Timeout>PT5S</tev:Timeout>"
-            "<tev:MessageLimit>16</tev:MessageLimit>"
-            "</tev:PullMessages>"
-        ),
-        action="PullMessages",
-        timeout=7.0,
-    )
+    messages: list[dict[str, Any]] = []
+    pulls: list[dict[str, Any]] = []
+    deadline = time.monotonic() + listen_seconds
+    max_pulls = max(1, min(6, (listen_seconds + 4) // 5))
+
+    for _ in range(max_pulls):
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            break
+        wait_seconds = max(1, min(5, int(remaining + 0.999)))
+        pull_response, pull_root = _soap(
+            camera,
+            path=pull_path,
+            namespace=ONVIF_EVENTS,
+            prefix="tev",
+            payload=(
+                "<tev:PullMessages>"
+                f"<tev:Timeout>PT{wait_seconds}S</tev:Timeout>"
+                "<tev:MessageLimit>16</tev:MessageLimit>"
+                "</tev:PullMessages>"
+            ),
+            action="PullMessages",
+            timeout=float(wait_seconds + 2),
+        )
+        summary = _response_summary(pull_response)
+        pulls.append(summary)
+        if not summary["accepted"]:
+            break
+        messages.extend(_notification_messages(pull_root))
+        if len(messages) >= LAB_MAX_EVENT_MESSAGES:
+            messages = messages[:LAB_MAX_EVENT_MESSAGES]
+            break
+
+    motion_values = [
+        item.get("motion")
+        for item in messages
+        if item.get("motion") is not None
+    ]
     return {
         "operation": "onvif_pull_events",
+        "listen_seconds": listen_seconds,
         "subscription": create_summary,
-        "pull": _response_summary(pull_response),
+        "pull": pulls[-1] if pulls else {},
+        "pulls": pulls,
         "subscription_path": pull_path,
-        "messages": _notification_messages(pull_root),
+        "messages": messages,
+        "message_count": len(messages),
+        "motion_observed": any(value is True for value in motion_values),
     }
 
+
+def _read_service_operation(
+    camera,
+    *,
+    path: str,
+    namespace: str,
+    prefix: str,
+    action: str,
+    payload: str,
+) -> dict[str, Any]:
+    response, root = _soap(
+        camera,
+        path=path,
+        namespace=namespace,
+        prefix=prefix,
+        payload=payload,
+        action=action,
+        timeout=5.0,
+    )
+    return {
+        **_response_summary(response),
+        "values": _xml_rows(root),
+        "hierarchy": _xml_tree(root),
+    }
+
+
+def onvif_storage_discovery(camera, onvif_info: dict) -> dict[str, Any]:
+    """Probe only read-only Recording/Search/Replay operations advertised by GetServices."""
+    specs = (
+        (
+            "recording",
+            ONVIF_RECORDING,
+            "trc",
+            (
+                ("service_capabilities", "GetServiceCapabilities", "<trc:GetServiceCapabilities/>"),
+                ("recordings", "GetRecordings", "<trc:GetRecordings/>"),
+            ),
+        ),
+        (
+            "search",
+            ONVIF_SEARCH,
+            "tse",
+            (
+                ("service_capabilities", "GetServiceCapabilities", "<tse:GetServiceCapabilities/>"),
+                ("recording_summary", "GetRecordingSummary", "<tse:GetRecordingSummary/>"),
+            ),
+        ),
+        (
+            "replay",
+            ONVIF_REPLAY,
+            "trp",
+            (
+                ("service_capabilities", "GetServiceCapabilities", "<trp:GetServiceCapabilities/>"),
+                ("configuration", "GetReplayConfiguration", "<trp:GetReplayConfiguration/>"),
+            ),
+        ),
+    )
+    result: dict[str, Any] = {
+        "operation": "onvif_storage_discovery",
+        "advertised_services": _services_list(onvif_info),
+    }
+
+    for key, namespace, prefix, operations in specs:
+        path = _service_path_by_namespace(onvif_info, namespace)
+        entry: dict[str, Any] = {
+            "advertised": bool(path),
+            "path": path,
+            "namespace": namespace,
+        }
+        if path:
+            for op_key, action, payload in operations:
+                entry[op_key] = _read_service_operation(
+                    camera,
+                    path=path,
+                    namespace=namespace,
+                    prefix=prefix,
+                    action=action,
+                    payload=payload,
+                )
+                status = entry[op_key].get("http")
+                if status is None or status == 401:
+                    break
+        result[key] = entry
+    return result
 
 def validate_diag_callback_ip(camera_ip: str, callback_ip: str) -> str:
     """Allow only a private callback address on the camera's local subnet."""

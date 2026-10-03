@@ -183,3 +183,81 @@ def test_diagnostic_authcode_is_redacted_from_urls():
     assert "123456" not in value
     assert "abcdef" not in value
     assert "authcode=<redacted>" in value
+
+
+
+def test_imaging_ranges_keep_parent_names():
+    root = ET.fromstring(
+        """
+        <Envelope><Body><GetOptionsResponse><ImagingOptions>
+          <Brightness><Min>1</Min><Max>255</Max></Brightness>
+          <Contrast><Min>2</Min><Max>200</Max></Contrast>
+        </ImagingOptions></GetOptionsResponse></Body></Envelope>
+        """
+    )
+
+    assert lab._extract_ranges(root) == [
+        {"name": "Brightness", "min": "1", "max": "255"},
+        {"name": "Contrast", "min": "2", "max": "200"},
+    ]
+
+
+def test_notification_parser_keeps_sections_and_motion_state():
+    root = ET.fromstring(
+        """
+        <Envelope><NotificationMessage>
+          <Topic>tns1:RuleEngine/CellMotionDetector/Motion</Topic>
+          <Message UtcTime="2026-10-03T19:20:00Z" PropertyOperation="Changed">
+            <Source><SimpleItem Name="VideoSourceConfigurationToken" Value="VideoSourceToken"/></Source>
+            <Data><SimpleItem Name="IsMotion" Value="true"/></Data>
+          </Message>
+        </NotificationMessage></Envelope>
+        """
+    )
+
+    message = lab._notification_messages(root)[0]
+    assert message["utc_time"] == "2026-10-03T19:20:00Z"
+    assert message["property_operation"] == "Changed"
+    assert message["source"] == [
+        {"name": "VideoSourceConfigurationToken", "value": "VideoSourceToken"}
+    ]
+    assert message["data"] == [{"name": "IsMotion", "value": "true"}]
+    assert message["motion"] is True
+
+
+def test_storage_discovery_only_uses_advertised_service_paths(monkeypatch):
+    info = ptz_info()
+    info["device_diagnostics"] = {
+        "services_list": {
+            "data": [
+                {"namespace": lab.ONVIF_RECORDING, "path": "/onvif/Recording"},
+                {"namespace": lab.ONVIF_SEARCH, "path": "/onvif/Search"},
+                {"namespace": lab.ONVIF_REPLAY, "path": "/onvif/Replay"},
+            ]
+        }
+    }
+    calls = []
+
+    def fake_soap(camera, **kwargs):
+        calls.append(kwargs)
+        return ok_response(), ET.fromstring("<Envelope/>")
+
+    monkeypatch.setattr(lab, "_soap", fake_soap)
+    result = lab.onvif_storage_discovery(FakeCamera(), info)
+
+    assert result["recording"]["advertised"] is True
+    assert result["search"]["advertised"] is True
+    assert result["replay"]["advertised"] is True
+    assert {call["path"] for call in calls} == {
+        "/onvif/Recording",
+        "/onvif/Search",
+        "/onvif/Replay",
+    }
+    assert [call["action"] for call in calls] == [
+        "GetServiceCapabilities",
+        "GetRecordings",
+        "GetServiceCapabilities",
+        "GetRecordingSummary",
+        "GetServiceCapabilities",
+        "GetReplayConfiguration",
+    ]
