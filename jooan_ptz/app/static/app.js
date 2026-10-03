@@ -802,14 +802,19 @@ async function labOemToggle(action){
     renderOemToggleValues(current);
 
     if(action==='baseline'){
-      labOemToggleBaseline={group,values:current};
+      labOemToggleBaseline={
+        group,
+        values:current,
+        wideFingerprints:{...(payload?.wide_fingerprints||{})}
+      };
       $('labOemToggleSummary').textContent=
         'Linha de base de '+group+' capturada. Altere uma única opção no CAM720 e clique em comparar.';
       showLabResult({
         operation:'oem_toggle_baseline',
         group,
         baseline:current,
-        keys:payload?.keys||[]
+        keys:payload?.keys||[],
+        wide_property_count:Object.keys(payload?.wide_fingerprints||{}).length
       });
       return;
     }
@@ -820,13 +825,30 @@ async function labOemToggle(action){
         throw new Error('O grupo mudou desde a linha de base; capture uma nova linha de base');
       }
       const changes=diffPlainObjects(labOemToggleBaseline.values,current);
-      $('labOemToggleSummary').textContent=Object.keys(changes).length
-        ?Object.keys(changes).length+' campo(s) alterado(s) em '+group+'.'
-        :'Nenhuma alteração detectada no grupo '+group+'.';
+      const wideBefore=labOemToggleBaseline.wideFingerprints||{};
+      const wideAfter=payload?.wide_fingerprints||{};
+      const wideChanges=diffPlainObjects(wideBefore,wideAfter);
+      const groupKeys=new Set(payload?.keys||[]);
+      const outsideGroupChanges=Object.keys(wideChanges)
+        .filter(key=>!groupKeys.has(key))
+        .sort();
+
+      if(Object.keys(changes).length){
+        $('labOemToggleSummary').textContent=
+          Object.keys(changes).length+' campo(s) alterado(s) em '+group+'.';
+      }else if(outsideGroupChanges.length){
+        $('labOemToggleSummary').textContent=
+          'Nenhum campo do grupo mudou, mas '+outsideGroupChanges.length+
+          ' propriedade(s) OEM fora do grupo mudaram.';
+      }else{
+        $('labOemToggleSummary').textContent='Nenhuma alteração OEM detectada.';
+      }
+
       showLabResult({
         operation:'oem_toggle_compare',
         group,
         changes,
+        outside_group_changes:outsideGroupChanges,
         baseline:labOemToggleBaseline.values,
         current,
         keys:payload?.keys||[]
