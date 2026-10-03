@@ -471,3 +471,45 @@ def test_goto_allows_any_preset_freshly_returned_by_camera(monkeypatch):
     assert result["preset"] == {"token": "door", "name": "Porta"}
     assert calls[0]["action"] == "GotoPreset"
     assert "<tptz:PresetToken>door</tptz:PresetToken>" in calls[0]["payload"]
+
+
+
+def test_imaging_path_probe_checks_capability_and_getservices_paths(monkeypatch):
+    info = ptz_info()
+    info["services"]["imaging"] = {"path": "/onvif/Imaging"}
+    info["device_diagnostics"] = {
+        "services_list": {
+            "data": [
+                {"namespace": lab.ONVIF_IMAGING, "path": "/onvif/Recording"},
+            ]
+        }
+    }
+    calls = []
+
+    def fake_soap(camera, **kwargs):
+        calls.append(kwargs)
+        if kwargs["action"] == "GetOptions":
+            root = ET.fromstring(
+                "<Envelope><Brightness><Min>1</Min><Max>255</Max></Brightness></Envelope>"
+            )
+        else:
+            root = ET.fromstring("<Envelope/>")
+        return ok_response(), root
+
+    monkeypatch.setattr(lab, "_soap", fake_soap)
+    result = lab.onvif_imaging_path_probe(FakeCamera(), info)
+
+    assert result["alternate_path_present"] is True
+    assert [item["path"] for item in result["paths"]] == [
+        "/onvif/Imaging",
+        "/onvif/Recording",
+    ]
+    assert [call["action"] for call in calls] == [
+        "GetServiceCapabilities",
+        "GetOptions",
+        "GetImagingSettings",
+        "GetServiceCapabilities",
+        "GetOptions",
+        "GetImagingSettings",
+    ]
+    assert all(call["action"] != "SetImagingSettings" for call in calls)
