@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.10.2
+
+- Added one final read-only ONVIF Imaging path probe before marking Imaging writes unsupported on the validated JA-A12.
+- The probe compares the Imaging path derived from GetCapabilities with the exact ver20 Imaging namespace path returned by GetServices, because this firmware reports unusual cross-mapped service paths.
+- On each distinct path it tests only GetServiceCapabilities, GetOptions and GetImagingSettings; it never writes image settings.
+- Preset work is no longer a priority for the validated unit because GetPresets is empty and SetPreset is unsupported.
+- Recording inventory remains usable, while GetReplayUri is confirmed unsupported on this firmware.
+
+
 ## 0.10.1
 
 - Fixed the Recording/Search/Replay playback probe route failing with `name 'onvif_recording_playback_probe' is not defined`; the function now has an explicit import in `main.py`.
