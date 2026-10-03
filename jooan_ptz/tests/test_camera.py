@@ -250,3 +250,24 @@ def test_start_mjpeg_preview_uses_allowlisted_stream(monkeypatch):
 
     with pytest.raises(ValueError):
         camera.start_mjpeg_preview("../../bad")
+
+
+def test_preview_substream_probe_can_target_only_ptz_channel(monkeypatch):
+    camera = JooanCamera("10.0.0.10", "admin", "secret")
+    monkeypatch.setattr(camera, "get_rtsp_credentials", lambda: ("admin", "rtsp"))
+    calls = []
+
+    def fake_ffprobe(url, timeout=None):
+        calls.append(url)
+        return {
+            "available": True,
+            "error": None,
+            "streams": [{"codec_type": "video", "codec_name": "h264"}],
+        }
+
+    monkeypatch.setattr(camera_module, "ffprobe_rtsp", fake_ffprobe)
+    result = camera.probe_preview_substreams(2, channels=[0])
+
+    assert result["tested_channels"] == [0]
+    assert [item["path"] for item in result["streams"]] == ["/live/ch00_1"]
+    assert len(calls) == 1
