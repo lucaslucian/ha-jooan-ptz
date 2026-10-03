@@ -533,19 +533,15 @@ def lab_onvif_ptz():
     except (TypeError, ValueError):
         return jsonify({"error": "Invalid PTZ speed/duration"}), 400
 
-    update_state(ptz_moving=True)
-    try:
-        return _lab_execute(
-            lambda camera, onvif_info: onvif_continuous_move(
-                camera,
-                onvif_info,
-                direction=direction,
-                speed=speed,
-                duration_ms=duration_ms,
-            )
+    return _lab_execute(
+        lambda camera, onvif_info: onvif_continuous_move(
+            camera,
+            onvif_info,
+            direction=direction,
+            speed=speed,
+            duration_ms=duration_ms,
         )
-    finally:
-        update_state(ptz_moving=False)
+    )
 
 
 @app.post("/api/lab/onvif/ir")
