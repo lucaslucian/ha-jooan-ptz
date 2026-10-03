@@ -93,6 +93,14 @@ OEM_TOGGLE_GROUPS: dict[str, tuple[str, ...]] = {
         "ptz_hide_schedule",
         "flipmirror",
     ),
+    "system": (
+        "timezone",
+        "powerfrequency",
+        "video_standard_red",
+        "qualitymode",
+        "definition",
+        "resolution",
+    ),
 }
 
 

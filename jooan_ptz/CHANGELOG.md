@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.14.1
+
+- Added a read-only OEM `system` mapper group for stock port 9898.
+- The group includes `timezone`, `powerfrequency`, `video_standard_red`, `qualitymode`, `definition` and `resolution`.
+- This provides a direct CAM720/OEM baseline-diff path for timezone research without relying on ONVIF.
+- No timezone write setter is guessed; the OEM write path still needs to be identified from evidence.
+
+
 ## 0.14.0
 
 - Added privacy-safe wide OEM property fingerprints to the toggle mapper.

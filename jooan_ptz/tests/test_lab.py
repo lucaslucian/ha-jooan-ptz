@@ -746,3 +746,27 @@ def test_oem_property_fingerprint_changes_when_value_changes():
     second = lab._oem_property_fingerprints({"candidate": 2})
 
     assert first["candidate"]["fingerprint"] != second["candidate"]["fingerprint"]
+
+
+
+def test_oem_toggle_snapshot_system_group_exposes_timezone_only_from_allowlist():
+    class Camera:
+        def get_device_features(self):
+            class Info:
+                def as_dict(self):
+                    return {
+                        "properties": {
+                            "timezone": "-04:00",
+                            "powerfrequency": 60,
+                            "device_pwd": "do-not-leak",
+                        },
+                        "capabilities": {},
+                    }
+            return Info()
+
+    result = lab.oem_toggle_snapshot(Camera(), group="system")
+
+    assert result["group"] == "system"
+    assert result["values"]["timezone"] == "-04:00"
+    assert result["values"]["powerfrequency"] == 60
+    assert "device_pwd" not in result["values"]
