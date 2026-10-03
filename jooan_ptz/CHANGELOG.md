@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.7.0
+
+- Added a dedicated **Laboratório** tab for explicit, manual protocol experiments; normal operation remains unchanged.
+- Added bounded ONVIF `ContinuousMove` tests with speed/duration limits and an unconditional `Stop` attempt.
+- Added allowlisted ONVIF `SendAuxiliaryCommand` testing for the IR commands actually advertised by the camera (`tt:Irlamp|On/Off`).
+- Added guarded ONVIF preset tests: list, create the fixed `HA_TEST` preset, goto only a token read back from the camera, and delete only `HA_TEST`.
+- Added read-only ONVIF Imaging discovery using `GetImagingSettings` and `GetOptions` before enabling any imaging setter.
+- Added ONVIF Events discovery plus a short-lived PullPoint test intended to determine whether motion/person/vehicle events can later be exposed to Home Assistant without polling.
+- Added an inventory of OEM state fields whose write command is still unknown instead of guessing setter endpoints.
+- Added a restricted `SetDiagMode` safety control that can only force diagnostic mode OFF. Active callback mode remains unavailable until a dedicated private callback sink is implemented.
+- Explicitly excluded firmware update, factory reset and Wi-Fi configuration from the laboratory.
+- Added tests for ONVIF movement stop guarantees, IR allowlisting, preset deletion boundaries, callback-host pinning and the fixed SetDiagMode disable request.
+
 ## 0.6.1
 
 - Infer the PTZ-controlled lens from the ONVIF PTZ profile-to-RTSP mapping; on the validated JA-A12 data this maps `profile_0` to channel `ch00`.
