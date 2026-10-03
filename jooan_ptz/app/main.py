@@ -637,7 +637,20 @@ def lab_onvif_events():
 
 @app.post("/api/lab/onvif/storage")
 def lab_onvif_storage():
-    return _lab_execute(onvif_storage_discovery)
+    payload = request.get_json(silent=True) or {}
+    action = str(payload.get("action") or "discover")
+    if action == "discover":
+        return _lab_execute(onvif_storage_discovery)
+    if action == "playback_probe":
+        token = payload.get("recording_token")
+        return _lab_execute(
+            lambda camera, onvif_info: onvif_recording_playback_probe(
+                camera,
+                onvif_info,
+                recording_token=str(token) if token else None,
+            )
+        )
+    return jsonify({"error": "Unsupported ONVIF storage laboratory action"}), 400
 
 
 @app.post("/api/lab/diag/disable")
