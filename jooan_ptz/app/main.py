@@ -15,6 +15,7 @@ from lab import (
     LabError,
     disable_diag_mode,
     oem_recording_snapshot,
+    oem_toggle_snapshot,
     onvif_continuous_move,
     onvif_create_test_preset,
     onvif_delete_test_preset,
@@ -645,6 +646,15 @@ def lab_onvif_events():
 @app.post("/api/lab/oem/recording")
 def lab_oem_recording():
     return _lab_execute(lambda camera, _onvif_info: oem_recording_snapshot(camera))
+
+
+@app.post("/api/lab/oem/toggles")
+def lab_oem_toggles():
+    payload = request.get_json(silent=True) or {}
+    group = str(payload.get("group") or "")
+    return _lab_execute(
+        lambda camera, _onvif_info: oem_toggle_snapshot(camera, group=group)
+    )
 
 
 @app.post("/api/lab/onvif/storage")
