@@ -671,6 +671,14 @@ async function labImaging(){
   finally{if(lastData)updateLabAvailability(lastData)}
 }
 
+async function labImagingPathProbe(){
+  try{
+    showLabResult('Comparando os caminhos ONVIF Imaging anunciados pela câmera...');
+    await labRequest('api/lab/onvif/imaging',{action:'path_probe'});
+  }catch(error){showLabResult('Imaging path probe: '+error.message)}
+  finally{if(lastData)updateLabAvailability(lastData)}
+}
+
 async function labImagingSet(){
   try{
     const setting=$('labImagingSetting').value;
@@ -817,6 +825,7 @@ $('labPresetGoto').addEventListener('click',()=>labPresetAction('goto'));
 $('labPresetDelete').addEventListener('click',()=>labPresetAction('delete'));
 $('labPresetSelect').addEventListener('change',updateLabPresetButtons);
 $('labImagingDiscover').addEventListener('click',labImaging);
+$('labImagingPathProbe').addEventListener('click',labImagingPathProbe);
 $('labImagingSet').addEventListener('click',labImagingSet);
 $('labEventsDiscover').addEventListener('click',()=>labEvents('discover'));
 $('labEventsPull').addEventListener('click',()=>labEvents('pull'));
