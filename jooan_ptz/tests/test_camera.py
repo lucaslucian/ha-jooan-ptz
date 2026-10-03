@@ -204,3 +204,49 @@ def test_heartbeat_preserves_unknown_icmp_state(monkeypatch):
     )
 
     assert camera.heartbeat()["online"] is None
+
+
+def test_preview_substream_probe_is_sequential(monkeypatch):
+    camera = JooanCamera("10.0.0.10", "admin", "secret")
+    monkeypatch.setattr(camera, "get_rtsp_credentials", lambda: ("admin", "rtsp"))
+    monkeypatch.setattr(camera_module.time, "sleep", lambda _: None)
+
+    calls = []
+
+    def fake_ffprobe(url, timeout=None):
+        calls.append(url)
+        return {
+            "available": True,
+            "error": None,
+            "streams": [{"codec_type": "video", "codec_name": "h264"}],
+        }
+
+    monkeypatch.setattr(camera_module, "ffprobe_rtsp", fake_ffprobe)
+    result = camera.probe_preview_substreams(2)
+
+    assert [item["path"] for item in result["streams"]] == [
+        "/live/ch00_1",
+        "/live/ch01_1",
+    ]
+    assert result["probe_mode"] == "substreams-only"
+    assert len(calls) == 2
+
+
+def test_start_mjpeg_preview_uses_allowlisted_stream(monkeypatch):
+    camera = JooanCamera("10.0.0.10", "admin", "secret")
+    monkeypatch.setattr(camera, "get_rtsp_credentials", lambda: ("admin", "rtsp-secret"))
+    calls = []
+    sentinel = object()
+
+    def fake_start(url, width=640, fps=6):
+        calls.append((url, width, fps))
+        return sentinel
+
+    monkeypatch.setattr(camera_module, "start_mjpeg_rtsp", fake_start)
+
+    assert camera.start_mjpeg_preview("ch00_1", width=640, fps=6) is sentinel
+    assert "/live/ch00_1" in calls[0][0]
+    assert "rtsp-secret" in calls[0][0]
+
+    with pytest.raises(ValueError):
+        camera.start_mjpeg_preview("../../bad")
