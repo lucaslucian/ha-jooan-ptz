@@ -24,6 +24,7 @@ from lab import (
     onvif_ir_lamp,
     onvif_list_presets,
     onvif_pull_events,
+    onvif_recording_playback_probe,
     onvif_storage_discovery,
     safe_diag_mode_callback_probe,
 )
