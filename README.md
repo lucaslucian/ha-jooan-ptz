@@ -51,6 +51,9 @@ Se o botão não preencher o repositório automaticamente:
 | Snapshots JPEG via RTSP | ✅ após stream confirmado |
 | ONVIF 8899 `/onvif/device_service` | ✅ validado no JA-A12 stock |
 | ONVIF GetProfiles/GetStreamUri/GetStatus/GetPresets | 🔬 read-only v0.4 |
+| Laboratório ONVIF PTZ / IR / presets | 🧪 v0.7, ação manual |
+| ONVIF Events / PullPoint | 🧪 descoberta local v0.7 |
+| SetDiagMode | 🧪 somente desligamento seguro no laboratório |
 | Vídeo contínuo no navegador | 🧪 MJPEG local sob demanda v0.6 |
 | Playback do microSD | 🔬 pesquisa |
 | Talk-back | 🔬 pesquisa |
@@ -96,7 +99,7 @@ A direção visual definida para o painel completo é um dashboard integrado ao 
 - diagnóstico local;
 - ações avançadas separadas das funções de leitura.
 
-Na v0.6 essa direção começa a ser implementada com abas de Visão geral, Câmeras & PTZ, Detecção, Gravação e Diagnóstico, além de preview ao vivo sob demanda. A referência completa continua documentada em [docs/UI_DESIGN.md](docs/UI_DESIGN.md).
+Na v0.7 o painel possui Visão geral, Câmeras & PTZ, Detecção, Gravação, Diagnóstico e Laboratório. A área experimental concentra as novas escritas e testes de eventos, mantendo a operação normal separada. A referência completa continua documentada em [docs/UI_DESIGN.md](docs/UI_DESIGN.md).
 
 ## Documentação
 
