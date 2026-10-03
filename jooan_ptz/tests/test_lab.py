@@ -364,3 +364,85 @@ def test_imaging_write_rejects_unknown_fields_and_out_of_range(monkeypatch):
             pass
         else:
             raise AssertionError(f"unsafe imaging write accepted: {setting}={value}")
+
+
+
+def storage_info():
+    info = ptz_info()
+    info["device_diagnostics"] = {
+        "services_list": {
+            "data": [
+                {"namespace": lab.ONVIF_RECORDING, "path": "/onvif/DeviceIO"},
+                {"namespace": lab.ONVIF_SEARCH, "path": "/onvif/Analytics"},
+                {"namespace": lab.ONVIF_REPLAY, "path": "/onvif/Ptz"},
+            ]
+        }
+    }
+    return info
+
+
+def test_recording_playback_probe_uses_only_camera_returned_token(monkeypatch):
+    calls = []
+    recordings_root = ET.fromstring(
+        "<Envelope><RecordingItem><RecordingToken>OnvifRecordingToken_1</RecordingToken></RecordingItem></Envelope>"
+    )
+    info_root = ET.fromstring(
+        "<Envelope><RecordingInformation><RecordingToken>OnvifRecordingToken_1</RecordingToken>"
+        "<EarliestRecording>2026-10-01T00:00:00Z</EarliestRecording>"
+        "<LatestRecording>2026-10-03T20:00:00Z</LatestRecording></RecordingInformation></Envelope>"
+    )
+    replay_root = ET.fromstring(
+        "<Envelope><GetReplayUriResponse><Uri>rtsp://127.0.0.1:554/replay/stream?token=secret</Uri>"
+        "</GetReplayUriResponse></Envelope>"
+    )
+
+    def fake_soap(camera, **kwargs):
+        calls.append(kwargs)
+        if kwargs["action"] == "GetRecordings":
+            return ok_response(), recordings_root
+        if kwargs["action"] == "GetRecordingInformation":
+            return ok_response(), info_root
+        if kwargs["action"] == "GetReplayUri":
+            return ok_response(), replay_root
+        raise AssertionError(kwargs["action"])
+
+    monkeypatch.setattr(lab, "_soap", fake_soap)
+    result = lab.onvif_recording_playback_probe(FakeCamera(), storage_info())
+
+    assert result["recording_token"] == "OnvifRecordingToken_1"
+    assert [call["action"] for call in calls] == [
+        "GetRecordings",
+        "GetRecordingInformation",
+        "GetReplayUri",
+    ]
+    assert calls[0]["path"] == "/onvif/DeviceIO"
+    assert calls[1]["path"] == "/onvif/Analytics"
+    assert calls[2]["path"] == "/onvif/Ptz"
+    assert "<tse:RecordingToken>OnvifRecordingToken_1</tse:RecordingToken>" in calls[1]["payload"]
+    assert "<trp:RecordingToken>OnvifRecordingToken_1</trp:RecordingToken>" in calls[2]["payload"]
+    assert result["replay_uri"]["raw_uri_exposed"] is False
+    assert result["replay_uri"]["descriptor"]["path"] == "/replay/stream"
+    assert result["replay_uri"]["descriptor"]["has_query"] is True
+    assert result["replay_uri"]["descriptor"]["query_redacted"] is True
+
+
+def test_recording_playback_probe_rejects_unreturned_token(monkeypatch):
+    recordings_root = ET.fromstring(
+        "<Envelope><RecordingItem><RecordingToken>OnvifRecordingToken_1</RecordingToken></RecordingItem></Envelope>"
+    )
+
+    def fake_soap(camera, **kwargs):
+        assert kwargs["action"] == "GetRecordings"
+        return ok_response(), recordings_root
+
+    monkeypatch.setattr(lab, "_soap", fake_soap)
+    try:
+        lab.onvif_recording_playback_probe(
+            FakeCamera(),
+            storage_info(),
+            recording_token="attacker_token",
+        )
+    except lab.LabError as exc:
+        assert "not returned by the camera" in str(exc)
+    else:
+        raise AssertionError("unreturned recording token must be rejected")
