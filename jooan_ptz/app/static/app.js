@@ -13,6 +13,7 @@ let snapshotRefreshRunning=false;
 let lastOverviewSignature='';
 let lastCameraSignature='';
 let labPresets=[];
+let labOemRecordingBaseline=null;
 let labRequestRunning=false;
 const STATUS_REFRESH_MS=5000;
 const SNAPSHOT_REFRESH_MS=30000;
@@ -717,6 +718,59 @@ async function labStorage(action='discover'){
   finally{if(lastData)updateLabAvailability(lastData)}
 }
 
+function oemRecordingComparable(payload){
+  return {
+    ...(payload?.properties||{}),
+    playback_fast_forward:payload?.playback_fast_forward??null,
+    channel_count:payload?.channel_count??null
+  };
+}
+
+function diffPlainObjects(before,after){
+  const changes={};
+  const keys=new Set([...Object.keys(before||{}),...Object.keys(after||{})]);
+  for(const key of keys){
+    const left=before?.[key];
+    const right=after?.[key];
+    if(JSON.stringify(left)!==JSON.stringify(right)){
+      changes[key]={before:left??null,after:right??null};
+    }
+  }
+  return changes;
+}
+
+async function labOemRecording(action){
+  try{
+    const payload=await labRequest('api/lab/oem/recording');
+    const current=oemRecordingComparable(payload);
+    if(action==='baseline'){
+      labOemRecordingBaseline=current;
+      $('labOemRecordingSummary').textContent='Linha de base capturada. Agora altere uma única opção no CAM720 e clique em comparar.';
+      showLabResult({operation:'oem_recording_baseline',baseline:current,raw:payload});
+      return;
+    }
+    if(action==='compare'){
+      if(!labOemRecordingBaseline)throw new Error('Capture uma linha de base primeiro');
+      const changes=diffPlainObjects(labOemRecordingBaseline,current);
+      $('labOemRecordingSummary').textContent=Object.keys(changes).length
+        ?Object.keys(changes).length+' campo(s) alterado(s) desde a linha de base.'
+        :'Nenhuma alteração detectada nos campos OEM de gravação.';
+      showLabResult({
+        operation:'oem_recording_compare',
+        changes,
+        baseline:labOemRecordingBaseline,
+        current
+      });
+      return;
+    }
+    $('labOemRecordingSummary').textContent='Estado OEM lido. Use linha de base + comparar para mapear mudanças do CAM720.';
+  }catch(error){
+    showLabResult('OEM recording: '+error.message);
+  }finally{
+    if(lastData)updateLabAvailability(lastData);
+  }
+}
+
 async function labDiagProbe(){
   try{
     showLabResult('Aguardando callback seguro da câmera...');
@@ -825,20 +879,23 @@ $('cameraRefreshSnapshots').addEventListener('click',()=>refreshSnapshots($('cam
 document.querySelectorAll('[data-lab-ptz]').forEach(button=>button.addEventListener('click',()=>labPtz(button.dataset.labPtz)));
 $('labIrOn').addEventListener('click',()=>labIr(true));
 $('labIrOff').addEventListener('click',()=>labIr(false));
-$('labPresetList').addEventListener('click',labPresetList);
-$('labPresetCreate').addEventListener('click',()=>labPresetAction('create'));
-$('labPresetGoto').addEventListener('click',()=>labPresetAction('goto'));
-$('labPresetDelete').addEventListener('click',()=>labPresetAction('delete'));
-$('labPresetSelect').addEventListener('change',updateLabPresetButtons);
-$('labImagingDiscover').addEventListener('click',labImaging);
-$('labImagingPathProbe').addEventListener('click',labImagingPathProbe);
-$('labImagingSet').addEventListener('click',labImagingSet);
+$('labPresetList')?.addEventListener('click',labPresetList);
+$('labPresetCreate')?.addEventListener('click',()=>labPresetAction('create'));
+$('labPresetGoto')?.addEventListener('click',()=>labPresetAction('goto'));
+$('labPresetDelete')?.addEventListener('click',()=>labPresetAction('delete'));
+$('labPresetSelect')?.addEventListener('change',updateLabPresetButtons);
+$('labImagingDiscover')?.addEventListener('click',labImaging);
+$('labImagingPathProbe')?.addEventListener('click',labImagingPathProbe);
+$('labImagingSet')?.addEventListener('click',labImagingSet);
 $('labEventsDiscover').addEventListener('click',()=>labEvents('discover'));
 $('labEventsPull').addEventListener('click',()=>labEvents('pull'));
-$('labStorageDiscover').addEventListener('click',()=>labStorage('discover'));
-$('labStorageJobs').addEventListener('click',()=>labStorage('jobs'));
-$('labStorageRecordPulse').addEventListener('click',()=>labStorage('record_pulse'));
-$('labStoragePlaybackProbe').addEventListener('click',()=>labStorage('playback_probe'));
+$('labStorageDiscover')?.addEventListener('click',()=>labStorage('discover'));
+$('labStorageJobs')?.addEventListener('click',()=>labStorage('jobs'));
+$('labStorageRecordPulse')?.addEventListener('click',()=>labStorage('record_pulse'));
+$('labStoragePlaybackProbe')?.addEventListener('click',()=>labStorage('playback_probe'));
+$('labOemRecordingRead').addEventListener('click',()=>labOemRecording('read'));
+$('labOemRecordingBaseline').addEventListener('click',()=>labOemRecording('baseline'));
+$('labOemRecordingCompare').addEventListener('click',()=>labOemRecording('compare'));
 $('labDiagProbe').addEventListener('click',labDiagProbe);
 $('labDiagDisable').addEventListener('click',labDiagDisable);
 $('labClearResult').addEventListener('click',()=>showLabResult('Nenhum teste executado.'));

@@ -14,6 +14,7 @@ from camera import JooanAuthError, JooanCamera, redact_secrets
 from lab import (
     LabError,
     disable_diag_mode,
+    oem_recording_snapshot,
     onvif_continuous_move,
     onvif_create_test_preset,
     onvif_delete_test_preset,
@@ -639,6 +640,11 @@ def lab_onvif_events():
             )
         )
     return jsonify({"error": "Unsupported ONVIF event laboratory action"}), 400
+
+
+@app.post("/api/lab/oem/recording")
+def lab_oem_recording():
+    return _lab_execute(lambda camera, _onvif_info: oem_recording_snapshot(camera))
 
 
 @app.post("/api/lab/onvif/storage")

@@ -33,10 +33,48 @@ LAB_MAX_PULL_SECONDS = 30
 LAB_TOKEN_RE = re.compile(r"^[A-Za-z0-9_.:-]{1,96}$")
 LAB_DIRECTIONS = {"up", "down", "left", "right"}
 LAB_IMAGING_FIELDS = {"Brightness", "ColorSaturation", "Contrast", "Sharpness"}
+OEM_RECORDING_KEYS = (
+    "record_enable",
+    "record_type",
+    "rectype",
+    "recordechannel",
+    "recloopnum",
+    "record_schedule",
+    "newrecord_schedule",
+    "sdcard_status",
+    "sdcard_excepreason",
+    "sdcard_total",
+    "sdcard_free",
+    "lastformattime",
+    "week",
+)
 
 
 class LabError(RuntimeError):
     """Raised when an experimental action cannot be executed safely."""
+
+
+def oem_recording_snapshot(camera) -> dict[str, Any]:
+    """Read only OEM recording/SD fields from the stock 9898 feature endpoint."""
+    info = camera.get_device_features().as_dict()
+    properties = info.get("properties") or {}
+    snapshot = {
+        key: properties.get(key)
+        for key in OEM_RECORDING_KEYS
+        if key in properties
+    }
+    features = info.get("device_features") or {}
+    return {
+        "operation": "oem_recording_snapshot",
+        "captured_at": int(time.time()),
+        "properties": snapshot,
+        "playback_fast_forward": features.get("10043"),
+        "channel_count": info.get("channel_count"),
+        "capabilities": {
+            "recording": bool((info.get("capabilities") or {}).get("recording")),
+            "sdcard": bool((info.get("capabilities") or {}).get("sdcard")),
+        },
+    }
 
 
 def _safe_token(value: object, *, label: str = "token") -> str:

@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.12.0
+
+- Marked ONVIF Imaging writes unsupported on the validated JA-A12 after both advertised Imaging paths accepted GetOptions but rejected GetImagingSettings, and SetImagingSettings also returned ActionNotSupported.
+- Marked ONVIF preset creation unsupported on the validated JA-A12; GetPresets remains diagnostic-only.
+- Confirmed ONVIF Recording objects/tracks are exposed, but GetRecordingJobs returns an empty list and GetReplayUri returns ActionNotSupported, so ONVIF storage is inventory-only on this firmware.
+- Simplified the laboratory UI to stop emphasizing unsupported preset/imaging/recording-write paths.
+- Added a read-only OEM recording snapshot against the stock port-9898 get_deviceFeatures endpoint.
+- The OEM recording snapshot exposes only allowlisted recording/SD fields plus the known playback-fast-forward capability.
+- Added a browser-side baseline/diff workflow: capture baseline, change one recording setting in CAM720, then compare exactly which local OEM fields changed.
+- No OEM recording setter is guessed or exposed yet.
+
+
 ## 0.11.0
 
 - Added read-only discovery of existing ONVIF recording jobs with GetRecordingJobs, GetRecordingJobConfiguration and GetRecordingJobState.

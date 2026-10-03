@@ -623,3 +623,44 @@ def test_recording_pulse_refuses_non_idle_job_without_write(monkeypatch):
 
     assert result["executed"] is False
     assert "not Idle" in result["reason"]
+
+
+
+def test_oem_recording_snapshot_exposes_only_recording_sd_fields():
+    class Camera:
+        def get_device_features(self):
+            class Info:
+                def as_dict(self):
+                    return {
+                        "properties": {
+                            "record_enable": 1,
+                            "record_type": 2,
+                            "rectype": 3,
+                            "recordechannel": 1,
+                            "newrecord_schedule": "schedule-data",
+                            "sdcard_status": 1,
+                            "sdcard_free": 1024,
+                            "device_id": "must-not-leak",
+                            "md_enable": 1,
+                        },
+                        "device_features": {"10043": "4x|16x", "99999": "hidden"},
+                        "channel_count": 2,
+                        "capabilities": {"recording": True, "sdcard": True},
+                    }
+            return Info()
+
+    result = lab.oem_recording_snapshot(Camera())
+
+    assert result["operation"] == "oem_recording_snapshot"
+    assert result["properties"] == {
+        "record_enable": 1,
+        "record_type": 2,
+        "rectype": 3,
+        "recordechannel": 1,
+        "newrecord_schedule": "schedule-data",
+        "sdcard_status": 1,
+        "sdcard_free": 1024,
+    }
+    assert result["playback_fast_forward"] == "4x|16x"
+    assert result["channel_count"] == 2
+    assert result["capabilities"] == {"recording": True, "sdcard": True}

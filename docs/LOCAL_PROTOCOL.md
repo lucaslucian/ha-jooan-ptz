@@ -395,9 +395,11 @@ Isso **não prova que o firmware stock ofereça esse filesystem pela LAN**. Noss
 
 Consequência para o projeto:
 
-1. usar `get_deviceFeatures` para estado/capacidade do SD agora;
-2. continuar procurando uma API stock de listagem/playback;
-3. não implementar acesso ao cartão com base apenas no layout interno do retrofit.
+1. usar `get_deviceFeatures` para estado/capacidade do SD e para mapear os modos de gravação;
+2. ONVIF Recording/Search é mantido apenas para inventário: a JA-A12 expõe `OnvifRecordingToken_1` com tracks Video/Audio/Metadata, mas `GetRecordingJobs` retorna vazio;
+3. ONVIF Replay foi descartado nesta revisão porque `GetReplayUri` retorna `ActionNotSupported`;
+4. a v0.12 adiciona baseline/diff somente leitura dos campos OEM de gravação para observar o que muda quando o CAM720 alterna entre 24/7, movimento e agendado;
+5. não implementar acesso ao cartão nem setter OEM com base apenas em nomes de campos ou no layout interno do retrofit.
 
 ## Capabilities vistas no ecossistema CAM720
 

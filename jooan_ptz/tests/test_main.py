@@ -459,3 +459,26 @@ def test_preview_candidates_fall_back_from_substream_to_main():
 
 def test_recording_playback_probe_is_imported_by_main():
     assert callable(main.onvif_recording_playback_probe)
+
+
+
+def test_oem_recording_lab_endpoint_is_read_only_snapshot(monkeypatch):
+    monkeypatch.setattr(
+        main,
+        "_lab_context",
+        lambda: (object(), {}),
+    )
+    monkeypatch.setattr(
+        main,
+        "oem_recording_snapshot",
+        lambda camera: {
+            "operation": "oem_recording_snapshot",
+            "properties": {"record_enable": 1},
+        },
+    )
+    client = main.app.test_client()
+
+    response = client.post("/api/lab/oem/recording")
+
+    assert response.status_code == 200
+    assert response.get_json()["properties"]["record_enable"] == 1
