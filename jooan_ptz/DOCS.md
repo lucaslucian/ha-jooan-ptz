@@ -146,19 +146,18 @@ Nenhuma dessas operações altera a câmera. PTZ de escrita continua usando apen
 
 ## Laboratório experimental
 
-A v0.11 mantém qualquer nova escrita separada da operação normal. Os testes só rodam por ação explícita na aba **Laboratório** e usam a mesma serialização de I/O que protege a câmera contra concorrência.
+A v0.12 mantém qualquer nova escrita separada da operação normal. Os testes só rodam por ação explícita na aba **Laboratório** e usam a mesma serialização de I/O que protege a câmera contra concorrência.
 
 Testes disponíveis inicialmente:
 
 - ONVIF `ContinuousMove` com velocidade entre 0,1 e 1,0, duração máxima de 800 ms e tentativa de `Stop` no bloco de finalização;
 - ONVIF `SendAuxiliaryCommand` apenas para `tt:Irlamp|On` / `tt:Irlamp|Off` quando esses comandos tiverem sido anunciados em `GetNodes`;
-- presets ONVIF: `GetPresets` funciona, mas `SetPreset` retornou `ActionNotSupported` na JA-A12 validada; o laboratório mantém a criação fixa `HA_TEST` apenas para testar outras revisões;
-- Imaging: `GetOptions` confirmou `Brightness`, `ColorSaturation`, `Contrast` e `Sharpness` em 1–255, mas `GetImagingSettings` e `SetImagingSettings` retornaram `ActionNotSupported` na JA-A12 validada;
+- presets ONVIF: `GetPresets` continua disponível apenas como diagnóstico; na JA-A12 validada a lista está vazia e `SetPreset` retorna `ActionNotSupported`;
+- Imaging: `GetOptions` funciona em ambos os paths anunciados, mas `GetImagingSettings` e `SetImagingSettings` retornam `ActionNotSupported`; controle de imagem ONVIF foi encerrado nesta revisão;
 - ONVIF Events: `GetServiceCapabilities`, `GetEventProperties` e PullPoint com janelas limitadas de 5/15/30 segundos;
-- descoberta read-only de Recording/Search/Replay somente quando os serviços forem anunciados por `GetServices`; a JA-A12 validada retornou uma gravação com tracks Video/Audio/Metadata e replay RTP/RTSP/TCP;
-- descoberta read-only de recording jobs (`GetRecordingJobs`, configuração e estado) e pulso protegido de 5 segundos que somente alterna um job existente `Idle -> Active -> Idle`, sem criar/apagar objetos;
-- probe read-only de `GetRecordingInformation` + `GetReplayUri`: o token é relido da câmera antes do uso e o URI bruto nunca é devolvido ao navegador;
-- inventário dos estados OEM da porta 9898 que ainda não possuem setter stock confirmado;
+- Recording/Search continuam úteis para inventário: a câmera expõe `OnvifRecordingToken_1` com Video/Audio/Metadata, porém `GetRecordingJobs` retorna vazio e `GetReplayUri` é `ActionNotSupported`;
+- snapshot OEM de gravação via porta 9898 com baseline/diff para mapear `record_enable`, `record_type`, `rectype`, `recordechannel`, agendas e estado do SD sem adivinhar setter;
+- inventário dos demais estados OEM da porta 9898 que ainda não possuem setter stock confirmado;
 - `SetDiagMode` em dois testes guardados: forçar `enable=0` e um callback ativo de curta duração através de sink dedicado na porta 49000.
 
 No teste ativo, `diag_callback_ip` é configurado no App e precisa estar no mesmo /24 da câmera. O navegador não escolhe host, porta ou código. O backend gera um código efêmero, aceita conexão somente do IP da câmera, não lê nem envia payload de comando e força `SetDiagMode enable=0` no bloco de finalização.
