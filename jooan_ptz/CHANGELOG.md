@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.13.0
+
+- Simplified the Laboratory tab around features that remain useful on the validated JA-A12.
+- Removed preset, Imaging write/path and ONVIF Recording Job/Replay controls from the Laboratory UI after hardware validation showed they are not usable on this firmware.
+- Kept validated ONVIF PTZ, IR auxiliary commands, PullPoint Events, restricted SetDiagMode and the OEM recording mapper.
+- Added a read-only OEM toggle mapper over the stock port-9898 `get_deviceFeatures` endpoint.
+- Added allowlisted groups for motion, smart detection, tracking, lighting, alerts and privacy.
+- The toggle mapper supports baseline -> change one option in CAM720 -> compare, showing exactly which OEM fields changed.
+- No guessed OEM setter was added: public research did not provide a sufficiently reliable local write mapping for these JA-A12 properties.
+- Target fields include motion detection/sensitivity, person/vehicle detection, automatic/person tracking, LED/floodlight/yellow light, push/audio/buzzer/siren, privacy/PTZ-hide and flip/mirror.
+- Firmware, reset and Wi-Fi remain excluded.
+
+
 ## 0.12.0
 
 - Marked ONVIF Imaging writes unsupported on the validated JA-A12 after both advertised Imaging paths accepted GetOptions but rejected GetImagingSettings, and SetImagingSettings also returned ActionNotSupported.

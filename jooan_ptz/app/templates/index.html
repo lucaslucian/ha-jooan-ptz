@@ -237,9 +237,9 @@
           <span class="badge warning">Ações manuais</span>
         </div>
         <p class="helper">
-          Cada ação abaixo é allowlisted no backend. Não existe proxy genérico de singleCMD,
-          SOAP action ou DP/MQTT. Firmware, reset e configuração de Wi-Fi ficam fora deste laboratório.
-          Pare o preview ao vivo antes dos testes.
+          Esta aba agora mostra somente caminhos que ainda são úteis na JA-A12 validada.
+          Presets, Imaging write e Recording Job/Replay ONVIF foram removidos daqui após retornarem
+          <code>ActionNotSupported</code> ou não exporem jobs utilizáveis. Firmware, reset e Wi-Fi continuam fora de escopo.
         </p>
       </article>
 
@@ -250,7 +250,7 @@
               <span class="section-kicker">ONVIF PTZ</span>
               <h2>ContinuousMove + Stop</h2>
             </div>
-            <span class="badge warning">Movimenta a câmera</span>
+            <span class="badge success">Validado</span>
           </div>
           <p class="helper">Movimento curto e limitado. O backend sempre tenta enviar Stop ao final.</p>
           <div class="lab-controls">
@@ -286,9 +286,11 @@
               <span class="section-kicker">AUXILIARY COMMAND</span>
               <h2>IR Lamp</h2>
             </div>
-            <span class="badge neutral">Anunciado pela câmera</span>
+            <span class="badge success">Comando aceito</span>
           </div>
-          <p class="helper"><code>tt:Irlamp|On</code> e <code>tt:Irlamp|Off</code> só são enviados se aparecerem nos PTZ nodes descobertos.</p>
+          <p class="helper">
+            Usa apenas <code>tt:Irlamp|On</code> / <code>tt:Irlamp|Off</code> quando anunciados pela própria câmera.
+          </p>
           <div class="toolbar">
             <button id="labIrOn" class="button primary">Ligar IR</button>
             <button id="labIrOff" class="button secondary">Desligar IR</button>
@@ -299,96 +301,43 @@
       <article class="card">
         <div class="card-heading">
           <div>
-            <span class="section-kicker">ONVIF PRESETS</span>
-            <h2>Presets</h2>
+            <span class="section-kicker">ONVIF EVENTS</span>
+            <h2>Eventos locais / futuro HA</h2>
           </div>
-          <span class="badge neutral">Encerrado na JA-A12</span>
+          <span class="badge success">Validado</span>
         </div>
         <p class="helper">
-          <code>GetPresets</code> funciona, mas a câmera validada retorna lista vazia e
-          <code>SetPreset</code> responde <code>ActionNotSupported</code>. Mantemos apenas a leitura
-          para diagnóstico de outras revisões.
+          PullPoint local confirmado para <code>MotionAlarm</code> e
+          <code>RuleEngine/CellMotionDetector/Motion</code>. O parser separa snapshots
+          <code>Initialized</code>, duplicatas e transições reais.
         </p>
-        <button id="labPresetList" class="button secondary">Listar presets</button>
-        <div id="labPresetSummary" class="lab-summary">Nenhum teste executado.</div>
-      </article>
-
-      <div class="content-grid two">
-        <article class="card">
-          <div class="card-heading">
-            <div>
-              <span class="section-kicker">ONVIF IMAGING</span>
-              <h2>Descobrir ajustes de imagem</h2>
-            </div>
-            <span class="badge neutral">Somente leitura</span>
-          </div>
-          <p class="helper">
-            Os dois paths anunciados pela câmera respondem <code>GetOptions</code> com
-            Brightness/ColorSaturation/Contrast/Sharpness em 1–255, mas ambos rejeitam
-            <code>GetImagingSettings</code>; <code>SetImagingSettings</code> também é rejeitado.
-            Nesta JA-A12 o Imaging fica somente como capability read-only.
-          </p>
-          <button id="labImagingDiscover" class="button secondary">Consultar ranges Imaging</button>
-        </article>
-
-        <article class="card">
-          <div class="card-heading">
-            <div>
-              <span class="section-kicker">ONVIF EVENTS</span>
-              <h2>Eventos locais / futuro HA</h2>
-            </div>
-            <span class="badge success">Prioridade</span>
-          </div>
-          <p class="helper">
-            O PullPoint foi validado, mas o firmware repete snapshots <code>Initialized</code> em cada pull.
-            O resultado agora separa estado inicial, duplicatas e mudanças reais para evitar tratar snapshots
-            repetidos como novas detecções.
-          </p>
-          <div class="lab-controls">
-            <label>Janela de escuta
-              <select id="labEventsDuration" class="lab-select">
-                <option value="5">5 s</option>
-                <option value="15">15 s</option>
-                <option value="30">30 s</option>
-              </select>
-            </label>
-          </div>
-          <div class="toolbar">
-            <button id="labEventsDiscover" class="button secondary">Descobrir eventos</button>
-            <button id="labEventsPull" class="button primary">Escutar eventos</button>
-          </div>
-        </article>
-      </div>
-
-      <article class="card">
-        <div class="card-heading">
-          <div>
-            <span class="section-kicker">ONVIF STORAGE</span>
-            <h2>Recording / Search / Replay</h2>
-          </div>
-          <span class="badge neutral">Inventário somente</span>
+        <div class="lab-controls">
+          <label>Janela de escuta
+            <select id="labEventsDuration" class="lab-select">
+              <option value="5">5 s</option>
+              <option value="15">15 s</option>
+              <option value="30">30 s</option>
+            </select>
+          </label>
         </div>
-        <p class="helper">
-          A JA-A12 expõe <code>OnvifRecordingToken_1</code> com tracks Video/Audio/Metadata,
-          porém <code>GetRecordingJobs</code> retorna vazio e <code>GetReplayUri</code> responde
-          <code>ActionNotSupported</code>. Portanto o ONVIF serve para inventário, não para comandar
-          ou reproduzir gravações neste firmware.
-        </p>
-        <button id="labStorageDiscover" class="button secondary">Ler inventário ONVIF de gravação</button>
+        <div class="toolbar">
+          <button id="labEventsDiscover" class="button secondary">Descobrir eventos</button>
+          <button id="labEventsPull" class="button primary">Escutar eventos</button>
+        </div>
       </article>
 
       <article class="card">
         <div class="card-heading">
           <div>
-            <span class="section-kicker">OEM RECORDING / PORTA 9898</span>
-            <h2>Comparar estado de gravação do CAM720</h2>
+            <span class="section-kicker">OEM RECORDING · PORTA 9898</span>
+            <h2>Mapear modos de gravação</h2>
           </div>
-          <span class="badge success">Próximo alvo</span>
+          <span class="badge success">Em mapeamento</span>
         </div>
         <p class="helper">
-          Este teste é somente leitura. Capture uma linha de base, altere <strong>uma única opção</strong>
-          de gravação no CAM720 (por exemplo 24/7, movimento ou agendado) e então compare.
-          O add-on relê diretamente <code>get_deviceFeatures</code> e mostra somente campos de gravação/SD.
+          Capture uma linha de base, altere <strong>uma única opção</strong> de gravação no CAM720
+          e compare. Já observamos <code>record_type 1 → 2</code> e
+          <code>recordechannel 1 → 0</code> em uma troca de modo.
         </p>
         <div class="toolbar">
           <button id="labOemRecordingRead" class="button secondary">Ler estado OEM agora</button>
@@ -401,17 +350,35 @@
       <article class="card">
         <div class="card-heading">
           <div>
-            <span class="section-kicker">OEM / PORTA 9898</span>
-            <h2>Estados que ainda precisam de setter confirmado</h2>
+            <span class="section-kicker">OEM TOGGLES · PORTA 9898</span>
+            <h2>Mapear recursos para ligar/desligar</h2>
           </div>
-          <span class="badge neutral">Inventário</span>
+          <span class="badge success">Novo</span>
         </div>
-        <div id="labOemInventory" class="setting-grid"></div>
         <p class="helper">
-          Motion, sensibilidade, auto tracking, pessoa, veículo, person tracking, LED, floodlight,
-          flip/mirror, gravação, privacy/PTZ-hide, buzzer e push entram aqui até encontrarmos o comando
-          de escrita stock correspondente. Não vamos adivinhar endpoints de escrita.
+          Escolha um grupo, capture a linha de base, altere <strong>uma única opção</strong> no CAM720
+          e compare. Este teste é somente leitura; ele serve para descobrir o campo OEM exato antes
+          de criarmos botões ON/OFF locais.
         </p>
+        <div class="lab-controls">
+          <label>Grupo de recursos
+            <select id="labOemToggleGroup" class="lab-select">
+              <option value="motion">Movimento / sensibilidade</option>
+              <option value="smart_detection">Pessoa / veículo</option>
+              <option value="tracking">Auto tracking / person tracking</option>
+              <option value="lighting">LED / floodlight / luz auxiliar</option>
+              <option value="alerts">Push / áudio / buzzer / sirene</option>
+              <option value="privacy">Privacy / PTZ hide / flip-mirror</option>
+            </select>
+          </label>
+        </div>
+        <div class="toolbar">
+          <button id="labOemToggleRead" class="button secondary">Ler grupo agora</button>
+          <button id="labOemToggleBaseline" class="button primary">Capturar linha de base</button>
+          <button id="labOemToggleCompare" class="button primary">Comparar com linha de base</button>
+        </div>
+        <div id="labOemToggleSummary" class="lab-summary">Nenhuma linha de base capturada.</div>
+        <div id="labOemToggleCurrent" class="setting-grid"></div>
       </article>
 
       <article class="card">
@@ -423,9 +390,8 @@
           <span class="badge danger">Restrito</span>
         </div>
         <p class="helper">
-          O teste ativo usa um sink TCP dedicado na porta 49000: somente a câmera configurada pode conectar,
-          nenhum byte/comando é enviado para ela, o código de autorização é efêmero e o backend força
-          <strong>SetDiagMode OFF</strong> no final. Configure <code>diag_callback_ip</code> com o IP LAN do Home Assistant.
+          O teste ativo usa sink TCP dedicado na porta 49000, aceita conexão apenas da câmera,
+          não envia comandos pelo socket e força <strong>SetDiagMode OFF</strong> no final.
         </p>
         <div class="toolbar">
           <button id="labDiagProbe" class="button primary">Testar callback seguro</button>

@@ -146,30 +146,46 @@ Nenhuma dessas operações altera a câmera. PTZ de escrita continua usando apen
 
 ## Laboratório experimental
 
-A v0.12 mantém qualquer nova escrita separada da operação normal. Os testes só rodam por ação explícita na aba **Laboratório** e usam a mesma serialização de I/O que protege a câmera contra concorrência.
+A v0.13 mantém a operação normal separada dos testes manuais e remove da interface caminhos que já foram encerrados na JA-A12 validada.
 
-Testes disponíveis inicialmente:
+Permanecem na aba **Laboratório**:
 
-- ONVIF `ContinuousMove` com velocidade entre 0,1 e 1,0, duração máxima de 800 ms e tentativa de `Stop` no bloco de finalização;
-- ONVIF `SendAuxiliaryCommand` apenas para `tt:Irlamp|On` / `tt:Irlamp|Off` quando esses comandos tiverem sido anunciados em `GetNodes`;
-- presets ONVIF: `GetPresets` continua disponível apenas como diagnóstico; na JA-A12 validada a lista está vazia e `SetPreset` retorna `ActionNotSupported`;
-- Imaging: `GetOptions` funciona em ambos os paths anunciados, mas `GetImagingSettings` e `SetImagingSettings` retornam `ActionNotSupported`; controle de imagem ONVIF foi encerrado nesta revisão;
-- ONVIF Events: `GetServiceCapabilities`, `GetEventProperties` e PullPoint com janelas limitadas de 5/15/30 segundos;
-- Recording/Search continuam úteis para inventário: a câmera expõe `OnvifRecordingToken_1` com Video/Audio/Metadata, porém `GetRecordingJobs` retorna vazio e `GetReplayUri` é `ActionNotSupported`;
-- snapshot OEM de gravação via porta 9898 com baseline/diff para mapear `record_enable`, `record_type`, `rectype`, `recordechannel`, agendas e estado do SD sem adivinhar setter;
-- inventário dos demais estados OEM da porta 9898 que ainda não possuem setter stock confirmado;
-- `SetDiagMode` em dois testes guardados: forçar `enable=0` e um callback ativo de curta duração através de sink dedicado na porta 49000.
+- ONVIF `ContinuousMove` + `Stop`, já validado no hardware;
+- ONVIF `SendAuxiliaryCommand` apenas para `tt:Irlamp|On` / `tt:Irlamp|Off`;
+- ONVIF Events com descoberta e PullPoint de 5/15/30 segundos;
+- mapper OEM de gravação via porta 9898 com baseline/diff;
+- mapper OEM de recursos liga/desliga via porta 9898 com grupos allowlisted;
+- `SetDiagMode` restrito: OFF fixo e callback seguro de curta duração.
 
-No teste ativo, `diag_callback_ip` é configurado no App e precisa estar no mesmo /24 da câmera. O navegador não escolhe host, porta ou código. O backend gera um código efêmero, aceita conexão somente do IP da câmera, não lê nem envia payload de comando e força `SetDiagMode enable=0` no bloco de finalização.
+Foram removidos da interface do laboratório na JA-A12:
 
-O laboratório **não implementa**:
+- presets ONVIF: `GetPresets` retorna vazio e `SetPreset` é `ActionNotSupported`;
+- Imaging write/path: `GetOptions` funciona, mas `GetImagingSettings` e `SetImagingSettings` são `ActionNotSupported`;
+- Recording Job/Replay ONVIF: há um RecordingToken fixo com Video/Audio/Metadata, porém `GetRecordingJobs` retorna vazio e `GetReplayUri` é `ActionNotSupported`.
 
-- atualização de firmware;
-- reset de fábrica;
-- alteração/configuração de Wi-Fi;
-- proxy genérico de `singleCMD`;
-- SOAP action arbitrária;
-- DP/MQTT arbitrário.
+### Mapper OEM de liga/desliga
+
+O mapper é somente leitura. Ele relê `get_deviceFeatures` na porta 9898 e expõe grupos fixos:
+
+- **motion**: `md_enable`, `sub_md_enable`, sensibilidades e áreas;
+- **smart_detection**: `person_detect`, `vehicle_detect`, `pdarea`;
+- **tracking**: `autotrack`, `person_track_enable`;
+- **lighting**: `led`, `floodlight`, `yellowlight`, alarm light e agendas relacionadas;
+- **alerts**: `msgpush_enable`, `audiosensitive`, `buzzer`, seleção de alarme e agendas;
+- **privacy**: `ptz_hide_mode`, `ptz_covre_status`, agenda privacy e `flipmirror`.
+
+Fluxo recomendado:
+
+1. escolher um grupo;
+2. capturar linha de base;
+3. alterar **uma única opção** no CAM720;
+4. comparar;
+5. registrar quais propriedades mudaram;
+6. só depois procurar/implementar um setter local específico para esse recurso.
+
+Nenhum setter OEM genérico foi adicionado. Pesquisa pública até aqui não forneceu um mapeamento de escrita local confiável o suficiente para essas propriedades da JA-A12.
+
+O laboratório **não implementa** atualização de firmware, reset de fábrica, configuração de Wi-Fi, proxy genérico de `singleCMD`, SOAP arbitrário ou DP/MQTT arbitrário.
 
 ### Eventos e futura integração Home Assistant
 

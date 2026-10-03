@@ -460,42 +460,36 @@ O App também exige IP literal privado/link-local e rejeita destino público.
 
 ## Matriz atual do App
 
-| Recurso | v0.7.0 |
+| Recurso | Estado |
 |---|---|
-| validar câmera/credenciais | sim |
-| identificação LAN | sim |
-| leitura 9898 | sim |
-| estado SD/detecção/luz/gravação | sim, read-only |
-| PTZ CGI | sim |
-| RTSP credential check | sim |
-| descobrir caminhos RTSP com ffprobe | sim |
-| snapshot RTSP | sim |
-| probe TCP connect-only de portas | não; removido por incompatibilidade com JA-A12 |
-| ONVIF GetCapabilities | sim, confirmado stock |
-| ONVIF GetProfiles/GetStreamUri | sim, read-only experimental |
-| ONVIF GetStatus/GetPresets | sim, read-only experimental |
-| ONVIF PTZ de escrita | laboratório: ContinuousMove/Stop experimental |
-| presets de escrita/recall | laboratório: HA_TEST experimental |
-| live video no navegador | ainda não |
-| áudio de escuta no navegador | ainda não |
-| playback SD | ainda não |
-| IR auxiliary command | laboratório: Irlamp On/Off experimental |
-| alterar tracking/detecção/floodlight | setter stock ainda não confirmado |
-| talk-back | ainda não |
-| descoberta UDP 7788 | ainda não |
+| validar câmera/credenciais | confirmado |
+| identificação LAN / porta 9898 | confirmado |
+| PTZ CGI | confirmado |
+| ONVIF PTZ ContinuousMove/Stop | confirmado |
+| ONVIF auxiliary IR | comando aceito; efeito físico deve ser validado por revisão |
+| ONVIF Events PullPoint | confirmado para MotionAlarm + CellMotionDetector |
+| presets ONVIF | leitura vazia; escrita não suportada na JA-A12 |
+| Imaging ONVIF | GetOptions somente; leitura/escrita de settings não suportadas |
+| Recording/Search ONVIF | inventário parcial de RecordingToken/tracks |
+| Recording Jobs ONVIF | lista vazia na JA-A12 |
+| Replay ONVIF | GetReplayUri não suportado |
+| RTSP / snapshots / preview | confirmado no projeto |
+| OEM recording mapper | baseline/diff v0.12+ |
+| OEM toggle mapper | baseline/diff v0.13 |
+| setter OEM tracking/detecção/luzes/push/privacy | ainda não confirmado |
+| playback SD OEM | em pesquisa |
+| talk-back | em pesquisa |
+| UDP 7788 | em pesquisa |
 
 ## Próximos testes no hardware stock
 
-1. registrar os `XAddr`/paths devolvidos por `GetCapabilities`;
-2. validar `GetProfiles` e os tokens retornados;
-3. validar `GetStreamUri` e comparar os paths com `/live/ch00_0` e `/live/ch01_0`;
-4. repetir o RTSP de forma sequencial e confirmar codec/resolução/áudio dentro do App;
-5. validar `GetStatus` e `GetPresets` read-only;
-6. somente depois considerar `GotoPreset`/Home/ContinuousMove via ONVIF;
-7. capturar tráfego do CAM720 ao alternar tracking, LED/floodlight e detecção;
-8. investigar listagem/playback do microSD sem modificar firmware;
-9. descrever o pacote UDP 7788 antes de habilitar descoberta automática.
-
+1. mapear `record_type`, `recordechannel` e demais campos mudando um único modo de gravação por vez no CAM720;
+2. usar o mapper OEM para movimento, pessoa/veículo, tracking, iluminação, alertas e privacy;
+3. validar quais campos mudam ao ligar/desligar cada recurso;
+4. procurar setters locais apenas depois de cada leitura estar semanticamente mapeada;
+5. investigar o mecanismo OEM de playback do microSD;
+6. manter ONVIF Events como caminho preferido para eventos de movimento no futuro Home Assistant;
+7. descrever o pacote UDP 7788 antes de qualquer descoberta automática.
 
 ## Hardware stock — observações de 2026-10-02
 

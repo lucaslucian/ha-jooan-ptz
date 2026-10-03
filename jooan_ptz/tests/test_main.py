@@ -482,3 +482,26 @@ def test_oem_recording_lab_endpoint_is_read_only_snapshot(monkeypatch):
 
     assert response.status_code == 200
     assert response.get_json()["properties"]["record_enable"] == 1
+
+
+
+def test_oem_toggle_lab_endpoint_passes_selected_group(monkeypatch):
+    monkeypatch.setattr(main, "_lab_context", lambda: (object(), {}))
+    seen = {}
+
+    def fake_snapshot(camera, *, group):
+        seen["group"] = group
+        return {
+            "operation": "oem_toggle_snapshot",
+            "group": group,
+            "values": {"autotrack": 1},
+        }
+
+    monkeypatch.setattr(main, "oem_toggle_snapshot", fake_snapshot)
+    client = main.app.test_client()
+
+    response = client.post("/api/lab/oem/toggles", json={"group": "tracking"})
+
+    assert response.status_code == 200
+    assert seen["group"] == "tracking"
+    assert response.get_json()["values"]["autotrack"] == 1
