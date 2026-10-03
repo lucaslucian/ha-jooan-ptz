@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+import ipaddress
 import re
+import secrets
+import socket
+import threading
 import time
 from typing import Any
 from xml.sax.saxutils import escape as xml_escape
@@ -510,6 +514,148 @@ def onvif_pull_events(camera, onvif_info: dict) -> dict[str, Any]:
         "pull": _response_summary(pull_response),
         "subscription_path": pull_path,
         "messages": _notification_messages(pull_root),
+    }
+
+
+def validate_diag_callback_ip(camera_ip: str, callback_ip: str) -> str:
+    """Allow only a private callback address on the camera's local subnet."""
+    try:
+        camera_addr = ipaddress.ip_address(str(camera_ip))
+        callback_addr = ipaddress.ip_address(str(callback_ip or "").strip())
+    except ValueError as exc:
+        raise LabError("Diagnostic callback IP must be a literal local IP") from exc
+
+    if camera_addr.version != callback_addr.version:
+        raise LabError("Diagnostic callback IP must use the same address family as the camera")
+    if callback_addr.is_loopback or callback_addr.is_multicast or callback_addr.is_unspecified:
+        raise LabError("Diagnostic callback IP must be a reachable LAN address")
+
+    if callback_addr.version == 4:
+        allowed = (
+            callback_addr in ipaddress.ip_network("10.0.0.0/8")
+            or callback_addr in ipaddress.ip_network("172.16.0.0/12")
+            or callback_addr in ipaddress.ip_network("192.168.0.0/16")
+        )
+        if not allowed:
+            raise LabError("Diagnostic callback IP must be RFC1918")
+        camera_net = ipaddress.ip_network(f"{camera_addr}/24", strict=False)
+    else:
+        allowed = callback_addr in ipaddress.ip_network("fc00::/7")
+        if not allowed:
+            raise LabError("Diagnostic callback IP must be ULA")
+        camera_net = ipaddress.ip_network(f"{camera_addr}/64", strict=False)
+
+    if callback_addr not in camera_net:
+        raise LabError("Diagnostic callback IP must be on the same local subnet as the camera")
+    if callback_addr == camera_addr:
+        raise LabError("Diagnostic callback IP cannot be the camera itself")
+    return str(callback_addr)
+
+
+def safe_diag_mode_callback_probe(
+    camera,
+    *,
+    callback_ip: str,
+    callback_port: int = 49000,
+    timeout: float = 8.0,
+) -> dict[str, Any]:
+    """Arm SetDiagMode only long enough to prove a callback reaches our sink.
+
+    The sink accepts a connection only from the configured camera IP and closes
+    it without reading, writing or forwarding a protocol payload. The browser
+    cannot choose callback host/port/authcode and the mode is forced OFF in a
+    finally block.
+    """
+    safe_ip = validate_diag_callback_ip(camera.ip, callback_ip)
+    port = int(callback_port)
+    if port != 49000:
+        raise LabError("Diagnostic laboratory callback port is fixed to 49000")
+
+    family = socket.AF_INET6 if ":" in safe_ip else socket.AF_INET
+    bind_host = "::" if family == socket.AF_INET6 else "0.0.0.0"
+    listener = socket.socket(family, socket.SOCK_STREAM)
+    listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    listener.bind((bind_host, port))
+    listener.listen(4)
+    listener.settimeout(0.5)
+
+    callback_seen = threading.Event()
+    stop_accept = threading.Event()
+    callback_peer: list[str] = []
+
+    def accept_sink() -> None:
+        deadline = time.monotonic() + max(1.0, min(float(timeout), 10.0))
+        while not stop_accept.is_set() and time.monotonic() < deadline:
+            try:
+                conn, peer = listener.accept()
+            except socket.timeout:
+                continue
+            except OSError:
+                return
+            try:
+                peer_ip = str(peer[0])
+                if peer_ip == camera.ip:
+                    callback_peer.append(peer_ip)
+                    callback_seen.set()
+                    # Deliberately send no bytes and accept no command payload.
+                    return
+            finally:
+                try:
+                    conn.close()
+                except OSError:
+                    pass
+
+    thread = threading.Thread(target=accept_sink, name="safe-diag-sink", daemon=True)
+    thread.start()
+
+    authcode = f"{secrets.randbelow(1_000_000):06d}"
+    authtime = int(time.time()) + 60
+    enable_result = None
+    enable_error = None
+    disable_result = None
+    try:
+        try:
+            enable_result = camera._goform(
+                "/goform/SingleHandlebyCommand",
+                {
+                    "singleCMD": "SetDiagMode",
+                    "enable": "1",
+                    "authcode": authcode,
+                    "authtime": str(authtime),
+                    "authserverip": safe_ip,
+                    "authserverport": str(port),
+                },
+            )
+        except Exception as exc:
+            # Do not return the exception text because request URLs may contain
+            # ephemeral diagnostic authorization material.
+            enable_error = type(exc).__name__
+        callback_seen.wait(max(1.0, min(float(timeout), 10.0)))
+    finally:
+        try:
+            disable_result = camera._goform(
+                "/goform/SingleHandlebyCommand",
+                {"singleCMD": "SetDiagMode", "enable": "0"},
+            )
+        except Exception:
+            disable_result = {"result": "disable_request_failed"}
+        stop_accept.set()
+        try:
+            listener.close()
+        except OSError:
+            pass
+        thread.join(timeout=1.0)
+
+    enable_status = str((enable_result or {}).get("result") or "").lower()
+    disable_status = str((disable_result or {}).get("result") or "").lower()
+    return {
+        "operation": "diag_mode_safe_callback_probe",
+        "callback_seen": callback_seen.is_set(),
+        "callback_peer_verified": bool(callback_peer),
+        "enable_accepted": enable_status in {"success", "successful", "ok"},
+        "enable_error_type": enable_error,
+        "disable_accepted": disable_status in {"success", "successful", "ok"},
+        "callback_port": port,
     }
 
 
