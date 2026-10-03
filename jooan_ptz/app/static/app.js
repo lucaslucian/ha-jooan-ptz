@@ -14,6 +14,7 @@ let lastOverviewSignature='';
 let lastCameraSignature='';
 let labPresets=[];
 let labOemRecordingBaseline=null;
+let labOemToggleBaseline=null;
 let labRequestRunning=false;
 const STATUS_REFRESH_MS=5000;
 const SNAPSHOT_REFRESH_MS=30000;
@@ -771,6 +772,73 @@ async function labOemRecording(action){
   }
 }
 
+function renderOemToggleValues(values){
+  const root=$('labOemToggleCurrent');
+  if(!root)return;
+  const entries=Object.entries(values||{});
+  root.innerHTML=entries.length
+    ?entries.map(([key,value])=>
+      '<div class="setting-item"><div><strong>'+esc(key)+'</strong><span>estado OEM atual</span></div>'+
+      '<span class="setting-value">'+esc(typeof value==='object'?JSON.stringify(value):value)+'</span></div>'
+    ).join('')
+    :'<div class="setting-item"><div><strong>Nenhum campo retornado</strong><span>Este firmware não expôs propriedades do grupo selecionado.</span></div></div>';
+}
+
+async function labOemToggle(action){
+  const group=$('labOemToggleGroup').value;
+  try{
+    const payload=await labRequest('api/lab/oem/toggles',{group});
+    const current={...(payload?.values||{})};
+    renderOemToggleValues(current);
+
+    if(action==='baseline'){
+      labOemToggleBaseline={group,values:current};
+      $('labOemToggleSummary').textContent=
+        'Linha de base de '+group+' capturada. Altere uma única opção no CAM720 e clique em comparar.';
+      showLabResult({
+        operation:'oem_toggle_baseline',
+        group,
+        baseline:current,
+        keys:payload?.keys||[]
+      });
+      return;
+    }
+
+    if(action==='compare'){
+      if(!labOemToggleBaseline)throw new Error('Capture uma linha de base primeiro');
+      if(labOemToggleBaseline.group!==group){
+        throw new Error('O grupo mudou desde a linha de base; capture uma nova linha de base');
+      }
+      const changes=diffPlainObjects(labOemToggleBaseline.values,current);
+      $('labOemToggleSummary').textContent=Object.keys(changes).length
+        ?Object.keys(changes).length+' campo(s) alterado(s) em '+group+'.'
+        :'Nenhuma alteração detectada no grupo '+group+'.';
+      showLabResult({
+        operation:'oem_toggle_compare',
+        group,
+        changes,
+        baseline:labOemToggleBaseline.values,
+        current,
+        keys:payload?.keys||[]
+      });
+      return;
+    }
+
+    $('labOemToggleSummary').textContent=
+      'Grupo '+group+' lido. Capture uma linha de base antes de alterar uma opção no CAM720.';
+  }catch(error){
+    showLabResult('OEM toggle mapper: '+error.message);
+  }finally{
+    if(lastData)updateLabAvailability(lastData);
+  }
+}
+
+function resetOemToggleBaseline(){
+  labOemToggleBaseline=null;
+  $('labOemToggleSummary').textContent='Grupo alterado. Capture uma nova linha de base.';
+  $('labOemToggleCurrent').innerHTML='';
+}
+
 async function labDiagProbe(){
   try{
     showLabResult('Aguardando callback seguro da câmera...');
@@ -896,6 +964,10 @@ $('labStoragePlaybackProbe')?.addEventListener('click',()=>labStorage('playback_
 $('labOemRecordingRead').addEventListener('click',()=>labOemRecording('read'));
 $('labOemRecordingBaseline').addEventListener('click',()=>labOemRecording('baseline'));
 $('labOemRecordingCompare').addEventListener('click',()=>labOemRecording('compare'));
+$('labOemToggleRead').addEventListener('click',()=>labOemToggle('read'));
+$('labOemToggleBaseline').addEventListener('click',()=>labOemToggle('baseline'));
+$('labOemToggleCompare').addEventListener('click',()=>labOemToggle('compare'));
+$('labOemToggleGroup').addEventListener('change',resetOemToggleBaseline);
 $('labDiagProbe').addEventListener('click',labDiagProbe);
 $('labDiagDisable').addEventListener('click',labDiagDisable);
 $('labClearResult').addEventListener('click',()=>showLabResult('Nenhum teste executado.'));
