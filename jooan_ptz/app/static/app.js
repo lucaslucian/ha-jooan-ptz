@@ -242,7 +242,7 @@ function renderDetection(data){
     ['Rastreamento de pessoa','person_tracking','person_track_enable',null]
   ];
   $('detectionGrid').innerHTML=defs.map(([label,cap,key,sub])=>{
-    const supported=capabilities[cap]!==false;
+    const supported=capabilities[cap]===true;
     const enabled=boolState(state[key]);
     return '<div class="setting-item"><div><strong>'+esc(label)+'</strong><span>'+esc(sub||(supported?'Suportado':'Não detectado'))+'</span></div>'+
       '<span class="setting-value">'+(enabled?'Ativo':'Inativo')+'</span></div>';
@@ -375,9 +375,12 @@ function bestPreviewDescriptor(data,channel){
 }
 
 function renderLiveMeta(data){
+  if(Number.isInteger(data.ptz_channel))selectedChannel=data.ptz_channel;
   const descriptor=bestPreviewDescriptor(data,selectedChannel);
   const video=descriptor.video||{};
-  $('liveTitle').textContent='Lente '+(selectedChannel+1);
+  $('liveTitle').textContent='Lente PTZ · Lente '+(selectedChannel+1);
+  $('ptzLensBadge').textContent='PTZ → ch'+String(selectedChannel).padStart(2,'0');
+  $('ptzLensBadge').className='badge '+(data.ptz_channel_source==='onvif_profile_mapping'?'success':'warning');
   $('liveMeta').innerHTML=[
     descriptor.source,
     descriptor.path,
@@ -412,13 +415,6 @@ function emergencyStop(){
   void sendPtz('stop',true);
 }
 
-function selectChannel(channel){
-  selectedChannel=Number(channel);
-  document.querySelectorAll('[data-channel]').forEach(button=>button.classList.toggle('active',Number(button.dataset.channel)===selectedChannel));
-  if(liveActive)void startLivePreview();
-  if(lastData)renderLiveMeta(lastData);
-}
-
 async function startLivePreview(){
   if(!lastData?.online||!lastData?.authenticated){$('previewMessage').textContent='A câmera precisa estar online e autenticada.';return}
   liveActive=true;
@@ -429,7 +425,7 @@ async function startLivePreview(){
   $('startLive').disabled=true;
   $('stopLive').disabled=false;
   $('previewMessage').textContent='Abrindo preview local...';
-  $('liveImage').src=api('api/live/'+selectedChannel+'?t='+Date.now());
+  $('liveImage').src=api('api/live/ptz?t='+Date.now());
 }
 
 async function stopLivePreview(){
@@ -470,9 +466,9 @@ async function validateSubstreams(){
       await sleep(1000);await refreshStatus();
       if(!lastData?.preview_probe_running)break;
     }
-    $('previewMessage').textContent='Validação de substreams concluída.';
+    $('previewMessage').textContent='Validação do stream PTZ concluída.';
   }catch(error){$('previewMessage').textContent='Validação: '+error.message}
-  finally{button.disabled=!!lastData?.preview_probe_running;button.textContent=lastData?.preview_probe_running?'Validando...':'Validar substreams'}
+  finally{button.disabled=!!lastData?.preview_probe_running;button.textContent=lastData?.preview_probe_running?'Validando...':'Validar stream PTZ'}
 }
 
 async function deepProbe(){
@@ -508,7 +504,10 @@ function renderAll(data){
   $('probe').disabled=!!data.probe_running||!!data.preview_active||!!data.ptz_moving;
   $('probe').textContent=data.probe_running?'Diagnosticando...':'Executar diagnóstico profundo';
   $('validateSubstreams').disabled=!!data.preview_probe_running||!!data.preview_active||!!data.probe_running||!!data.ptz_moving;
-  $('validateSubstreams').textContent=data.preview_probe_running?'Validando...':'Validar substreams';
+  $('validateSubstreams').textContent=data.preview_probe_running?'Validando...':'Validar stream PTZ';
+  if(data.preview_last_error&&!data.preview_active&&currentTab==='camera'){
+    $('previewMessage').textContent='Preview: '+data.preview_last_error;
+  }
   if(data.last_error&&!data.probe_running)$('command').textContent='Último erro: '+data.last_error;
   if(data.preview_active){
     liveActive=true;
@@ -557,8 +556,6 @@ function startPolling(){
 }
 
 document.querySelectorAll('.tab').forEach(button=>button.addEventListener('click',()=>switchTab(button.dataset.tab)));
-document.querySelectorAll('[data-channel]').forEach(button=>button.addEventListener('click',()=>selectChannel(button.dataset.channel)));
-
 const directionButtons=[...document.querySelectorAll('[data-dir]')];
 directionButtons.forEach(button=>{
   const direction=button.dataset.dir;
@@ -587,7 +584,7 @@ $('cameraRefreshSnapshots').addEventListener('click',()=>refreshSnapshots($('cam
 
 $('liveImage').addEventListener('load',()=>{$('previewMessage').textContent='Preview ao vivo ativo.'});
 $('liveImage').addEventListener('error',()=>{
-  if(liveActive)$('previewMessage').textContent='O preview foi interrompido. Tente validar os substreams ou usar snapshot.';
+  if(liveActive)$('previewMessage').textContent='O preview PTZ foi interrompido. O backend tentará o stream principal se o substream não gerar vídeo.';
 });
 
 window.addEventListener('blur',emergencyStop);

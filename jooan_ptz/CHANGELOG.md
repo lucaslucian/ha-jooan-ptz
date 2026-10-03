@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.6.1
+
+- Infer the PTZ-controlled lens from the ONVIF PTZ profile-to-RTSP mapping; on the validated JA-A12 data this maps `profile_0` to channel `ch00`.
+- The Cameras & PTZ page now exposes only the PTZ lens as the continuous preview; both lenses remain available as snapshots below.
+- Preview validation targets only the PTZ channel instead of probing both substreams.
+- Made FFmpeg preview startup more conservative by removing aggressive low-latency probe flags that could prevent frames on the embedded RTSP server.
+- Added MJPEG startup preflight: the backend only marks preview active after FFmpeg actually emits a multipart JPEG frame.
+- If the preferred PTZ substream does not emit MJPEG, the backend closes it and automatically retries the confirmed PTZ main stream.
+- Added safe preview failure state to diagnostics without exposing RTSP credentials.
+
+
 ## 0.6.0
 
 - Rebuilt the Ingress panel into five user-facing sections: Overview, Cameras & PTZ, Detection, Recording and Diagnostics.

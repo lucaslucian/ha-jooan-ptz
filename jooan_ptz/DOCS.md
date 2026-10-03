@@ -110,11 +110,19 @@ O FFmpeg gera um JPEG diretamente do RTSP para cada stream confirmado. A interfa
 
 A v0.6 adiciona preview ao vivo sob demanda no painel. O navegador não recebe a URL RTSP nem as credenciais: o backend abre um único stream RTSP e o FFmpeg o converte para MJPEG local de baixa taxa (até 640 px e 6 fps).
 
+Seleção da lente PTZ:
+
+- quando ONVIF informa o `profile_token` usado pelo PTZ, o App cruza esse token com o `GetStreamUri` do profile;
+- na JA-A12 de referência, `profile_0` aponta para `/live/ch00_0`, portanto o preview PTZ usa o canal `ch00`;
+- a segunda lente continua disponível nos snapshots, mas não abre um segundo preview contínuo.
+
 Regras de proteção:
 
 - no máximo **um preview contínuo** fica ativo por vez;
 - trocar de lente encerra o preview anterior antes de abrir o próximo;
-- o App prefere um substream `*_1` validado/descoberto por ONVIF;
+- o App prefere o substream `*_1` da lente PTZ quando validado/descoberto por ONVIF;
+- antes de declarar o preview ativo, o backend exige que o FFmpeg realmente entregue um frame MJPEG;
+- se o substream não produzir frames, ele é fechado e o stream principal PTZ é tentado automaticamente;
 - se não houver substream conhecido, usa o stream principal confirmado e reduz resolução/FPS no bridge;
 - PTZ continua permitido durante o preview;
 - snapshots, diagnóstico profundo e validações pesadas ficam suspensos enquanto o preview contínuo está ativo;

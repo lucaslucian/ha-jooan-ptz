@@ -619,21 +619,35 @@ class JooanCamera:
             "streams": results,
         }
 
-    def probe_preview_substreams(self, channel_count: int = 2) -> dict:
+    def probe_preview_substreams(
+        self,
+        channel_count: int = 2,
+        *,
+        channels: list[int] | tuple[int, ...] | None = None,
+    ) -> dict:
         """Validate low-bandwidth substreams only when explicitly requested."""
         username, password = self.get_rtsp_credentials()
         channel_count = max(1, min(int(channel_count or 1), 2))
+        if channels is None:
+            targets = list(range(channel_count))
+        else:
+            targets = []
+            for channel in channels:
+                channel = int(channel)
+                if 0 <= channel < channel_count and channel not in targets:
+                    targets.append(channel)
         results: list[dict] = []
-        for channel in range(channel_count):
+        for index, channel in enumerate(targets):
             path = f"/live/ch{channel:02d}_1"
             url = self.build_rtsp_url_path(path, username, password)
             result = ffprobe_rtsp(url, timeout=5.0)
             results.append({"path": path, "source": "preview_validation", **result})
-            if channel + 1 < channel_count:
+            if index + 1 < len(targets):
                 time.sleep(RTSP_PROBE_GAP)
         return {
             "probe_mode": "substreams-only",
             "reported_channel_count": channel_count,
+            "tested_channels": targets,
             "streams": results,
             "reachable": any(
                 item.get("available")
