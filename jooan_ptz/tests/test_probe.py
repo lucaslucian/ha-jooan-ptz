@@ -11,6 +11,7 @@ from probe import (
     _extract_profiles,
     _extract_stream_uri,
     _safe_rtsp_descriptor,
+    _soap_fault,
 )
 
 
@@ -165,17 +166,13 @@ def test_rtsp_probe_runs_sequentially(monkeypatch):
         }
     )
 
-    assert result["probe_mode"] == "sequential"
+    assert result["probe_mode"] == "sequential-minimal"
     assert result["reachable"] is True
-    assert [item["path"] for item in result["streams"]][:4] == [
+    assert [item["path"] for item in result["streams"]] == [
         "/live/ch00_0",
         "/live/ch01_0",
-        "/live/ch00_1",
-        "/live/ch01_1",
     ]
-    assert result["streams"][-1]["path"] == "/media/live/profile0"
-    assert result["streams"][-1]["source"] == "onvif"
-    assert len(calls) == 5
+    assert len(calls) == 2
 
 
 def test_extract_extended_onvif_diagnostics():
@@ -205,3 +202,86 @@ def test_extract_extended_onvif_diagnostics():
     nodes = _extract_ptz_nodes(root)
     assert nodes[0]["home_supported"] == "true"
     assert nodes[0]["maximum_presets"] == "8"
+
+
+def test_rtsp_probe_uses_substream_only_when_main_fails(monkeypatch):
+    camera = JooanCamera("10.0.0.10", "admin", "http-password")
+    monkeypatch.setattr(camera, "get_rtsp_credentials", lambda: ("admin", "rtsp-password"))
+    monkeypatch.setattr(camera_module.time, "sleep", lambda _: None)
+
+    calls = []
+
+    def fake_ffprobe(url, timeout=None):
+        calls.append(url)
+        available = "/live/ch00_1" in url
+        return {
+            "available": available,
+            "error": None if available else "missing",
+            "streams": [{"codec_type": "video"}] if available else [],
+        }
+
+    monkeypatch.setattr(camera_module, "ffprobe_rtsp", fake_ffprobe)
+    result = camera.probe_rtsp_streams(channel_count=1)
+
+    assert [item["path"] for item in result["streams"]] == [
+        "/live/ch00_0",
+        "/live/ch00_1",
+    ]
+    assert result["reachable"] is True
+
+
+def test_extract_profiles_ignores_malformed_numeric_values():
+    root = ET.fromstring(
+        """<Envelope>
+          <Profiles token="profile_bad">
+            <VideoEncoderConfiguration>
+              <Encoding>H264</Encoding>
+              <Resolution><Width>not-a-number</Width><Height>1296</Height></Resolution>
+              <RateControl><FrameRateLimit>bad</FrameRateLimit></RateControl>
+            </VideoEncoderConfiguration>
+          </Profiles>
+        </Envelope>"""
+    )
+    profiles = _extract_profiles(root)
+    assert profiles[0]["video"]["encoding"] == "H264"
+    assert "width" not in profiles[0]["video"]
+    assert "frame_rate_limit" not in profiles[0]["video"]
+    assert profiles[0]["video"]["height"] == 1296
+
+
+def test_soap_fault_ignores_non_fault_reason_text():
+    root = ET.fromstring("<Envelope><Reason>normal metadata</Reason></Envelope>")
+    assert _soap_fault(root) is None
+
+
+def test_soap_fault_reads_actual_fault_text():
+    root = ET.fromstring(
+        """<Envelope>
+          <Fault>
+            <Reason><Text>Unsupported operation</Text></Reason>
+          </Fault>
+        </Envelope>"""
+    )
+    assert _soap_fault(root) == "Unsupported operation"
+
+
+def test_profile_extraction_is_bounded():
+    xml = "<Envelope>" + "".join(
+        f'<Profiles token="p{i}"><Name>P{i}</Name></Profiles>' for i in range(20)
+    ) + "</Envelope>"
+    profiles = _extract_profiles(ET.fromstring(xml))
+    assert len(profiles) == 4
+
+
+def test_malformed_capability_xaddr_is_ignored():
+    root = ET.fromstring(
+        """<Envelope>
+          <Capabilities>
+            <Media><XAddr>http://[broken/onvif/Media</XAddr></Media>
+            <PTZ><XAddr>http://127.0.0.1:8899/onvif/Ptz</XAddr></PTZ>
+          </Capabilities>
+        </Envelope>"""
+    )
+    services = _extract_capability_services(root)
+    assert "media" not in services
+    assert services["ptz"]["path"] == "/onvif/Ptz"

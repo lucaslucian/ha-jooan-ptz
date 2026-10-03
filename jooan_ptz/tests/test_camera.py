@@ -85,12 +85,14 @@ def test_ptz_command_is_allowlisted(monkeypatch):
 
 def test_redact_secrets_hides_userkey_and_rtsp_password():
     message = (
-        "GET http://10.0.0.10/path?userid=admin&userkey=deadbeef "
-        "rtsp://admin:super-secret@10.0.0.10:554/live/ch00_0"
+        'GET http://10.0.0.10/path?userid=admin&userkey=deadbeef '
+        'rtsp://admin:super-secret@10.0.0.10:554/live/ch00_0 '
+        '{"key":"json-secret"}'
     )
     safe = redact_secrets(message)
     assert "deadbeef" not in safe
     assert "super-secret" not in safe
+    assert "json-secret" not in safe
     assert "userkey=<redacted>" in safe
     assert "rtsp://admin:<redacted>@10.0.0.10" in safe
 
@@ -125,3 +127,80 @@ def test_heartbeat_uses_icmp_without_touching_camera_ports(monkeypatch):
 
     assert result == {"online": True, "method": "icmp", "error": None}
     assert calls == [("10.0.0.10", 1.5)]
+
+
+def test_rtsp_credentials_are_cached(monkeypatch):
+    camera_module._rtsp_credential_cache.clear()
+    camera = JooanCamera("10.0.0.10", "admin", "secret")
+    calls = []
+
+    def fake_goform(endpoint, params=None):
+        calls.append((endpoint, params))
+        return {"user": "admin", "key": "rtsp-secret"}
+
+    monkeypatch.setattr(camera, "_goform", fake_goform)
+    first = camera.get_rtsp_credentials()
+    second = camera.get_rtsp_credentials()
+
+    assert first == ("admin", "rtsp-secret")
+    assert second == first
+    assert len(calls) == 1
+
+
+def test_device_features_tolerates_non_object_sections(monkeypatch):
+    camera = JooanCamera("10.0.0.10", "admin", "secret")
+
+    class Response:
+        text = '{"result":"successful","properties":[],"deviceFeatures":"invalid"}'
+
+    monkeypatch.setattr(camera, "_get", lambda *args, **kwargs: Response())
+    info = camera.get_device_features()
+
+    assert info.channel_count == 1
+    assert info.safe_properties == {}
+    assert info.device_features == {}
+    assert info.local_state == {}
+
+
+def test_audio_only_rtsp_result_does_not_count_as_working_video(monkeypatch):
+    camera = JooanCamera("10.0.0.10", "admin", "secret")
+    monkeypatch.setattr(camera, "get_rtsp_credentials", lambda: ("admin", "rtsp"))
+    monkeypatch.setattr(camera_module.time, "sleep", lambda _: None)
+
+    def fake_ffprobe(url, timeout=None):
+        if "/live/ch00_0" in url:
+            return {
+                "available": True,
+                "error": None,
+                "streams": [{"codec_type": "audio", "codec_name": "pcm_alaw"}],
+            }
+        return {
+            "available": True,
+            "error": None,
+            "streams": [{"codec_type": "video", "codec_name": "h264"}],
+        }
+
+    monkeypatch.setattr(camera_module, "ffprobe_rtsp", fake_ffprobe)
+    result = camera.probe_rtsp_streams(channel_count=1)
+
+    assert [item["path"] for item in result["streams"]] == [
+        "/live/ch00_0",
+        "/live/ch00_1",
+    ]
+    assert result["reachable"] is True
+
+
+def test_heartbeat_preserves_unknown_icmp_state(monkeypatch):
+    camera = JooanCamera("10.0.0.10", "admin", "secret")
+
+    monkeypatch.setattr(
+        camera_module,
+        "icmp_probe",
+        lambda *args, **kwargs: {
+            "online": None,
+            "method": "icmp",
+            "error": "ICMP heartbeat is unavailable in this container",
+        },
+    )
+
+    assert camera.heartbeat()["online"] is None

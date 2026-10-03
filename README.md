@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <img alt="Version" src="https://img.shields.io/badge/version-0.5.0-blue">
+  <img alt="Version" src="https://img.shields.io/badge/version-0.5.2-blue">
   <img alt="Stage" src="https://img.shields.io/badge/stage-experimental-orange">
   <img alt="aarch64" src="https://img.shields.io/badge/aarch64-yes-success">
   <img alt="amd64" src="https://img.shields.io/badge/amd64-yes-success">
@@ -47,7 +47,7 @@ Se o botão não preencher o repositório automaticamente:
 | Estado de SD, gravação, detecção, tracking e luzes | ✅ leitura |
 | Detecção de lente dupla | ✅ |
 | RTSP / credenciais locais | ✅ |
-| Descoberta de streams/codec/áudio via ffprobe | 🔬 probe sequencial v0.4 |
+| Descoberta de streams/codec/áudio via ffprobe | ✅ probe sequencial mínimo v0.5.2 |
 | Snapshots JPEG via RTSP | ✅ após stream confirmado |
 | ONVIF 8899 `/onvif/device_service` | ✅ validado no JA-A12 stock |
 | ONVIF GetProfiles/GetStreamUri/GetStatus/GetPresets | 🔬 read-only v0.4 |
@@ -60,7 +60,7 @@ Se o botão não preencher o repositório automaticamente:
 O App evita consultar a câmera sem necessidade:
 
 - na inicialização executa uma descoberta completa para preencher informações, capabilities, ONVIF e RTSP;
-- depois disso o processo em background usa somente um heartbeat TCP leve na porta HTTP;
+- depois disso o processo em background usa somente ICMP ping para acompanhar online/offline, sem abrir portas da câmera;
 - a interface para de consultar `/api/status` quando a aba do App fica oculta;
 - snapshots só são atualizados quando a aba está visível **e** o card de mídia está na área visível da página;
 - diagnóstico completo só roda novamente quando solicitado manualmente.

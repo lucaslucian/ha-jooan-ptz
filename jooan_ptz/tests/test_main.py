@@ -6,6 +6,14 @@ import main
 
 def setup_function():
     main._snapshot_cache.clear()
+    main._ptz_sequences.clear()
+    main.update_state(
+        online=False,
+        authenticated=False,
+        probe_running=False,
+        ptz_moving=False,
+        last_error=None,
+    )
 
 
 def test_last_good_snapshot_is_returned_after_transient_failure(monkeypatch):
@@ -75,3 +83,179 @@ def test_snapshot_capture_is_serialized(monkeypatch):
 
     assert max_active == 1
     assert sorted(results) == [b"jpeg-ch00_0", b"jpeg-ch01_0"]
+
+
+def test_expired_snapshot_cache_is_not_returned(monkeypatch):
+    key = ("10.0.0.10", 554, "ch00_0")
+    main._snapshot_cache[key] = (
+        time.monotonic() - main.SNAPSHOT_CACHE_TTL - 1,
+        b"too-old",
+    )
+
+    class FakeCamera:
+        def snapshot(self, stream):
+            raise RuntimeError("capture failed")
+
+    monkeypatch.setattr(main, "get_camera", lambda: FakeCamera())
+    monkeypatch.setattr(main, "_snapshot_cache_key", lambda stream: key)
+
+    try:
+        main._capture_snapshot_with_fallback("ch00_0")
+    except RuntimeError as exc:
+        assert "capture failed" in str(exc)
+    else:
+        raise AssertionError("expired cache must not be returned")
+
+
+def test_snapshot_uses_stale_cache_while_camera_io_is_busy(monkeypatch):
+    key = ("10.0.0.10", 554, "ch00_0")
+    main._snapshot_cache[key] = (time.monotonic(), b"cached-frame")
+    monkeypatch.setattr(main, "_snapshot_cache_key", lambda stream: key)
+    monkeypatch.setattr(main, "CAMERA_IO_LOCK_TIMEOUT", 0.01)
+
+    main._camera_io_lock.acquire()
+    try:
+        image, stale = main._capture_snapshot_with_fallback("ch00_0")
+    finally:
+        main._camera_io_lock.release()
+
+    assert image == b"cached-frame"
+    assert stale is True
+
+
+def test_stale_ptz_sequence_is_ignored(monkeypatch):
+    commands = []
+
+    class FakeCamera:
+        def command(self, direction):
+            commands.append(direction)
+            return {"result": "success"}
+
+    monkeypatch.setattr(main, "get_camera", lambda: FakeCamera())
+    main.update_state(online=True, authenticated=True)
+    client = main.app.test_client()
+
+    newer = client.post("/api/ptz/stop?client=test-client&seq=2")
+    older = client.post("/api/ptz/right?client=test-client&seq=1")
+
+    assert newer.status_code == 200
+    assert older.status_code == 200
+    assert older.get_json()["ignored"] is True
+    assert commands == ["stop"]
+
+
+def test_invalid_ptz_direction_is_rejected_without_camera_call(monkeypatch):
+    monkeypatch.setattr(
+        main,
+        "get_camera",
+        lambda: (_ for _ in ()).throw(AssertionError("camera must not be called")),
+    )
+    main.update_state(online=True, authenticated=True)
+    client = main.app.test_client()
+    response = client.post("/api/ptz/SetDiagMode?client=test-client&seq=1")
+
+    assert response.status_code == 400
+
+
+def test_offline_heartbeat_clears_authenticated_state(monkeypatch):
+    class FakeCamera:
+        def heartbeat(self):
+            return {"online": False, "method": "icmp", "error": "ICMP ping failed"}
+
+    monkeypatch.setattr(main, "get_camera", lambda: FakeCamera())
+    main.update_state(online=True, authenticated=True)
+
+    assert main.heartbeat_camera() is False
+    with main._state_lock:
+        assert main._state["online"] is False
+        assert main._state["authenticated"] is False
+
+
+def test_api_responses_disable_caching():
+    client = main.app.test_client()
+    response = client.get("/api/status")
+
+    assert response.headers["Cache-Control"] == "no-store, max-age=0"
+    assert response.headers["X-Content-Type-Options"] == "nosniff"
+    assert response.headers["Referrer-Policy"] == "no-referrer"
+
+
+def test_light_test_rejects_while_probe_is_running(monkeypatch):
+    monkeypatch.setattr(
+        main,
+        "validate_camera",
+        lambda **kwargs: (_ for _ in ()).throw(
+            AssertionError("validation must not run while deep probe is active")
+        ),
+    )
+    main.update_state(probe_running=True)
+    client = main.app.test_client()
+
+    response = client.post("/api/test")
+
+    assert response.status_code == 409
+    assert response.get_json()["busy"] is True
+
+
+def test_unavailable_icmp_preserves_last_known_online_state(monkeypatch):
+    class FakeCamera:
+        def heartbeat(self):
+            return {
+                "online": None,
+                "method": "icmp",
+                "error": "ICMP heartbeat is unavailable in this container",
+            }
+
+    monkeypatch.setattr(main, "get_camera", lambda: FakeCamera())
+    main.update_state(online=True, authenticated=True)
+
+    assert main.heartbeat_camera() is True
+    with main._state_lock:
+        assert main._state["online"] is True
+        assert main._state["authenticated"] is True
+        assert main._state["heartbeat_error"] is not None
+
+
+def test_deep_probe_is_rejected_while_ptz_is_moving():
+    main.update_state(ptz_moving=True, probe_running=False)
+    client = main.app.test_client()
+
+    response = client.post("/api/probe")
+
+    assert response.status_code == 409
+    assert "Stop PTZ" in response.get_json()["error"]
+
+
+def test_snapshot_does_not_open_rtsp_while_ptz_is_moving(monkeypatch):
+    key = ("10.0.0.10", 554, "ch00_0")
+    main._snapshot_cache[key] = (time.monotonic(), b"cached-frame")
+    monkeypatch.setattr(main, "_snapshot_cache_key", lambda stream: key)
+
+    class FakeCamera:
+        def snapshot(self, stream):
+            raise AssertionError("RTSP must not open while PTZ is moving")
+
+    monkeypatch.setattr(main, "get_camera", lambda: FakeCamera())
+    main.update_state(ptz_moving=True)
+
+    image, stale = main._capture_snapshot_with_fallback("ch00_0")
+
+    assert image == b"cached-frame"
+    assert stale is True
+
+
+def test_light_test_rejects_while_ptz_is_moving(monkeypatch):
+    monkeypatch.setattr(
+        main,
+        "_validate_camera_locked",
+        lambda **kwargs: (_ for _ in ()).throw(
+            AssertionError("validation must not run while PTZ is moving")
+        ),
+    )
+    main.update_state(ptz_moving=True, probe_running=False)
+    client = main.app.test_client()
+
+    response = client.post("/api/test")
+
+    assert response.status_code == 409
+    assert response.get_json()["busy"] is True

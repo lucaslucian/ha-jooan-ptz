@@ -22,7 +22,7 @@ configuration:
     description: Port used for the read-only ONVIF capability probe. JA-A12 research suggests 8899.
   validation_interval:
     name: Heartbeat interval
-    description: Seconds between lightweight TCP heartbeats on the HTTP port. CGI, ONVIF, port 9898 and RTSP discovery are not repeated in the background.
+    description: Seconds between ICMP liveness checks. The heartbeat does not open HTTP, ONVIF, port 9898 or RTSP connections.
   debug:
     name: Debug logging
     description: Enables additional diagnostic logging. Credentials and authentication keys remain redacted.
