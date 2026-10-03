@@ -23,6 +23,7 @@ from lab import (
     onvif_ir_lamp,
     onvif_list_presets,
     onvif_pull_events,
+    safe_diag_mode_callback_probe,
 )
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -609,10 +610,24 @@ def lab_onvif_events():
 
 @app.post("/api/lab/diag/disable")
 def lab_diag_disable():
-    # Only the fixed SetDiagMode disable operation is exposed. Active callback
-    # mode will not be added until a callback sink can be pinned to a safe
-    # private HA address without exposing an arbitrary command channel.
     return _lab_execute(lambda camera, _onvif_info: disable_diag_mode(camera))
+
+
+@app.post("/api/lab/diag/probe")
+def lab_diag_probe():
+    config = load_config()
+    callback_ip = str(config.get("diag_callback_ip") or "").strip()
+    if not callback_ip:
+        return jsonify({
+            "error": "Configure diag_callback_ip with the Home Assistant LAN IP before the safe callback test"
+        }), 400
+    return _lab_execute(
+        lambda camera, _onvif_info: safe_diag_mode_callback_probe(
+            camera,
+            callback_ip=callback_ip,
+            callback_port=49000,
+        )
+    )
 
 
 def _video_stream_available(item: dict | None) -> bool:
