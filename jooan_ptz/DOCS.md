@@ -27,6 +27,7 @@ Na aba **Configuração** do App:
 | `features_port` | `9898` | capabilities/estado |
 | `rtsp_port` | `554` | mídia RTSP |
 | `onvif_port` | `8899` | candidato ONVIF |
+| `diag_callback_ip` | vazio | IP LAN do host Home Assistant no mesmo /24 da câmera, usado somente pelo sink SetDiagMode seguro |
 | `validation_interval` | `30` | intervalo do heartbeat ICMP em segundos; não abre portas da câmera |
 | `debug` | `false` | diagnóstico adicional nos logs |
 
@@ -34,13 +35,14 @@ Para o primeiro teste, `debug: true` pode ajudar. Desative depois de concluir o 
 
 ## O que aparece no painel
 
-A interface v0.6 organiza os dados já coletados em cinco áreas:
+A interface v0.7 organiza os dados e testes em seis áreas:
 
 - **Visão geral** — saúde, dispositivo, armazenamento, serviços e estados principais;
 - **Câmeras & PTZ** — preview ao vivo, snapshots, seleção de lente e PTZ;
 - **Detecção** — movimento, pessoa, veículo, tracking, luzes e alertas em modo leitura;
 - **Gravação** — SD, gravação e resumo de agendas;
 - **Diagnóstico** — serviços, ONVIF amigável e JSON bruto recolhido em detalhes expansíveis.
+- **Laboratório** — testes manuais, allowlisted e experimentais de escrita/assinatura de eventos; firmware/reset/Wi-Fi ficam fora.
 
 
 ### Estado geral
@@ -141,6 +143,37 @@ A v0.4 amplia a descoberta somente leitura para:
 - `GetPresets`.
 
 Nenhuma dessas operações altera a câmera. PTZ de escrita continua usando apenas o CGI já validado; presets ainda não são criados, removidos ou chamados via ONVIF.
+
+## Laboratório experimental
+
+A v0.7 separa qualquer nova escrita da operação normal. Os testes só rodam por ação explícita na aba **Laboratório** e usam a mesma serialização de I/O que protege a câmera contra concorrência.
+
+Testes disponíveis inicialmente:
+
+- ONVIF `ContinuousMove` com velocidade entre 0,1 e 1,0, duração máxima de 800 ms e tentativa de `Stop` no bloco de finalização;
+- ONVIF `SendAuxiliaryCommand` apenas para `tt:Irlamp|On` / `tt:Irlamp|Off` quando esses comandos tiverem sido anunciados em `GetNodes`;
+- presets ONVIF: listar, criar somente o preset fixo `HA_TEST`, chamar apenas token presente no readback e excluir somente `HA_TEST`;
+- Imaging read-only com `GetImagingSettings` + `GetOptions`;
+- ONVIF Events: `GetServiceCapabilities`, `GetEventProperties` e teste PullPoint com assinatura de 15 segundos;
+- inventário dos estados OEM da porta 9898 que ainda não possuem setter stock confirmado;
+- `SetDiagMode` em dois testes guardados: forçar `enable=0` e um callback ativo de curta duração através de sink dedicado na porta 49000.
+
+No teste ativo, `diag_callback_ip` é configurado no App e precisa estar no mesmo /24 da câmera. O navegador não escolhe host, porta ou código. O backend gera um código efêmero, aceita conexão somente do IP da câmera, não lê nem envia payload de comando e força `SetDiagMode enable=0` no bloco de finalização.
+
+O laboratório **não implementa**:
+
+- atualização de firmware;
+- reset de fábrica;
+- alteração/configuração de Wi-Fi;
+- proxy genérico de `singleCMD`;
+- SOAP action arbitrária;
+- DP/MQTT arbitrário.
+
+### Eventos e futura integração Home Assistant
+
+A câmera já anuncia o serviço ONVIF Events. O teste PullPoint existe para descobrir se o firmware stock entrega eventos de movimento/pessoa/veículo localmente. Se isso for confirmado no hardware, a evolução preferida é manter uma assinatura local no backend e publicar entidades/eventos para o Home Assistant, evitando polling contínuo e sem depender do push cloud da JOOAN.
+
+O campo OEM `msgpush_enable` e suas agendas continuam sendo observados separadamente. Eles podem ajudar a mapear o mecanismo de notificação do fabricante, mas não são tratados como substituto do ONVIF Events até existir um caminho LAN confirmado.
 
 ## Diagnóstico profundo
 

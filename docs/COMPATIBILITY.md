@@ -28,6 +28,10 @@ A família JOOAN/CAM720 contém várias revisões de hardware e firmware com nom
 | `ch01_1` | Validado via probe manual da v0.6 (640×360 H.264) |
 | ONVIF 8899 | Validado: `/onvif/device_service` respondeu `GetCapabilities` com HTTP 200 |
 | `GetProfiles` / `GetStreamUri` / `GetStatus` / `GetPresets` | Experimental read-only v0.4 |
+| ONVIF ContinuousMove/Stop | Laboratório v0.7; precisa validação no hardware stock |
+| ONVIF auxiliary IR | Laboratório v0.7; câmera anunciou Irlamp On/Off, escrita precisa validação |
+| ONVIF presets Set/Goto/Remove | Laboratório v0.7; limitado ao HA_TEST para criação/exclusão |
+| ONVIF Events PullPoint | Laboratório v0.7; precisa validação de eventos reais |
 | UDP 7788 | Observado, formato em pesquisa |
 | playback microSD | Em pesquisa |
 | talk-back | Em pesquisa |

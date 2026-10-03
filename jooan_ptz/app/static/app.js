@@ -12,6 +12,8 @@ let snapshotTimer=null;
 let snapshotRefreshRunning=false;
 let lastOverviewSignature='';
 let lastCameraSignature='';
+let labTestPresetToken=null;
+let labRequestRunning=false;
 const STATUS_REFRESH_MS=5000;
 const SNAPSHOT_REFRESH_MS=30000;
 
@@ -492,12 +494,184 @@ async function lightTest(){
   finally{button.disabled=false}
 }
 
+function showLabResult(value){
+  const target=$('labResult');
+  if(!target)return;
+  target.textContent=typeof value==='string'?value:JSON.stringify(value,null,2);
+}
+
+async function labRequest(path,body=null){
+  if(labRequestRunning)throw new Error('Outro teste do laboratório está em andamento');
+  labRequestRunning=true;
+  try{
+    const options={method:'POST',headers:{}};
+    if(body!==null){
+      options.headers['Content-Type']='application/json';
+      options.body=JSON.stringify(body);
+    }
+    const response=await fetch(api(path),options);
+    let payload={};
+    try{payload=await response.json()}catch(_){payload={error:'Resposta inválida do backend'}}
+    showLabResult(payload);
+    if(!response.ok)throw new Error(payload.error||('HTTP '+response.status));
+    return payload;
+  }finally{
+    labRequestRunning=false;
+  }
+}
+
+function labPresetFromPayload(payload){
+  const lists=[
+    payload?.presets,
+    payload?.readback?.presets
+  ].filter(Array.isArray);
+  for(const list of lists){
+    const match=list.find(item=>item?.name==='HA_TEST');
+    if(match?.token!=null)return String(match.token);
+  }
+  if(payload?.preset_token!=null)return String(payload.preset_token);
+  if(payload?.preset?.name==='HA_TEST'&&payload.preset?.token!=null)return String(payload.preset.token);
+  return null;
+}
+
+function updateLabPresetButtons(){
+  if(!$('labPresetGoto'))return;
+  $('labPresetGoto').disabled=!labTestPresetToken||labRequestRunning;
+  $('labPresetDelete').disabled=!labTestPresetToken||labRequestRunning;
+  $('labPresetSummary').textContent=labTestPresetToken
+    ?'HA_TEST disponível · token '+labTestPresetToken
+    :'Nenhum preset HA_TEST confirmado.';
+}
+
+function renderLabInventory(data){
+  const root=$('labOemInventory');
+  if(!root)return;
+  const state=data?.device_info?.local_state||{};
+  const defs=[
+    ['Motion','md_enable'],
+    ['Sensibilidade motion','mdsensitivity'],
+    ['Motion secundário','sub_md_enable'],
+    ['Auto tracking','autotrack'],
+    ['Detecção de pessoa','person_detect'],
+    ['Detecção de veículo','vehicle_detect'],
+    ['Person tracking','person_track_enable'],
+    ['LED','led'],
+    ['Floodlight','floodlight'],
+    ['Luz amarela','yellowlight'],
+    ['Flip/mirror','flipmirror'],
+    ['Gravação','record_enable'],
+    ['Tipo de gravação','record_type'],
+    ['Privacy / PTZ hide','ptz_hide_mode'],
+    ['Buzzer','buzzer'],
+    ['Push da câmera','msgpush_enable'],
+    ['Sensibilidade de áudio','audiosensitive'],
+    ['Frequência elétrica','powerfrequency'],
+    ['Qualidade','qualitymode']
+  ];
+  root.innerHTML=defs.map(([label,key])=>{
+    const exists=Object.prototype.hasOwnProperty.call(state,key);
+    const value=exists?state[key]:'—';
+    return '<div class="setting-item"><div><strong>'+esc(label)+'</strong><span>'+esc(key)+' · setter pendente</span></div>'+
+      '<span class="setting-value">'+esc(value)+'</span></div>';
+  }).join('');
+}
+
+function updateLabAvailability(data){
+  const ready=!!data?.online&&!!data?.authenticated&&!data?.probe_running&&!data?.preview_active&&!data?.preview_probe_running&&!data?.ptz_moving&&!labRequestRunning;
+  document.querySelectorAll('#tab-lab button').forEach(button=>{
+    if(button.id==='labClearResult')return;
+    if(button.id==='labPresetGoto'||button.id==='labPresetDelete')return;
+    button.disabled=!ready;
+  });
+  updateLabPresetButtons();
+}
+
+async function labPtz(direction){
+  const speed=Number($('labPtzSpeed').value);
+  const duration=Number($('labPtzDuration').value);
+  try{
+    await labRequest('api/lab/onvif/ptz',{direction,speed,duration_ms:duration});
+  }catch(error){showLabResult('PTZ ONVIF: '+error.message)}
+  finally{if(lastData)updateLabAvailability(lastData)}
+}
+
+async function labIr(enabled){
+  try{await labRequest('api/lab/onvif/ir',{enabled})}
+  catch(error){showLabResult('IR: '+error.message)}
+  finally{if(lastData)updateLabAvailability(lastData)}
+}
+
+async function labPresetList(){
+  if(labRequestRunning)return;
+  labRequestRunning=true;
+  try{
+    const response=await fetch(api('api/lab/onvif/presets'),{cache:'no-store'});
+    const payload=await response.json();
+    showLabResult(payload);
+    if(!response.ok)throw new Error(payload.error||('HTTP '+response.status));
+    labTestPresetToken=labPresetFromPayload(payload);
+  }catch(error){showLabResult('Presets: '+error.message)}
+  finally{
+    labRequestRunning=false;
+    updateLabPresetButtons();
+    if(lastData)updateLabAvailability(lastData);
+  }
+}
+
+async function labPresetAction(action){
+  try{
+    const body={action};
+    if(action==='goto'||action==='delete'){
+      if(!labTestPresetToken)throw new Error('Nenhum HA_TEST confirmado');
+      body.token=labTestPresetToken;
+    }
+    const payload=await labRequest('api/lab/onvif/presets',body);
+    const token=labPresetFromPayload(payload);
+    if(action==='delete')labTestPresetToken=null;
+    else if(token)labTestPresetToken=token;
+  }catch(error){showLabResult('Preset '+action+': '+error.message)}
+  finally{
+    updateLabPresetButtons();
+    if(lastData)updateLabAvailability(lastData);
+  }
+}
+
+async function labImaging(){
+  try{await labRequest('api/lab/onvif/imaging')}
+  catch(error){showLabResult('Imaging: '+error.message)}
+  finally{if(lastData)updateLabAvailability(lastData)}
+}
+
+async function labEvents(action){
+  try{
+    if(action==='pull')showLabResult('Escutando eventos ONVIF por aproximadamente 5 segundos...');
+    await labRequest('api/lab/onvif/events',{action});
+  }catch(error){showLabResult('Eventos ONVIF: '+error.message)}
+  finally{if(lastData)updateLabAvailability(lastData)}
+}
+
+async function labDiagProbe(){
+  try{
+    showLabResult('Aguardando callback seguro da câmera...');
+    await labRequest('api/lab/diag/probe');
+  }catch(error){showLabResult('SetDiagMode callback: '+error.message)}
+  finally{if(lastData)updateLabAvailability(lastData)}
+}
+
+async function labDiagDisable(){
+  try{await labRequest('api/lab/diag/disable')}
+  catch(error){showLabResult('SetDiagMode OFF: '+error.message)}
+  finally{if(lastData)updateLabAvailability(lastData)}
+}
+
 function renderAll(data){
   setHealth(data);
   renderOverview(data);
   renderDetection(data);
   renderRecording(data);
   renderDiagnostics(data);
+  renderLabInventory(data);
+  updateLabAvailability(data);
   renderLiveMeta(data);
   renderSnapshotTiles('cameraMedia',data,true);
   enablePtz(data.online&&data.authenticated&&!data.probe_running);
@@ -581,6 +755,19 @@ $('probe').addEventListener('click',deepProbe);
 $('lightTest').addEventListener('click',lightTest);
 $('overviewRefreshSnapshots').addEventListener('click',()=>refreshSnapshots($('overviewMedia')));
 $('cameraRefreshSnapshots').addEventListener('click',()=>refreshSnapshots($('cameraMedia')));
+document.querySelectorAll('[data-lab-ptz]').forEach(button=>button.addEventListener('click',()=>labPtz(button.dataset.labPtz)));
+$('labIrOn').addEventListener('click',()=>labIr(true));
+$('labIrOff').addEventListener('click',()=>labIr(false));
+$('labPresetList').addEventListener('click',labPresetList);
+$('labPresetCreate').addEventListener('click',()=>labPresetAction('create'));
+$('labPresetGoto').addEventListener('click',()=>labPresetAction('goto'));
+$('labPresetDelete').addEventListener('click',()=>labPresetAction('delete'));
+$('labImagingDiscover').addEventListener('click',labImaging);
+$('labEventsDiscover').addEventListener('click',()=>labEvents('discover'));
+$('labEventsPull').addEventListener('click',()=>labEvents('pull'));
+$('labDiagProbe').addEventListener('click',labDiagProbe);
+$('labDiagDisable').addEventListener('click',labDiagDisable);
+$('labClearResult').addEventListener('click',()=>showLabResult('Nenhum teste executado.'));
 
 $('liveImage').addEventListener('load',()=>{$('previewMessage').textContent='Preview ao vivo ativo.'});
 $('liveImage').addEventListener('error',()=>{

@@ -152,7 +152,7 @@ def redact_secrets(value: object) -> str:
     text = str(value)
     text = re.sub(r"([?&]userkey=)[^&\s'\"]+", r"\1<redacted>", text, flags=re.I)
     text = re.sub(
-        r"([?&](?:key|password|AuthKey)=)[^&\s'\"]+",
+        r"([?&](?:key|password|AuthKey|authcode)=)[^&\s'\"]+",
         r"\1<redacted>",
         text,
         flags=re.I,
@@ -164,7 +164,7 @@ def redact_secrets(value: object) -> str:
         flags=re.I,
     )
     text = re.sub(
-        r'("(?:key|password|AuthKey|userkey|device_pwd|security_password)"\s*:\s*")[^"]*(")',
+        r'("(?:key|password|AuthKey|userkey|device_pwd|security_password|authcode)"\s*:\s*")[^"]*(")',
         r"\1<redacted>\2",
         text,
         flags=re.I,
