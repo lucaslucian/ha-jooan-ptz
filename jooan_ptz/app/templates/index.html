@@ -357,8 +357,10 @@
         </div>
         <p class="helper">
           Escolha um grupo, capture a linha de base, altere <strong>uma única opção</strong> no CAM720
-          e compare. Este teste é somente leitura; ele serve para descobrir o campo OEM exato antes
-          de criarmos botões ON/OFF locais.
+          e compare. Além dos campos conhecidos do grupo, o backend calcula fingerprints de outras
+          propriedades OEM não sensíveis; se algo mudar fora da allowlist, o resultado mostra o nome
+          da propriedade sem expor seu valor. Em Motion, mudanças de <code>mdarea</code> também são
+          decodificadas como máscara de 25 bits.
         </p>
         <div class="lab-controls">
           <label>Grupo de recursos
