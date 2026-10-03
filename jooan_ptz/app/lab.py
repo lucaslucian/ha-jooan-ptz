@@ -49,9 +49,78 @@ OEM_RECORDING_KEYS = (
     "week",
 )
 
+OEM_TOGGLE_GROUPS: dict[str, tuple[str, ...]] = {
+    "motion": (
+        "md_enable",
+        "sub_md_enable",
+        "mdsensitivity",
+        "sub_mdsensitivity",
+        "mdarea",
+        "sub_mdarea",
+    ),
+    "smart_detection": (
+        "person_detect",
+        "vehicle_detect",
+        "pdarea",
+    ),
+    "tracking": (
+        "autotrack",
+        "person_track_enable",
+    ),
+    "lighting": (
+        "led",
+        "floodlight",
+        "yellowlight",
+        "alarm_light_switch",
+        "alarm_light_mode",
+        "light_schedule",
+        "newflood_light_schedule",
+    ),
+    "alerts": (
+        "msgpush_enable",
+        "audiosensitive",
+        "buzzer",
+        "alarmsoundselect",
+        "msgpush_schedule",
+        "newmsg_push_schedule",
+        "sound_alarm_schedule",
+    ),
+    "privacy": (
+        "ptz_hide_mode",
+        "ptz_covre_status",
+        "ptz_hide_schedule",
+        "flipmirror",
+    ),
+}
+
 
 class LabError(RuntimeError):
     """Raised when an experimental action cannot be executed safely."""
+
+
+def oem_toggle_snapshot(camera, *, group: str) -> dict[str, Any]:
+    """Read one allowlisted OEM feature group from the stock 9898 endpoint.
+
+    This is deliberately read-only. It exists to map the effect of changing a
+    single CAM720 option before any local setter is implemented.
+    """
+    group = str(group or "").strip()
+    keys = OEM_TOGGLE_GROUPS.get(group)
+    if not keys:
+        raise LabError("Unsupported OEM toggle group")
+
+    info = camera.get_device_features().as_dict()
+    properties = info.get("properties") or {}
+    values = {key: properties.get(key) for key in keys if key in properties}
+    return {
+        "operation": "oem_toggle_snapshot",
+        "captured_at": int(time.time()),
+        "group": group,
+        "keys": list(keys),
+        "values": values,
+        "present_count": len(values),
+        "capabilities": info.get("capabilities") or {},
+    }
 
 
 def oem_recording_snapshot(camera) -> dict[str, Any]:
