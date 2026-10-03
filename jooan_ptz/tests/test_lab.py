@@ -261,3 +261,106 @@ def test_storage_discovery_only_uses_advertised_service_paths(monkeypatch):
         "GetServiceCapabilities",
         "GetReplayConfiguration",
     ]
+
+
+
+def test_event_summary_deduplicates_initialized_snapshots_and_tracks_transitions():
+    messages = [
+        {
+            "topic": "tns1:VideoSource/MotionAlarm",
+            "property_operation": "Initialized",
+            "source": [{"name": "Source", "value": "VideoSource"}],
+            "key": [],
+            "data": [{"name": "State", "value": "true"}],
+            "motion": True,
+            "utc_time": "2026-10-03T19:41:38",
+            "pull_index": 0,
+        },
+        {
+            "topic": "tns1:VideoSource/MotionAlarm",
+            "property_operation": "Initialized",
+            "source": [{"name": "Source", "value": "VideoSource"}],
+            "key": [],
+            "data": [{"name": "State", "value": "true"}],
+            "motion": True,
+            "utc_time": "2026-10-03T19:41:40",
+            "pull_index": 1,
+        },
+    ]
+
+    summary = lab._summarize_event_messages(messages)
+
+    assert summary["unique_message_count"] == 1
+    assert summary["duplicate_message_count"] == 1
+    assert summary["initial_states"] == {"tns1:VideoSource/MotionAlarm": True}
+    assert summary["state_changes"] == []
+    assert summary["motion_transition_observed"] is False
+    assert summary["initialization_only"] is True
+
+
+def test_event_summary_detects_state_change_even_if_firmware_marks_initialized():
+    messages = [
+        {
+            "topic": "motion",
+            "property_operation": "Initialized",
+            "source": [],
+            "key": [],
+            "data": [{"name": "State", "value": "true"}],
+            "motion": True,
+            "pull_index": 0,
+        },
+        {
+            "topic": "motion",
+            "property_operation": "Initialized",
+            "source": [],
+            "key": [],
+            "data": [{"name": "State", "value": "false"}],
+            "motion": False,
+            "pull_index": 1,
+        },
+    ]
+
+    summary = lab._summarize_event_messages(messages)
+
+    assert summary["motion_transition_observed"] is True
+    assert summary["state_changes"][0]["from"] is True
+    assert summary["state_changes"][0]["to"] is False
+
+
+def test_imaging_write_is_allowlisted_and_bounded(monkeypatch):
+    calls = []
+
+    def fake_soap(camera, **kwargs):
+        calls.append(kwargs)
+        return ok_response(), ET.fromstring("<Envelope/>")
+
+    monkeypatch.setattr(lab, "_soap", fake_soap)
+    result = lab.onvif_set_imaging(
+        FakeCamera(),
+        ptz_info(),
+        setting="Brightness",
+        value=128,
+    )
+
+    assert result["accepted"] is True
+    assert result["setting"] == "Brightness"
+    assert result["value"] == 128
+    assert result["force_persistence"] is False
+    assert calls[0]["action"] == "SetImagingSettings"
+    assert "<tt:Brightness>128</tt:Brightness>" in calls[0]["payload"]
+    assert "<timg:ForcePersistence>false</timg:ForcePersistence>" in calls[0]["payload"]
+
+
+def test_imaging_write_rejects_unknown_fields_and_out_of_range(monkeypatch):
+    for setting, value in (("Gain", 128), ("Brightness", 0), ("Sharpness", 256)):
+        try:
+            lab.onvif_set_imaging(
+                FakeCamera(),
+                ptz_info(),
+                setting=setting,
+                value=value,
+            )
+        except lab.LabError:
+            pass
+        else:
+            raise AssertionError(f"unsafe imaging write accepted: {setting}={value}")
