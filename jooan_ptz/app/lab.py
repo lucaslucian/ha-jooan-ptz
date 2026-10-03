@@ -7,6 +7,7 @@ import socket
 import threading
 import time
 from typing import Any
+from urllib.parse import urlsplit
 from xml.sax.saxutils import escape as xml_escape
 
 from probe import (
@@ -787,6 +788,136 @@ def onvif_pull_events(
             item.get("motion") is True for item in messages
         ),
         **event_summary,
+    }
+
+
+def _recording_tokens(root) -> list[str]:
+    tokens: list[str] = []
+    if root is None:
+        return tokens
+    for node in root.iter():
+        if _local_name(node.tag) != "RecordingToken" or not node.text:
+            continue
+        token = node.text.strip()
+        if LAB_TOKEN_RE.fullmatch(token) and token not in tokens:
+            tokens.append(token)
+        if len(tokens) >= 16:
+            break
+    return tokens
+
+
+def _replay_uri_descriptor(root) -> dict[str, Any] | None:
+    if root is None:
+        return None
+    uri = None
+    for node in root.iter():
+        if _local_name(node.tag) == "Uri" and node.text:
+            uri = node.text.strip()
+            break
+    if not uri:
+        return None
+    try:
+        parsed = urlsplit(uri)
+        port = parsed.port
+    except (ValueError, TypeError):
+        return {"valid_rtsp": False}
+    return {
+        "valid_rtsp": parsed.scheme.lower() == "rtsp",
+        "path": parsed.path or "/",
+        "reported_port": port,
+        "reported_host_is_camera": parsed.hostname in {None, "", "127.0.0.1", "localhost"},
+        "has_query": bool(parsed.query),
+        "query_redacted": bool(parsed.query),
+        "credentials_present": bool(parsed.username or parsed.password),
+    }
+
+
+def onvif_recording_playback_probe(
+    camera,
+    onvif_info: dict,
+    *,
+    recording_token: str | None = None,
+) -> dict[str, Any]:
+    """Inspect a camera-returned recording token and request, but do not open, its replay URI."""
+    recording_path = _service_path_by_namespace(onvif_info, ONVIF_RECORDING)
+    search_path = _service_path_by_namespace(onvif_info, ONVIF_SEARCH)
+    replay_path = _service_path_by_namespace(onvif_info, ONVIF_REPLAY)
+    if not recording_path or not search_path or not replay_path:
+        raise LabError("Recording/Search/Replay services were not all advertised")
+
+    recordings_response, recordings_root = _soap(
+        camera,
+        path=recording_path,
+        namespace=ONVIF_RECORDING,
+        prefix="trc",
+        payload="<trc:GetRecordings/>",
+        action="GetRecordings",
+        timeout=5.0,
+    )
+    recordings_summary = _response_summary(recordings_response)
+    tokens = _recording_tokens(recordings_root) if recordings_summary["accepted"] else []
+    if not tokens:
+        return {
+            "operation": "onvif_recording_playback_probe",
+            "recordings": recordings_summary,
+            "recording_tokens": [],
+            "error": "Camera returned no recording token",
+        }
+
+    if recording_token:
+        token = _safe_token(recording_token, label="recording token")
+        if token not in tokens:
+            raise LabError("Recording token was not returned by the camera")
+    else:
+        token = tokens[0]
+
+    info_response, info_root = _soap(
+        camera,
+        path=search_path,
+        namespace=ONVIF_SEARCH,
+        prefix="tse",
+        payload=(
+            "<tse:GetRecordingInformation>"
+            f"<tse:RecordingToken>{xml_escape(token)}</tse:RecordingToken>"
+            "</tse:GetRecordingInformation>"
+        ),
+        action="GetRecordingInformation",
+        timeout=5.0,
+    )
+
+    replay_response, replay_root = _soap(
+        camera,
+        path=replay_path,
+        namespace=ONVIF_REPLAY,
+        prefix="trp",
+        payload=(
+            "<trp:GetReplayUri>"
+            "<trp:StreamSetup>"
+            "<tt:Stream>RTP-Unicast</tt:Stream>"
+            "<tt:Transport><tt:Protocol>RTSP</tt:Protocol></tt:Transport>"
+            "</trp:StreamSetup>"
+            f"<trp:RecordingToken>{xml_escape(token)}</trp:RecordingToken>"
+            "</trp:GetReplayUri>"
+        ),
+        action="GetReplayUri",
+        timeout=5.0,
+    )
+
+    return {
+        "operation": "onvif_recording_playback_probe",
+        "recording_token": token,
+        "recording_tokens": tokens,
+        "recordings": recordings_summary,
+        "recording_information": {
+            **_response_summary(info_response),
+            "values": _xml_rows(info_root),
+            "hierarchy": _xml_tree(info_root),
+        },
+        "replay_uri": {
+            **_response_summary(replay_response),
+            "descriptor": _replay_uri_descriptor(replay_root),
+            "raw_uri_exposed": False,
+        },
     }
 
 
