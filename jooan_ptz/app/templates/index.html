@@ -374,11 +374,14 @@
           <span class="badge danger">Restrito</span>
         </div>
         <p class="helper">
-          Nesta primeira etapa o painel expõe somente <strong>desativar</strong> SetDiagMode.
-          O modo ativo só será liberado depois que houver um callback sink dedicado, com IP privado fixo,
-          código efêmero, timeout curto, sem payload arbitrário e sem shell/proxy de comandos.
+          O teste ativo usa um sink TCP dedicado na porta 49000: somente a câmera configurada pode conectar,
+          nenhum byte/comando é enviado para ela, o código de autorização é efêmero e o backend força
+          <strong>SetDiagMode OFF</strong> no final. Configure <code>diag_callback_ip</code> com o IP LAN do Home Assistant.
         </p>
-        <button id="labDiagDisable" class="button secondary">Forçar SetDiagMode OFF</button>
+        <div class="toolbar">
+          <button id="labDiagProbe" class="button primary">Testar callback seguro</button>
+          <button id="labDiagDisable" class="button secondary">Forçar SetDiagMode OFF</button>
+        </div>
       </article>
 
       <article class="card">
