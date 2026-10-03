@@ -305,13 +305,21 @@
           <span class="badge neutral">SetPreset não suportado na JA-A12 testada</span>
         </div>
         <p class="helper">
-          O laboratório cria apenas o preset fixo <code>HA_TEST</code>. A exclusão é recusada para qualquer preset
-          com outro nome. “Ir para” aceita somente tokens que acabaram de ser lidos da própria câmera.
+          <code>GetPresets</code> funciona. Qualquer preset retornado pela própria câmera pode ser selecionado
+          e testado com <code>GotoPreset</code>. A criação continua limitada ao nome fixo <code>HA_TEST</code>
+          e a exclusão continua permitida somente para <code>HA_TEST</code>.
         </p>
+        <div class="lab-controls">
+          <label>Preset retornado pela câmera
+            <select id="labPresetSelect" class="lab-select" disabled>
+              <option value="">Nenhum preset listado</option>
+            </select>
+          </label>
+        </div>
         <div class="toolbar">
           <button id="labPresetList" class="button secondary">Listar presets</button>
           <button id="labPresetCreate" class="button primary">Salvar posição como HA_TEST</button>
-          <button id="labPresetGoto" class="button secondary" disabled>Ir para HA_TEST</button>
+          <button id="labPresetGoto" class="button secondary" disabled>Ir para preset selecionado</button>
           <button id="labPresetDelete" class="button ghost" disabled>Excluir HA_TEST</button>
         </div>
         <div id="labPresetSummary" class="lab-summary">Nenhum teste executado.</div>
