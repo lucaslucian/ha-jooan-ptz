@@ -9,7 +9,7 @@
 - Added read-only ONVIF Imaging discovery using `GetImagingSettings` and `GetOptions` before enabling any imaging setter.
 - Added ONVIF Events discovery plus a short-lived PullPoint test intended to determine whether motion/person/vehicle events can later be exposed to Home Assistant without polling.
 - Added an inventory of OEM state fields whose write command is still unknown instead of guessing setter endpoints.
-- Added a restricted `SetDiagMode` safety control that can only force diagnostic mode OFF. Active callback mode remains unavailable until a dedicated private callback sink is implemented.
+- Added guarded `SetDiagMode` tests: force OFF, plus an active short-lived callback probe on fixed port 49000. The sink accepts only the configured camera, sends/reads no command payload, uses an ephemeral authorization code and forces OFF in a finally block.
 - Explicitly excluded firmware update, factory reset and Wi-Fi configuration from the laboratory.
 - Added tests for ONVIF movement stop guarantees, IR allowlisting, preset deletion boundaries, callback-host pinning and the fixed SetDiagMode disable request.
 
