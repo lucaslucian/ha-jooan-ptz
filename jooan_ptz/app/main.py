@@ -33,6 +33,7 @@ _state_lock = threading.Lock()
 _camera_io_lock = threading.Lock()
 _probe_start_lock = threading.Lock()
 _preview_state_lock = threading.Lock()
+_preview_start_lock = threading.Lock()
 _preview_probe_start_lock = threading.Lock()
 _ptz_order_lock = threading.Lock()
 _snapshot_lock = threading.Lock()
@@ -563,7 +564,9 @@ def validate_preview_substreams():
 
 @app.post("/api/live/stop")
 def stop_live_preview():
-    return jsonify({"ok": True, "stopped": _stop_live_preview()})
+    with _preview_start_lock:
+        stopped = _stop_live_preview()
+    return jsonify({"ok": True, "stopped": stopped})
 
 
 @app.get("/api/live/<int:channel>")
@@ -579,32 +582,33 @@ def live_preview(channel: int):
         if _state.get("probe_running") or _state.get("preview_probe_running"):
             return jsonify({"error": "Camera diagnostics are running"}), 409
 
-    # Supersede any previous live stream first so at most one RTSP preview is
-    # ever active. PTZ remains allowed while this one stream is open.
-    _stop_live_preview()
+    # Serialize preview replacement so concurrent browser reconnects can never
+    # leave two RTSP/ffmpeg preview sessions alive at the same time.
+    with _preview_start_lock:
+        _stop_live_preview()
 
-    if not _camera_io_lock.acquire(timeout=CAMERA_IO_LOCK_TIMEOUT):
-        return jsonify({"error": "Camera is busy"}), 409
-    try:
-        path, source = _select_preview_stream(channel)
-        stream = path.rsplit("/", 1)[-1]
-        process = get_camera().start_mjpeg_preview(stream, width=640, fps=6)
-    except Exception as exc:
-        return jsonify({"error": redact_secrets(exc)}), 502
-    finally:
-        _camera_io_lock.release()
+        if not _camera_io_lock.acquire(timeout=CAMERA_IO_LOCK_TIMEOUT):
+            return jsonify({"error": "Camera is busy"}), 409
+        try:
+            path, source = _select_preview_stream(channel)
+            stream = path.rsplit("/", 1)[-1]
+            process = get_camera().start_mjpeg_preview(stream, width=640, fps=6)
+        except Exception as exc:
+            return jsonify({"error": redact_secrets(exc)}), 502
+        finally:
+            _camera_io_lock.release()
 
-    with _preview_state_lock:
-        _preview_generation += 1
-        generation = _preview_generation
-        _preview_process = process
+        with _preview_state_lock:
+            _preview_generation += 1
+            generation = _preview_generation
+            _preview_process = process
 
-    update_state(
-        preview_active=True,
-        preview_channel=channel,
-        preview_stream=path,
-        preview_source=source,
-    )
+        update_state(
+            preview_active=True,
+            preview_channel=channel,
+            preview_stream=path,
+            preview_source=source,
+        )
 
     def generate():
         global _preview_process
