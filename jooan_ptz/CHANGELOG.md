@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.10.0
+
+- Confirmed the validated JA-A12 rejects ONVIF `SetPreset` with `ActionNotSupported`; `GetPresets` remains usable and currently returns an empty list.
+- Confirmed the same firmware rejects both `GetImagingSettings` and `SetImagingSettings`; `GetOptions` remains usable and advertises Brightness, ColorSaturation, Contrast and Sharpness ranges.
+- Confirmed ONVIF Recording/Search/Replay are functional on the stock camera despite unusual service-path mappings reported by `GetServices`.
+- The camera returns one recording token, `OnvifRecordingToken_1`, containing video, audio and metadata tracks.
+- Replay capabilities report RTP/RTSP/TCP support.
+- Added a read-only playback probe that refreshes recording tokens from the camera, pins the selected token to that fresh result, calls `GetRecordingInformation`, and requests `GetReplayUri`.
+- The raw replay URI is never exposed to the browser; only a sanitized descriptor is returned and query contents are redacted.
+- The replay URI is not opened in v0.10.0; actual server-side playback remains a separate validation step.
+- Firmware, reset, Wi-Fi configuration, recording creation/deletion and arbitrary SOAP/CGI proxies remain excluded.
+
+
 ## 0.9.0
 
 - Confirmed that the stock firmware repeats ONVIF motion property snapshots with `PropertyOperation=Initialized` across successive PullMessages calls.
