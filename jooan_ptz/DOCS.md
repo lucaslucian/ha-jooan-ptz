@@ -27,6 +27,7 @@ Na aba **Configuração** do App:
 | `features_port` | `9898` | capabilities/estado |
 | `rtsp_port` | `554` | mídia RTSP |
 | `onvif_port` | `8899` | candidato ONVIF |
+| `diag_callback_ip` | vazio | IP LAN do host Home Assistant no mesmo /24 da câmera, usado somente pelo sink SetDiagMode seguro |
 | `validation_interval` | `30` | intervalo do heartbeat ICMP em segundos; não abre portas da câmera |
 | `debug` | `false` | diagnóstico adicional nos logs |
 
@@ -155,9 +156,9 @@ Testes disponíveis inicialmente:
 - Imaging read-only com `GetImagingSettings` + `GetOptions`;
 - ONVIF Events: `GetServiceCapabilities`, `GetEventProperties` e teste PullPoint com assinatura de 15 segundos;
 - inventário dos estados OEM da porta 9898 que ainda não possuem setter stock confirmado;
-- `SetDiagMode` somente em `enable=0` para desligar/limpar o modo de diagnóstico.
+- `SetDiagMode` em dois testes guardados: forçar `enable=0` e um callback ativo de curta duração através de sink dedicado na porta 49000.
 
-O modo ativo de `SetDiagMode` não é exposto ainda. Quando for adicionado, deverá usar callback dedicado, IP privado fixado pelo backend, código efêmero, timeout curto e nenhum payload/comando arbitrário vindo do navegador.
+No teste ativo, `diag_callback_ip` é configurado no App e precisa estar no mesmo /24 da câmera. O navegador não escolhe host, porta ou código. O backend gera um código efêmero, aceita conexão somente do IP da câmera, não lê nem envia payload de comando e força `SetDiagMode enable=0` no bloco de finalização.
 
 O laboratório **não implementa**:
 
