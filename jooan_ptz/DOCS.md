@@ -146,7 +146,7 @@ Nenhuma dessas operações altera a câmera. PTZ de escrita continua usando apen
 
 ## Laboratório experimental
 
-A v0.10 mantém qualquer nova escrita separada da operação normal. Os testes só rodam por ação explícita na aba **Laboratório** e usam a mesma serialização de I/O que protege a câmera contra concorrência.
+A v0.11 mantém qualquer nova escrita separada da operação normal. Os testes só rodam por ação explícita na aba **Laboratório** e usam a mesma serialização de I/O que protege a câmera contra concorrência.
 
 Testes disponíveis inicialmente:
 
@@ -156,6 +156,7 @@ Testes disponíveis inicialmente:
 - Imaging: `GetOptions` confirmou `Brightness`, `ColorSaturation`, `Contrast` e `Sharpness` em 1–255, mas `GetImagingSettings` e `SetImagingSettings` retornaram `ActionNotSupported` na JA-A12 validada;
 - ONVIF Events: `GetServiceCapabilities`, `GetEventProperties` e PullPoint com janelas limitadas de 5/15/30 segundos;
 - descoberta read-only de Recording/Search/Replay somente quando os serviços forem anunciados por `GetServices`; a JA-A12 validada retornou uma gravação com tracks Video/Audio/Metadata e replay RTP/RTSP/TCP;
+- descoberta read-only de recording jobs (`GetRecordingJobs`, configuração e estado) e pulso protegido de 5 segundos que somente alterna um job existente `Idle -> Active -> Idle`, sem criar/apagar objetos;
 - probe read-only de `GetRecordingInformation` + `GetReplayUri`: o token é relido da câmera antes do uso e o URI bruto nunca é devolvido ao navegador;
 - inventário dos estados OEM da porta 9898 que ainda não possuem setter stock confirmado;
 - `SetDiagMode` em dois testes guardados: forçar `enable=0` e um callback ativo de curta duração através de sink dedicado na porta 49000.

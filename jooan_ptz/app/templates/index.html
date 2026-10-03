@@ -404,8 +404,15 @@
         </p>
         <div class="toolbar">
           <button id="labStorageDiscover" class="button secondary">Descobrir serviços de gravação</button>
-          <button id="labStoragePlaybackProbe" class="button primary">Inspecionar gravação / URI de replay</button>
+          <button id="labStorageJobs" class="button secondary">Inspecionar jobs de gravação</button>
+          <button id="labStorageRecordPulse" class="button primary">Gravar por 5 s e restaurar</button>
+          <button id="labStoragePlaybackProbe" class="button ghost">Inspecionar URI de replay</button>
         </div>
+        <p class="helper">
+          O teste de 5 segundos só executa escrita se a câmera retornar exatamente um job existente em modo
+          <code>Idle</code>. Ele muda somente o modo para <code>Active</code>, lê estado/informações e força
+          retorno para <code>Idle</code> no bloco de finalização. Não cria nem remove gravações, tracks ou jobs.
+        </p>
       </article>
 
       <article class="card">

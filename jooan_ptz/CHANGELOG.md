@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.11.0
+
+- Added read-only discovery of existing ONVIF recording jobs with GetRecordingJobs, GetRecordingJobConfiguration and GetRecordingJobState.
+- Added a guarded 5-second recording pulse for an already configured job.
+- The pulse runs only when exactly one job is returned and its current mode is explicitly Idle.
+- It changes only SetRecordingJobMode Idle -> Active -> Idle, reads job state and recording information around the pulse, and restores Idle in a finally block.
+- The pulse never creates/deletes recordings, tracks or jobs and never changes job configuration.
+- If the job is already Active, missing, ambiguous or lacks a safe recording token, the test performs no write.
+- GetReplayUri remains unsupported on the validated JA-A12, so successful recording can be verified via job/recording state even if ONVIF video playback remains unavailable.
+
+
 ## 0.10.2
 
 - Added one final read-only ONVIF Imaging path probe before marking Imaging writes unsupported on the validated JA-A12.
