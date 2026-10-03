@@ -428,11 +428,15 @@ Política do projeto a partir da v0.7:
 
 - continua proibido criar endpoint `singleCMD` genérico;
 - o navegador nunca fornece `authserverip`, porta, código de autorização ou payload arbitrário;
-- a primeira implementação do laboratório expõe somente `SetDiagMode enable=0`, para forçar o modo desligado;
-- ativação futura só poderá ocorrer através de um callback sink dedicado controlado pelo backend;
-- o callback deverá usar IP privado fixado/validado, código efêmero, timeout curto e fechamento automático;
-- o sink não poderá encaminhar shell, comandos do navegador ou bytes arbitrários para a câmera;
-- toda ativação deverá possuir caminho automático de desativação/expiração.
+- o laboratório sempre permite `SetDiagMode enable=0` para forçar o modo desligado;
+- o teste ativo usa um callback sink dedicado na porta fixa 49000;
+- `diag_callback_ip` precisa ser IP privado/ULA, da mesma família e mesma sub-rede local da câmera;
+- o navegador não fornece callback host, porta, código de autorização ou payload;
+- o backend gera código de autorização efêmero e limita a janela do teste;
+- o sink só aceita a conexão quando o peer é exatamente o IP configurado da câmera;
+- o sink fecha a conexão sem ler, enviar ou encaminhar payload de comando;
+- `SetDiagMode enable=0` é enviado no bloco de finalização, mesmo após falha/timeout;
+- nenhuma API de shell ou comando arbitrário é criada.
 
 Assim podemos pesquisar o mecanismo sem transformar o App em uma interface de execução genérica.
 
