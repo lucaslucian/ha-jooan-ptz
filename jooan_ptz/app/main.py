@@ -23,6 +23,7 @@ from lab import (
     onvif_ir_lamp,
     onvif_list_presets,
     onvif_pull_events,
+    onvif_storage_discovery,
     safe_diag_mode_callback_probe,
 )
 
@@ -604,8 +605,23 @@ def lab_onvif_events():
     if action == "discover":
         return _lab_execute(onvif_event_discovery)
     if action == "pull":
-        return _lab_execute(onvif_pull_events)
+        try:
+            seconds = int(payload.get("seconds", 5))
+        except (TypeError, ValueError):
+            return jsonify({"error": "Invalid event listen duration"}), 400
+        return _lab_execute(
+            lambda camera, onvif_info: onvif_pull_events(
+                camera,
+                onvif_info,
+                listen_seconds=seconds,
+            )
+        )
     return jsonify({"error": "Unsupported ONVIF event laboratory action"}), 400
+
+
+@app.post("/api/lab/onvif/storage")
+def lab_onvif_storage():
+    return _lab_execute(onvif_storage_discovery)
 
 
 @app.post("/api/lab/diag/disable")
