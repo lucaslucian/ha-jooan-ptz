@@ -25,7 +25,9 @@ from lab import (
     onvif_ir_lamp,
     onvif_list_presets,
     onvif_pull_events,
+    onvif_recording_job_discovery,
     onvif_recording_playback_probe,
+    onvif_recording_pulse,
     onvif_storage_discovery,
     safe_diag_mode_callback_probe,
 )
@@ -652,6 +654,20 @@ def lab_onvif_storage():
                 camera,
                 onvif_info,
                 recording_token=str(token) if token else None,
+            )
+        )
+    if action == "jobs":
+        return _lab_execute(onvif_recording_job_discovery)
+    if action == "record_pulse":
+        try:
+            seconds = int(payload.get("seconds", 5))
+        except (TypeError, ValueError):
+            return jsonify({"error": "Invalid recording pulse duration"}), 400
+        return _lab_execute(
+            lambda camera, onvif_info: onvif_recording_pulse(
+                camera,
+                onvif_info,
+                seconds=seconds,
             )
         )
     return jsonify({"error": "Unsupported ONVIF storage laboratory action"}), 400
