@@ -17,6 +17,7 @@ A família JOOAN/CAM720 contém várias revisões de hardware e firmware com nom
 |---|---|
 | HTTP/CGI porta 80 | Validado |
 | PTZ up/down/left/right/stop | Validado |
+| Lente PTZ / canal `ch00` | Inferido com forte evidência: ONVIF PTZ usa `profile_0`, cujo StreamUri é `/live/ch00_0` |
 | RTSP 554 | Validado |
 | `ch00_0` | Validado |
 | `ch01_0` | Validado |
@@ -24,7 +25,7 @@ A família JOOAN/CAM720 contém várias revisões de hardware e firmware com nom
 | dual-lens | Detectado |
 | SD / recording / motion / tracking / light state | Detectado |
 | `ch00_1` | Detectado via ONVIF `GetStreamUri` (640×360, 15 fps, 256 kbps); validação RTSP contínua pendente |
-| `ch01_1` | Experimental; validação manual adicionada na v0.6 |
+| `ch01_1` | Validado via probe manual da v0.6 (640×360 H.264) |
 | ONVIF 8899 | Validado: `/onvif/device_service` respondeu `GetCapabilities` com HTTP 200 |
 | `GetProfiles` / `GetStreamUri` / `GetStatus` / `GetPresets` | Experimental read-only v0.4 |
 | UDP 7788 | Observado, formato em pesquisa |
