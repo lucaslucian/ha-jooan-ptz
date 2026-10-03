@@ -12,6 +12,10 @@ startup: application
 boot: auto
 ingress: true
 ingress_port: 8099
+ports:
+  49000/tcp: 49000
+ports_description:
+  49000/tcp: SetDiagMode safe callback laboratory sink
 panel_icon: mdi:cctv
 panel_title: JOOAN Local Control
 panel_admin: true
@@ -24,6 +28,7 @@ options:
   features_port: 9898
   rtsp_port: 554
   onvif_port: 8899
+  diag_callback_ip: ""
   validation_interval: 30
   debug: false
 schema:
@@ -34,5 +39,6 @@ schema:
   features_port: port
   rtsp_port: port
   onvif_port: port
+  diag_callback_ip: str
   validation_interval: "int(10,3600)"
   debug: bool
