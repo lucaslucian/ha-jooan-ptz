@@ -650,6 +650,14 @@ async function labEvents(action){
   finally{if(lastData)updateLabAvailability(lastData)}
 }
 
+async function labDiagProbe(){
+  try{
+    showLabResult('Aguardando callback seguro da câmera...');
+    await labRequest('api/lab/diag/probe');
+  }catch(error){showLabResult('SetDiagMode callback: '+error.message)}
+  finally{if(lastData)updateLabAvailability(lastData)}
+}
+
 async function labDiagDisable(){
   try{await labRequest('api/lab/diag/disable')}
   catch(error){showLabResult('SetDiagMode OFF: '+error.message)}
@@ -757,6 +765,7 @@ $('labPresetDelete').addEventListener('click',()=>labPresetAction('delete'));
 $('labImagingDiscover').addEventListener('click',labImaging);
 $('labEventsDiscover').addEventListener('click',()=>labEvents('discover'));
 $('labEventsPull').addEventListener('click',()=>labEvents('pull'));
+$('labDiagProbe').addEventListener('click',labDiagProbe);
 $('labDiagDisable').addEventListener('click',labDiagDisable);
 $('labClearResult').addEventListener('click',()=>showLabResult('Nenhum teste executado.'));
 
