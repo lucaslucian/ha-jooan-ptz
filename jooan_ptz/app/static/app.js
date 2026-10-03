@@ -12,7 +12,7 @@ let snapshotTimer=null;
 let snapshotRefreshRunning=false;
 let lastOverviewSignature='';
 let lastCameraSignature='';
-let labTestPresetToken=null;
+let labPresets=[];
 let labRequestRunning=false;
 const STATUS_REFRESH_MS=5000;
 const SNAPSHOT_REFRESH_MS=30000;
@@ -520,27 +520,50 @@ async function labRequest(path,body=null){
   }
 }
 
-function labPresetFromPayload(payload){
-  const lists=[
-    payload?.presets,
-    payload?.readback?.presets
-  ].filter(Array.isArray);
-  for(const list of lists){
-    const match=list.find(item=>item?.name==='HA_TEST');
-    if(match?.token!=null)return String(match.token);
-  }
-  if(payload?.preset_token!=null)return String(payload.preset_token);
-  if(payload?.preset?.name==='HA_TEST'&&payload.preset?.token!=null)return String(payload.preset.token);
+function labPresetListFromPayload(payload){
+  if(Array.isArray(payload?.presets))return payload.presets;
+  if(Array.isArray(payload?.readback?.presets))return payload.readback.presets;
   return null;
+}
+
+function selectedLabPreset(){
+  const token=$('labPresetSelect')?.value||'';
+  return labPresets.find(item=>String(item?.token??'')===token)||null;
+}
+
+function renderLabPresetSelect(){
+  const select=$('labPresetSelect');
+  if(!select)return;
+  const previous=select.value;
+  select.innerHTML='';
+  if(!labPresets.length){
+    const option=document.createElement('option');
+    option.value='';
+    option.textContent='Nenhum preset listado';
+    select.appendChild(option);
+    select.disabled=true;
+    return;
+  }
+  for(const preset of labPresets){
+    const token=String(preset?.token??'');
+    if(!token)continue;
+    const option=document.createElement('option');
+    option.value=token;
+    option.textContent=(preset?.name||'Sem nome')+' · '+token;
+    select.appendChild(option);
+  }
+  select.disabled=select.options.length===0;
+  if([...select.options].some(option=>option.value===previous))select.value=previous;
 }
 
 function updateLabPresetButtons(){
   if(!$('labPresetGoto'))return;
-  $('labPresetGoto').disabled=!labTestPresetToken||labRequestRunning;
-  $('labPresetDelete').disabled=!labTestPresetToken||labRequestRunning;
-  $('labPresetSummary').textContent=labTestPresetToken
-    ?'HA_TEST disponível · token '+labTestPresetToken
-    :'Nenhum preset HA_TEST confirmado.';
+  const preset=selectedLabPreset();
+  $('labPresetGoto').disabled=!preset||labRequestRunning;
+  $('labPresetDelete').disabled=!(preset?.name==='HA_TEST')||labRequestRunning;
+  $('labPresetSummary').textContent=labPresets.length
+    ?labPresets.length+' preset(s) retornado(s) pela câmera. Selecione um para testar GotoPreset.'
+    :'Nenhum preset ONVIF retornado pela câmera.';
 }
 
 function renderLabInventory(data){
@@ -609,7 +632,9 @@ async function labPresetList(){
     const payload=await response.json();
     showLabResult(payload);
     if(!response.ok)throw new Error(payload.error||('HTTP '+response.status));
-    labTestPresetToken=labPresetFromPayload(payload);
+    const presets=labPresetListFromPayload(payload);
+    if(presets)labPresets=presets;
+    renderLabPresetSelect();
   }catch(error){showLabResult('Presets: '+error.message)}
   finally{
     labRequestRunning=false;
@@ -622,13 +647,17 @@ async function labPresetAction(action){
   try{
     const body={action};
     if(action==='goto'||action==='delete'){
-      if(!labTestPresetToken)throw new Error('Nenhum HA_TEST confirmado');
-      body.token=labTestPresetToken;
+      const preset=selectedLabPreset();
+      if(!preset)throw new Error('Selecione um preset retornado pela câmera');
+      if(action==='delete'&&preset.name!=='HA_TEST')throw new Error('Somente HA_TEST pode ser excluído');
+      body.token=String(preset.token);
     }
     const payload=await labRequest('api/lab/onvif/presets',body);
-    const token=labPresetFromPayload(payload);
-    if(action==='delete')labTestPresetToken=null;
-    else if(token)labTestPresetToken=token;
+    const presets=labPresetListFromPayload(payload);
+    if(presets){
+      labPresets=presets;
+      renderLabPresetSelect();
+    }
   }catch(error){showLabResult('Preset '+action+': '+error.message)}
   finally{
     updateLabPresetButtons();
@@ -786,6 +815,7 @@ $('labPresetList').addEventListener('click',labPresetList);
 $('labPresetCreate').addEventListener('click',()=>labPresetAction('create'));
 $('labPresetGoto').addEventListener('click',()=>labPresetAction('goto'));
 $('labPresetDelete').addEventListener('click',()=>labPresetAction('delete'));
+$('labPresetSelect').addEventListener('change',updateLabPresetButtons);
 $('labImagingDiscover').addEventListener('click',labImaging);
 $('labImagingSet').addEventListener('click',labImagingSet);
 $('labEventsDiscover').addEventListener('click',()=>labEvents('discover'));
