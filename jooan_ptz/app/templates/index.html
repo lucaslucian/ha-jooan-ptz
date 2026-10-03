@@ -29,6 +29,7 @@
       <button class="tab" data-tab="detection">Detecção</button>
       <button class="tab" data-tab="recording">Gravação</button>
       <button class="tab" data-tab="diagnostics">Diagnóstico</button>
+      <button class="tab" data-tab="lab">Laboratório</button>
     </nav>
 
     <section id="tab-overview" class="tab-panel active">
@@ -226,6 +227,172 @@
         <div id="rawDetails" class="details-stack"></div>
       </article>
     </section>
+    <section id="tab-lab" class="tab-panel">
+      <article class="card lab-warning">
+        <div class="card-heading">
+          <div>
+            <span class="section-kicker">EXPERIMENTAL · HARDWARE STOCK</span>
+            <h2>Laboratório de comandos locais</h2>
+          </div>
+          <span class="badge warning">Ações manuais</span>
+        </div>
+        <p class="helper">
+          Cada ação abaixo é allowlisted no backend. Não existe proxy genérico de singleCMD,
+          SOAP action ou DP/MQTT. Firmware, reset e configuração de Wi-Fi ficam fora deste laboratório.
+          Pare o preview ao vivo antes dos testes.
+        </p>
+      </article>
+
+      <div class="content-grid two">
+        <article class="card">
+          <div class="card-heading">
+            <div>
+              <span class="section-kicker">ONVIF PTZ</span>
+              <h2>ContinuousMove + Stop</h2>
+            </div>
+            <span class="badge warning">Movimenta a câmera</span>
+          </div>
+          <p class="helper">Movimento curto e limitado. O backend sempre tenta enviar Stop ao final.</p>
+          <div class="lab-controls">
+            <label>Velocidade
+              <select id="labPtzSpeed" class="lab-select">
+                <option value="0.2">1 · 0,2</option>
+                <option value="0.4">2 · 0,4</option>
+                <option value="0.6">3 · 0,6</option>
+                <option value="0.8">4 · 0,8</option>
+                <option value="1">5 · 1,0</option>
+              </select>
+            </label>
+            <label>Duração
+              <select id="labPtzDuration" class="lab-select">
+                <option value="150">150 ms</option>
+                <option value="250" selected>250 ms</option>
+                <option value="500">500 ms</option>
+              </select>
+            </label>
+          </div>
+          <div class="lab-direction-grid">
+            <div></div><button class="button secondary" data-lab-ptz="up">↑ Cima</button><div></div>
+            <button class="button secondary" data-lab-ptz="left">← Esquerda</button>
+            <span class="lab-center">ONVIF</span>
+            <button class="button secondary" data-lab-ptz="right">Direita →</button>
+            <div></div><button class="button secondary" data-lab-ptz="down">↓ Baixo</button><div></div>
+          </div>
+        </article>
+
+        <article class="card">
+          <div class="card-heading">
+            <div>
+              <span class="section-kicker">AUXILIARY COMMAND</span>
+              <h2>IR Lamp</h2>
+            </div>
+            <span class="badge neutral">Anunciado pela câmera</span>
+          </div>
+          <p class="helper"><code>tt:Irlamp|On</code> e <code>tt:Irlamp|Off</code> só são enviados se aparecerem nos PTZ nodes descobertos.</p>
+          <div class="toolbar">
+            <button id="labIrOn" class="button primary">Ligar IR</button>
+            <button id="labIrOff" class="button secondary">Desligar IR</button>
+          </div>
+        </article>
+      </div>
+
+      <article class="card">
+        <div class="card-heading">
+          <div>
+            <span class="section-kicker">ONVIF PRESETS</span>
+            <h2>Preset temporário de teste</h2>
+          </div>
+          <span class="badge warning">Pode movimentar</span>
+        </div>
+        <p class="helper">
+          O laboratório cria apenas o preset fixo <code>HA_TEST</code>. A exclusão é recusada para qualquer preset
+          com outro nome. “Ir para” aceita somente tokens que acabaram de ser lidos da própria câmera.
+        </p>
+        <div class="toolbar">
+          <button id="labPresetList" class="button secondary">Listar presets</button>
+          <button id="labPresetCreate" class="button primary">Salvar posição como HA_TEST</button>
+          <button id="labPresetGoto" class="button secondary" disabled>Ir para HA_TEST</button>
+          <button id="labPresetDelete" class="button ghost" disabled>Excluir HA_TEST</button>
+        </div>
+        <div id="labPresetSummary" class="lab-summary">Nenhum teste executado.</div>
+      </article>
+
+      <div class="content-grid two">
+        <article class="card">
+          <div class="card-heading">
+            <div>
+              <span class="section-kicker">ONVIF IMAGING</span>
+              <h2>Descobrir ajustes de imagem</h2>
+            </div>
+            <span class="badge neutral">Somente leitura</span>
+          </div>
+          <p class="helper">Consulta GetImagingSettings e GetOptions. Só criaremos SetImagingSettings depois de conhecer valores atuais e faixas aceitas pela câmera.</p>
+          <button id="labImagingDiscover" class="button primary">Consultar Imaging</button>
+        </article>
+
+        <article class="card">
+          <div class="card-heading">
+            <div>
+              <span class="section-kicker">ONVIF EVENTS</span>
+              <h2>Eventos locais / futuro HA</h2>
+            </div>
+            <span class="badge success">Prioridade</span>
+          </div>
+          <p class="helper">
+            Primeiro descobre os tipos de evento. O teste PullPoint cria uma assinatura de 15 segundos,
+            busca uma leva de eventos e deixa a assinatura expirar automaticamente.
+          </p>
+          <div class="toolbar">
+            <button id="labEventsDiscover" class="button secondary">Descobrir eventos</button>
+            <button id="labEventsPull" class="button primary">Escutar por ~5 s</button>
+          </div>
+        </article>
+      </div>
+
+      <article class="card">
+        <div class="card-heading">
+          <div>
+            <span class="section-kicker">OEM / PORTA 9898</span>
+            <h2>Estados que ainda precisam de setter confirmado</h2>
+          </div>
+          <span class="badge neutral">Inventário</span>
+        </div>
+        <div id="labOemInventory" class="setting-grid"></div>
+        <p class="helper">
+          Motion, sensibilidade, auto tracking, pessoa, veículo, person tracking, LED, floodlight,
+          flip/mirror, gravação, privacy/PTZ-hide, buzzer e push entram aqui até encontrarmos o comando
+          de escrita stock correspondente. Não vamos adivinhar endpoints de escrita.
+        </p>
+      </article>
+
+      <article class="card">
+        <div class="card-heading">
+          <div>
+            <span class="section-kicker">SETDIAGMODE</span>
+            <h2>Modo de diagnóstico OEM</h2>
+          </div>
+          <span class="badge danger">Restrito</span>
+        </div>
+        <p class="helper">
+          Nesta primeira etapa o painel expõe somente <strong>desativar</strong> SetDiagMode.
+          O modo ativo só será liberado depois que houver um callback sink dedicado, com IP privado fixo,
+          código efêmero, timeout curto, sem payload arbitrário e sem shell/proxy de comandos.
+        </p>
+        <button id="labDiagDisable" class="button secondary">Forçar SetDiagMode OFF</button>
+      </article>
+
+      <article class="card">
+        <div class="card-heading">
+          <div>
+            <span class="section-kicker">RESULTADO</span>
+            <h2>Última resposta do laboratório</h2>
+          </div>
+          <button id="labClearResult" class="button ghost">Limpar</button>
+        </div>
+        <pre id="labResult" class="lab-result">Nenhum teste executado.</pre>
+      </article>
+    </section>
+
   </main>
 
   <script src="static/app.js" defer></script>
