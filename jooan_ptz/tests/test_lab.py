@@ -446,3 +446,28 @@ def test_recording_playback_probe_rejects_unreturned_token(monkeypatch):
         assert "not returned by the camera" in str(exc)
     else:
         raise AssertionError("unreturned recording token must be rejected")
+
+
+
+def test_goto_allows_any_preset_freshly_returned_by_camera(monkeypatch):
+    calls = []
+    monkeypatch.setattr(
+        lab,
+        "onvif_list_presets",
+        lambda camera, info: {
+            "accepted": True,
+            "presets": [{"token": "door", "name": "Porta"}],
+        },
+    )
+
+    def fake_soap(camera, **kwargs):
+        calls.append(kwargs)
+        return ok_response(), ET.fromstring("<Envelope/>")
+
+    monkeypatch.setattr(lab, "_soap", fake_soap)
+    result = lab.onvif_goto_preset(FakeCamera(), ptz_info(), token="door")
+
+    assert result["accepted"] is True
+    assert result["preset"] == {"token": "door", "name": "Porta"}
+    assert calls[0]["action"] == "GotoPreset"
+    assert "<tptz:PresetToken>door</tptz:PresetToken>" in calls[0]["payload"]
