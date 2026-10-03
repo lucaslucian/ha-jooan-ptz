@@ -179,7 +179,10 @@ function renderSnapshotTiles(rootId,data,withTechnical){
       '</div><div data-snapshot-state class="helper">Aguardando snapshot</div></div>';
     root.appendChild(tile);
   }
-  if(currentTab==='overview'||currentTab==='camera')void refreshSnapshots(root);
+  if(
+    (rootId==='overviewMedia'&&currentTab==='overview')||
+    (rootId==='cameraMedia'&&currentTab==='camera')
+  )void refreshSnapshots(root);
 }
 
 async function loadSnapshot(img){
@@ -523,7 +526,11 @@ function switchTab(name){
   document.querySelectorAll('.tab').forEach(button=>button.classList.toggle('active',button.dataset.tab===name));
   document.querySelectorAll('.tab-panel').forEach(panel=>panel.classList.toggle('active',panel.id==='tab-'+name));
   if(name!=='camera'&&liveActive)void stopLivePreview();
-  if((name==='overview'||name==='camera')&&!liveActive)void refreshSnapshots(name==='overview'?$('overviewMedia'):$('cameraMedia'));
+  if(name==='camera'&&!liveActive&&lastData?.online&&lastData?.authenticated){
+    void startLivePreview();
+  }else if(name==='overview'&&!liveActive){
+    void refreshSnapshots($('overviewMedia'));
+  }
 }
 
 function stopPolling(){
@@ -550,7 +557,6 @@ directionButtons.forEach(button=>{
     event.preventDefault();
     activeDirection=direction;
     button.setPointerCapture?.(event.pointerId);
-    if(!liveActive)void startLivePreview();
     void sendPtz(direction);
   });
   const stop=()=>{
