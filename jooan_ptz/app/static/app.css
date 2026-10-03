@@ -166,6 +166,15 @@ summary{cursor:pointer;padding:12px 14px;font-size:13px;font-weight:750;list-sty
 summary::-webkit-details-marker{display:none}
 details pre{margin:0;padding:0 14px 14px;color:#c8d1dd;white-space:pre-wrap;word-break:break-word;max-height:520px;overflow:auto;font-size:11px}
 .empty{color:var(--muted);border:1px dashed var(--border);border-radius:13px;padding:20px;text-align:center}
+.lab-warning{border-color:rgba(245,189,85,.28);background:linear-gradient(180deg,var(--warning-soft),transparent 55%),var(--panel)}
+.lab-controls{display:flex;gap:12px;flex-wrap:wrap;margin:14px 0}
+.lab-controls label{display:grid;gap:6px;color:var(--muted);font-size:11px;font-weight:750}
+.lab-select{min-height:38px;border:1px solid var(--border);border-radius:10px;background:var(--panel-2);color:var(--text);padding:7px 10px}
+.lab-direction-grid{display:grid;grid-template-columns:repeat(3,minmax(90px,140px));gap:8px;justify-content:center;align-items:center;margin-top:14px}
+.lab-center{display:grid;place-items:center;height:38px;border:1px dashed var(--border);border-radius:10px;color:var(--muted);font-size:11px;font-weight:800}
+.lab-summary{margin-top:12px;border:1px solid var(--border-soft);border-radius:11px;padding:10px 12px;background:var(--panel-2);color:var(--muted);font-size:12px}
+.lab-result{margin:0;border:1px solid var(--border-soft);border-radius:12px;background:#080a0d;color:#cbd5e1;padding:14px;white-space:pre-wrap;word-break:break-word;max-height:520px;overflow:auto;font-size:11px;line-height:1.5}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:#b8dcff}
 @media(max-width:900px){
   .stat-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
   .content-grid.two,.camera-workspace{grid-template-columns:1fr}
@@ -179,6 +188,7 @@ details pre{margin:0;padding:0 14px 14px;color:#c8d1dd;white-space:pre-wrap;word
   .card{padding:14px;border-radius:15px}
   .ptz-grid{grid-template-columns:repeat(3,70px)}
   .tabs{top:4px}
+  .lab-direction-grid{grid-template-columns:repeat(3,minmax(70px,1fr))}
 }
 @media(prefers-color-scheme:light){
   :root{
