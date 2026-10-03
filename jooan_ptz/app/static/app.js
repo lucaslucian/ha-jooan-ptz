@@ -703,6 +703,12 @@ async function labStorage(action='discover'){
     if(action==='playback_probe'){
       showLabResult('Consultando informações da gravação e solicitando URI de replay sem abrir o stream...');
       await labRequest('api/lab/onvif/storage',{action});
+    }else if(action==='jobs'){
+      showLabResult('Lendo jobs ONVIF existentes, configuração e estado...');
+      await labRequest('api/lab/onvif/storage',{action});
+    }else if(action==='record_pulse'){
+      showLabResult('Testando gravação ONVIF por até 5 segundos e restaurando o job para Idle...');
+      await labRequest('api/lab/onvif/storage',{action,seconds:5});
     }else{
       showLabResult('Consultando serviços ONVIF Recording / Search / Replay...');
       await labRequest('api/lab/onvif/storage',{action:'discover'});
@@ -830,6 +836,8 @@ $('labImagingSet').addEventListener('click',labImagingSet);
 $('labEventsDiscover').addEventListener('click',()=>labEvents('discover'));
 $('labEventsPull').addEventListener('click',()=>labEvents('pull'));
 $('labStorageDiscover').addEventListener('click',()=>labStorage('discover'));
+$('labStorageJobs').addEventListener('click',()=>labStorage('jobs'));
+$('labStorageRecordPulse').addEventListener('click',()=>labStorage('record_pulse'));
 $('labStoragePlaybackProbe').addEventListener('click',()=>labStorage('playback_probe'));
 $('labDiagProbe').addEventListener('click',labDiagProbe);
 $('labDiagDisable').addEventListener('click',labDiagDisable);
