@@ -1012,8 +1012,16 @@ function summarizeLegacyProbe(payload){
   const surfaces=payload?.surfaces||{};
   const labels=[];
   for(const [name,item] of Object.entries(surfaces)){
-    if(item?.accepted){
-      labels.push(name+': '+(item.probe_method||'HTTP')+' aceito, '+Number(item.recognized_fields||0)+' campo(s) reconhecido(s)');
+    if(item?.http_status===404||item?.endpoint_present===false){
+      labels.push(name+': endpoint ausente (HTTP 404); nenhuma segunda tentativa foi feita');
+    }else if(item?.accepted){
+      const count=Number(item.recognized_fields||0);
+      labels.push(
+        name+': HTTP '+String(item.http_status||200)+' via '+(item.probe_method||'HTTP')+
+        (count
+          ?', '+count+' campo(s) reconhecido(s)'
+          :', mas sem campos reconhecidos — writer permanece bloqueado')
+      );
     }else{
       labels.push(name+': não confirmado'+(item?.error_type?' ('+item.error_type+')':''));
     }
