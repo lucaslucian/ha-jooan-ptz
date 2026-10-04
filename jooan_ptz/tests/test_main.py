@@ -12,6 +12,7 @@ def setup_function():
     main._preview_processes.clear()
     main._preview_generations.update({0: 0, 1: 0})
     main._ptz_onvif_disabled_until = 0.0
+    main._ptz_onvif_discovery_attempted = False
     main.update_state(
         online=False,
         authenticated=False,
@@ -166,6 +167,52 @@ def test_stale_ptz_sequence_is_ignored(monkeypatch):
     assert commands == ["stop"]
 
 
+def test_ptz_lazy_discovers_onvif_once(monkeypatch):
+    discoveries = []
+    moves = []
+
+    class FakeCamera:
+        ip = "10.0.0.10"
+        onvif_port = 8899
+
+        def command(self, direction):
+            raise AssertionError("CGI fallback must not run when ONVIF discovery succeeds")
+
+    def fake_discovery(host, port):
+        discoveries.append((host, port))
+        return {
+            "reachable": True,
+            "ptz": {"path": "/onvif/Ptz", "profile_token": "profile_0"},
+            "profiles": [{"token": "profile_0", "name": "Main"}],
+        }
+
+    def fake_move(host, port, onvif_info, *, direction, speed, duration_ms):
+        moves.append(direction)
+        return {"start": {"accepted": True}, "stop": {"accepted": True}}
+
+    monkeypatch.setattr(main, "get_camera", lambda: FakeCamera())
+    monkeypatch.setattr(main, "onvif_ptz_discovery", fake_discovery)
+    monkeypatch.setattr(main, "onvif_continuous_move", fake_move)
+    main.update_state(
+        online=True,
+        authenticated=True,
+        ptz_onvif_available=False,
+        onvif_info=None,
+        services={},
+    )
+    client = main.app.test_client()
+
+    first = client.post("/api/ptz/right?client=lazy&seq=1&speed=0.4")
+    second = client.post("/api/ptz/left?client=lazy&seq=2&speed=0.4")
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert first.get_json()["transport"] == "onvif"
+    assert second.get_json()["transport"] == "onvif"
+    assert discoveries == [("10.0.0.10", 8899)]
+    assert moves == ["right", "left"]
+
+
 def test_ptz_prefers_onvif_and_passes_selected_speed(monkeypatch):
     calls = []
 
@@ -279,23 +326,6 @@ def test_api_responses_disable_caching():
     assert response.headers["Referrer-Policy"] == "no-referrer"
 
 
-def test_light_test_rejects_while_probe_is_running(monkeypatch):
-    monkeypatch.setattr(
-        main,
-        "validate_camera",
-        lambda **kwargs: (_ for _ in ()).throw(
-            AssertionError("validation must not run while deep probe is active")
-        ),
-    )
-    main.update_state(probe_running=True)
-    client = main.app.test_client()
-
-    response = client.post("/api/test")
-
-    assert response.status_code == 409
-    assert response.get_json()["busy"] is True
-
-
 def test_unavailable_icmp_preserves_last_known_online_state(monkeypatch):
     class FakeCamera:
         def heartbeat(self):
@@ -313,16 +343,6 @@ def test_unavailable_icmp_preserves_last_known_online_state(monkeypatch):
         assert main._state["online"] is True
         assert main._state["authenticated"] is True
         assert main._state["heartbeat_error"] is not None
-
-
-def test_deep_probe_is_rejected_while_ptz_is_moving():
-    main.update_state(ptz_moving=True, probe_running=False)
-    client = main.app.test_client()
-
-    response = client.post("/api/probe")
-
-    assert response.status_code == 409
-    assert "Stop PTZ" in response.get_json()["error"]
 
 
 def test_snapshot_does_not_open_rtsp_while_ptz_is_moving(monkeypatch):
@@ -343,23 +363,6 @@ def test_snapshot_does_not_open_rtsp_while_ptz_is_moving(monkeypatch):
     assert stale is True
 
 
-def test_light_test_rejects_while_ptz_is_moving(monkeypatch):
-    monkeypatch.setattr(
-        main,
-        "_validate_camera_locked",
-        lambda **kwargs: (_ for _ in ()).throw(
-            AssertionError("validation must not run while PTZ is moving")
-        ),
-    )
-    main.update_state(ptz_moving=True, probe_running=False)
-    client = main.app.test_client()
-
-    response = client.post("/api/test")
-
-    assert response.status_code == 409
-    assert response.get_json()["busy"] is True
-
-
 def test_dashboard_template_is_served():
     client = main.app.test_client()
     response = client.get("/")
@@ -372,6 +375,9 @@ def test_dashboard_template_is_served():
     assert "ptzSpeed" in body
     assert "generalInfo" in body
     assert "allReadSettings" in body
+    assert 'id="lightTest"' not in body
+    assert 'id="probe"' not in body
+    assert 'id="validateSubstreams"' not in body
     assert 'class="tabs"' not in body
     assert "Laboratório" not in body
     assert "labCgiProbeAll" not in body
@@ -531,16 +537,6 @@ def test_snapshot_uses_cache_while_live_preview_is_active(monkeypatch):
     assert stale is True
 
 
-def test_deep_probe_is_rejected_while_live_preview_is_active():
-    main.update_state(preview_active=True, ptz_moving=False, probe_running=False)
-    client = main.app.test_client()
-
-    response = client.post("/api/probe")
-
-    assert response.status_code == 409
-    assert "preview" in response.get_json()["error"].lower()
-
-
 def test_ptz_channel_is_inferred_from_onvif_profile_mapping():
     channel, source = main._infer_ptz_channel(
         {
@@ -593,9 +589,12 @@ def test_preview_candidates_fall_back_from_substream_to_main():
 
 
 
-def test_laboratory_routes_are_removed():
+def test_non_control_action_routes_are_removed():
     client = main.app.test_client()
 
+    assert client.post("/api/test").status_code == 404
+    assert client.post("/api/probe").status_code == 404
+    assert client.post("/api/preview/validate").status_code == 404
     assert client.post("/api/lab/cgi/probe").status_code == 404
     assert client.post("/api/lab/onvif/ptz").status_code == 404
     assert client.post("/api/lab/diag/probe").status_code == 404
