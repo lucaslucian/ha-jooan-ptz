@@ -237,8 +237,9 @@
           <span class="badge warning">Ações manuais</span>
         </div>
         <p class="helper">
-          Esta aba agora mostra somente caminhos que ainda são úteis na JA-A12 validada.
-          Presets, Imaging write e Recording Job/Replay ONVIF foram removidos daqui após retornarem
+          Esta aba concentra caminhos que ainda são úteis na JA-A12 validada e candidatos locais
+          com evidência externa suficiente para teste controlado. Presets, Imaging write e
+          Recording Job/Replay ONVIF foram removidos daqui após retornarem
           <code>ActionNotSupported</code> ou não exporem jobs utilizáveis. Firmware, reset e Wi-Fi continuam fora de escopo.
         </p>
       </article>
@@ -382,6 +383,62 @@
         </div>
         <div id="labOemToggleSummary" class="lab-summary">Baseline do grupo atual ainda não capturada.</div>
         <div id="labOemToggleCurrent" class="setting-grid"></div>
+      </article>
+
+      <article class="card">
+        <div class="card-heading">
+          <div>
+            <span class="section-kicker">LEGACY GOAHEAD CGI · PORTA 80</span>
+            <h2>Testar APIs relacionadas encontradas publicamente</h2>
+          </div>
+          <span class="badge warning">Candidatos</span>
+        </div>
+        <p class="helper">
+          Estes endpoints foram encontrados em firmware/web UI relacionado que compartilha
+          <code>/goform/getVideoSettings</code> com câmeras JOOAN. Primeiro teste as leituras.
+          O round-trip envia de volta <strong>os mesmos valores acabados de ler</strong> e compara
+          novamente o CGI e o estado OEM da porta 9898. Os setters abaixo são manuais, limitados
+          por allowlist e nunca aceitam caminho ou nome de parâmetro arbitrário.
+        </p>
+        <div class="lab-controls">
+          <label>Superfície
+            <select id="labCgiSurface" class="lab-select">
+              <option value="video">Vídeo / IR / flip / flicker</option>
+              <option value="motion">Movimento / sensibilidade</option>
+            </select>
+          </label>
+        </div>
+        <div class="toolbar">
+          <button id="labCgiProbeAll" class="button primary">Testar leituras encontradas</button>
+          <button id="labCgiProbeSelected" class="button secondary">Ler superfície selecionada</button>
+          <button id="labCgiRoundtrip" class="button secondary">Round-trip sem alteração</button>
+        </div>
+
+        <hr class="lab-divider">
+
+        <div class="lab-controls">
+          <label>Setter candidato
+            <select id="labCgiWriteTarget" class="lab-select">
+              <option value="motion_enable">Motion detect</option>
+              <option value="motion_sensitivity">Sensibilidade motion</option>
+              <option value="rotation">Rotation / Flip</option>
+              <option value="ir">IR mode</option>
+              <option value="flicker">Flicker / frequência</option>
+              <option value="timezone_legacy">Timezone via /goform/NTP</option>
+            </select>
+          </label>
+          <label>Valor
+            <select id="labCgiWriteValue" class="lab-select"></select>
+          </label>
+        </div>
+        <div class="toolbar">
+          <button id="labCgiWrite" class="button danger">Executar setter candidato</button>
+        </div>
+        <div id="labCgiSummary" class="lab-summary">
+          Comece por “Testar leituras encontradas”. Motion e Video só escrevem após conseguirem
+          reler valores que serão preservados. O candidato NTP é separado porque a fonte pública
+          não expõe um CGI de leitura equivalente.
+        </div>
       </article>
 
       <article class="card">
