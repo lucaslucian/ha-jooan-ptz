@@ -6,6 +6,7 @@ let authenticated=false;
 let activeDirection=null;
 let selectedChannel=0;
 let liveActive=false;
+let ptzHoldGeneration=0;
 let currentTab='overview';
 let statusTimer=null;
 let snapshotTimer=null;
@@ -54,6 +55,10 @@ function ptzUrl(command,sequence){
   const url=new URL(api('api/ptz/'+command));
   url.searchParams.set('client',ptzClient);
   url.searchParams.set('seq',String(sequence));
+  if(command!=='stop'){
+    url.searchParams.set('speed',String($('ptzSpeed')?.value||'0.4'));
+    url.searchParams.set('duration_ms','280');
+  }
   return url.toString();
 }
 
@@ -369,96 +374,246 @@ function renderRawDetails(data){
 
 function bestPreviewDescriptor(data,channel){
   const channelId='ch'+String(channel).padStart(2,'0');
+  const active=data.preview_streams?.[String(channel)];
   const validated=(data.preview_probe?.streams||[]).find(item=>item.path===('/live/'+channelId+'_1')&&item.available&&item.streams?.some(s=>s.codec_type==='video'));
-  if(validated)return {path:validated.path,source:'Substream validado',video:videoInfo(validated)};
   const profile=(data.onvif_info?.profiles||[]).find(p=>p.stream?.path===('/live/'+channelId+'_1'));
-  if(profile)return {path:profile.stream.path,source:'Substream ONVIF',video:profile.video||{}};
   const main=(data.media_probe?.streams||[]).find(item=>item.path===('/live/'+channelId+'_0')&&item.available);
+  const activePath=active?.path;
+  if(activePath){
+    if(validated?.path===activePath)return {path:activePath,source:active.source||'Substream validado',video:videoInfo(validated)};
+    if(profile?.stream?.path===activePath)return {path:activePath,source:active.source||'Substream ONVIF',video:profile.video||{}};
+    if(main?.path===activePath)return {path:activePath,source:active.source||'Stream principal',video:videoInfo(main)};
+    return {path:activePath,source:active.source||'Preview ativo',video:{}};
+  }
+  if(validated)return {path:validated.path,source:'Substream validado',video:videoInfo(validated)};
+  if(profile)return {path:profile.stream.path,source:'Substream ONVIF',video:profile.video||{}};
   if(main)return {path:main.path,source:'Stream principal',video:videoInfo(main)};
-  return {path:'/live/'+channelId+'_0',source:'Candidato',video:{}};
+  return {path:'/live/'+channelId+'_1',source:'Candidato baixa resolução',video:{}};
 }
 
-function renderLiveMeta(data){
-  if(Number.isInteger(data.ptz_channel))selectedChannel=data.ptz_channel;
-  const descriptor=bestPreviewDescriptor(data,selectedChannel);
+function settingValue(value){
+  if(value===null||value===undefined)return '—';
+  if(typeof value==='boolean')return value?'true':'false';
+  if(typeof value==='object'){
+    try{return JSON.stringify(value)}catch(_){return String(value)}
+  }
+  return String(value);
+}
+
+function renderSettingGroup(title,value){
+  const entries=Object.entries(value||{}).sort(([a],[b])=>a.localeCompare(b));
+  if(!entries.length)return '';
+  return '<section class="read-settings-group"><h3>'+esc(title)+'</h3><div class="read-setting-grid">'+
+    entries.map(([key,item])=>
+      '<div class="read-setting"><span>'+esc(key)+'</span><strong>'+esc(settingValue(item))+'</strong></div>'
+    ).join('')+'</div></section>';
+}
+
+function renderAllReadSettings(data){
+  const device=data.device_info||{};
+  const onvif=data.onvif_info||{};
+  const ptz=onvif.ptz||{};
+  const media=data.media_probe||{};
+  const preview=data.preview_probe||{};
+  const network={
+    ...(data.network_state||{}),
+    lan_support:data.lan_support||null
+  };
+  const mediaState={
+    rtsp_port:media.port||554,
+    rtsp_reachable:!!media.reachable,
+    reported_channel_count:media.reported_channel_count??device.channel_count??null,
+    credentials_confirmed:data.stream_info?.credentials_confirmed??null,
+    candidate_paths:data.stream_info?.candidate_paths||[],
+    media_streams:media.streams||[],
+    preview_streams:preview.streams||[]
+  };
+  const onvifState={
+    reachable:!!onvif.reachable,
+    media_authentication_required:onvif.media_authentication_required??null,
+    profile_count:(onvif.profiles||[]).length,
+    ptz_profile_token:ptz.profile_token||null,
+    ptz_nodes:ptz.nodes||[],
+    ptz_status:ptz.status||null,
+    services:onvif.services||{}
+  };
+  $('allReadSettings').innerHTML=[
+    renderSettingGroup('Estado OEM',device.local_state||{}),
+    renderSettingGroup('Propriedades OEM',device.properties||{}),
+    renderSettingGroup('Capabilities',device.capabilities||{}),
+    renderSettingGroup('Plataforma',data.camera_info||{}),
+    renderSettingGroup('Rede e LAN',network),
+    renderSettingGroup('RTSP e feeds',mediaState),
+    renderSettingGroup('ONVIF',onvifState)
+  ].filter(Boolean).join('')||'<div class="empty">Nenhuma configuração lida ainda.</div>';
+}
+
+function renderGeneralInfo(data){
+  const device=data.device_info||{};
+  const props=device.properties||{};
+  const services=data.services||{};
+  const media=data.media_probe||{};
+  const onvif=data.onvif_info||{};
+  const rows=[
+    ['Modelo',device.model||data.lan_support?.model||'—'],
+    ['Firmware',device.firmware_version||props.device_version||'—'],
+    ['Endereço',props.device_ip||data.network_state?.IP||'—'],
+    ['Canais',device.channel_count??media.reported_channel_count??'—'],
+    ['Codec',device.capabilities?.codec||props.solution||'—'],
+    ['Timezone',device.timezone||props.timezone||'—'],
+    ['RTSP',services.rtsp?.reachable?'Disponível · porta '+(services.rtsp.port||554):'Não confirmado'],
+    ['ONVIF',services.onvif?.reachable?'Disponível · '+(onvif.profiles||[]).length+' perfis':'Não confirmado'],
+    ['PTZ ONVIF',data.ptz_onvif_available?'Disponível':'Fallback CGI'],
+    ['Última leitura',formatTime(data.last_seen)]
+  ];
+  $('generalInfo').innerHTML=rows.map(([label,value])=>
+    '<div class="info-row"><span>'+esc(label)+'</span><strong>'+esc(settingValue(value))+'</strong></div>'
+  ).join('');
+}
+
+function renderFeedMeta(data,channel){
+  const descriptor=bestPreviewDescriptor(data,channel);
   const video=descriptor.video||{};
-  $('liveTitle').textContent='Lente PTZ · Lente '+(selectedChannel+1);
-  $('ptzLensBadge').textContent='PTZ → ch'+String(selectedChannel).padStart(2,'0');
-  $('ptzLensBadge').className='badge '+(data.ptz_channel_source==='onvif_profile_mapping'?'success':'warning');
-  $('liveMeta').innerHTML=[
+  const active=(data.preview_channels||[]).map(Number).includes(channel);
+  const badge=$('feedBadge'+channel);
+  const meta=$('feedMeta'+channel);
+  badge.textContent=active?'Ao vivo':'Parado';
+  badge.className='badge '+(active?'success':'neutral');
+  meta.innerHTML=[
     descriptor.source,
     descriptor.path,
     video.width&&video.height?video.width+'×'+video.height:null,
     video.frame_rate_limit?video.frame_rate_limit+' fps':null,
     video.bitrate_limit_kbps?video.bitrate_limit_kbps+' kbps':null,
-    video.codec_name?(String(video.codec_name).toUpperCase()):video.encoding||null
+    video.codec_name?String(video.codec_name).toUpperCase():video.encoding||null
   ].filter(Boolean).map(value=>'<span class="meta-pill">'+esc(value)+'</span>').join('');
+}
+
+function renderControlDashboard(data){
+  renderFeedMeta(data,0);
+  renderFeedMeta(data,1);
+  renderGeneralInfo(data);
+  renderAllReadSettings(data);
+
   $('ptzState').textContent=data.ptz_moving?'Em movimento':'Parado';
   $('ptzState').className='badge '+(data.ptz_moving?'warning':'neutral');
+
+  const transport=data.ptz_last_transport;
+  const badge=$('ptzTransportBadge');
+  if(transport==='onvif'){
+    badge.textContent='ONVIF · velocidade ativa';
+    badge.className='badge success';
+  }else if(transport?.startsWith('cgi')){
+    badge.textContent=transport==='cgi-fallback'?'CGI · fallback ativo':'CGI PTZ';
+    badge.className='badge warning';
+  }else if(data.ptz_onvif_available){
+    badge.textContent='ONVIF preferido';
+    badge.className='badge success';
+  }else{
+    badge.textContent='CGI PTZ';
+    badge.className='badge neutral';
+  }
 }
 
 function enablePtz(enabled){
   document.querySelectorAll('[data-dir]').forEach(button=>button.disabled=!enabled);
   $('stop').disabled=!enabled;
+  if($('ptzSpeed'))$('ptzSpeed').disabled=!enabled;
 }
 
 async function sendPtz(command,keepalive=false){
-  if(!authenticated)return;
+  if(!authenticated)return null;
   const sequence=++ptzSequence;
   try{
     const response=await fetch(ptzUrl(command,sequence),{method:'POST',keepalive});
     const body=await response.json();
-    if(!body.ignored)$('command').textContent=response.ok?'Comando: '+command:'Erro: '+(body.error||'falha');
+    if(!body.ignored){
+      const transport=body.transport?(' · '+body.transport):'';
+      $('command').textContent=response.ok?'Comando: '+command+transport:'Erro: '+(body.error||'falha');
+    }
+    if(body.transport&&lastData){
+      lastData.ptz_last_transport=body.transport;
+      renderControlDashboard(lastData);
+    }
     if(!response.ok&&response.status===401){authenticated=false;enablePtz(false)}
-  }catch(error){$('command').textContent='Erro: '+error.message}
+    return response.ok?body:null;
+  }catch(error){
+    $('command').textContent='Erro: '+error.message;
+    return null;
+  }
+}
+
+async function holdPtz(direction,generation){
+  let result=await sendPtz(direction);
+  // CGI movement remains active until STOP, so it must not be spammed. ONVIF
+  // uses short bounded pulses and can be repeated while the button is held.
+  while(
+    activeDirection===direction
+    && generation===ptzHoldGeneration
+    && result?.transport==='onvif'
+  ){
+    await sleep(35);
+    if(activeDirection!==direction||generation!==ptzHoldGeneration)break;
+    result=await sendPtz(direction);
+  }
 }
 
 function emergencyStop(){
   if(!activeDirection)return;
   activeDirection=null;
+  ptzHoldGeneration++;
   void sendPtz('stop',true);
 }
 
+function setFeedUi(channel,state,message){
+  const image=$('liveFeed'+channel);
+  const empty=$('feedEmpty'+channel);
+  const indicator=$('feedLive'+channel);
+  const badge=$('feedBadge'+channel);
+  const text=$('feedMessage'+channel);
+  if(state==='loading'){
+    image.hidden=false;empty.hidden=true;indicator.hidden=true;
+    badge.textContent='Abrindo';badge.className='badge warning';
+  }else if(state==='live'){
+    image.hidden=false;empty.hidden=true;indicator.hidden=false;
+    badge.textContent='Ao vivo';badge.className='badge success';
+  }else if(state==='error'){
+    image.hidden=true;empty.hidden=false;indicator.hidden=true;
+    badge.textContent='Falha';badge.className='badge danger';
+  }else{
+    image.hidden=true;empty.hidden=false;indicator.hidden=true;
+    badge.textContent='Parado';badge.className='badge neutral';
+  }
+  if(message)text.textContent=message;
+}
+
 async function startLivePreview(){
-  if(!lastData?.online||!lastData?.authenticated){$('previewMessage').textContent='A câmera precisa estar online e autenticada.';return}
+  if(!lastData?.online||!lastData?.authenticated){
+    $('previewMessage').textContent='A câmera precisa estar online e autenticada.';
+    return;
+  }
   liveActive=true;
-  $('singleSnapshot').hidden=true;
-  $('previewEmpty').hidden=true;
-  $('liveImage').hidden=false;
-  $('liveIndicator').hidden=false;
   $('startLive').disabled=true;
   $('stopLive').disabled=false;
-  $('previewMessage').textContent='Abrindo preview local...';
-  $('liveImage').src=api('api/live/ptz?t='+Date.now());
+  $('previewMessage').textContent='Abrindo os dois feeds locais de baixa resolução...';
+  for(const channel of [0,1]){
+    setFeedUi(channel,'loading','Conectando ao RTSP autenticado...');
+    const image=$('liveFeed'+channel);
+    image.src=api('api/live/'+channel+'?t='+Date.now());
+  }
 }
 
 async function stopLivePreview(){
   liveActive=false;
-  $('liveImage').removeAttribute('src');
-  $('liveImage').hidden=true;
-  $('liveIndicator').hidden=true;
+  for(const channel of [0,1]){
+    const image=$('liveFeed'+channel);
+    image.removeAttribute('src');
+    setFeedUi(channel,'stopped','Feed parado.');
+  }
   $('startLive').disabled=false;
   $('stopLive').disabled=true;
   try{await fetch(api('api/live/stop'),{method:'POST',keepalive:true})}catch(_){}
-  if(!$('singleSnapshot').hasAttribute('src'))$('previewEmpty').hidden=false;
-  if($('previewMessage').textContent.includes('preview'))$('previewMessage').textContent='Preview parado.';
-}
-
-async function loadSingleSnapshot(){
-  if(liveActive)await stopLivePreview();
-  const stream='ch'+String(selectedChannel).padStart(2,'0')+'_0';
-  $('previewMessage').textContent='Carregando snapshot...';
-  try{
-    const response=await fetch(api('api/snapshot/'+stream+'?t='+Date.now()),{cache:'no-store'});
-    if(!response.ok)throw new Error('HTTP '+response.status);
-    const blob=await response.blob();
-    const url=URL.createObjectURL(blob);
-    const previous=$('singleSnapshot').dataset.objectUrl;
-    $('singleSnapshot').src=url;$('singleSnapshot').dataset.objectUrl=url;$('singleSnapshot').hidden=false;
-    $('previewEmpty').hidden=true;
-    if(previous)URL.revokeObjectURL(previous);
-    $('previewMessage').textContent=response.headers.get('X-JOOAN-Snapshot')==='stale'?'Snapshot em cache temporário.':'Snapshot atualizado.';
-  }catch(error){$('previewMessage').textContent='Falha no snapshot: '+error.message}
+  $('previewMessage').textContent='Feeds parados.';
 }
 
 async function validateSubstreams(){
@@ -1233,13 +1388,12 @@ function renderAll(data){
   renderDiagnostics(data);
   renderLabInventory(data);
   updateLabAvailability(data);
-  renderLiveMeta(data);
-  renderSnapshotTiles('cameraMedia',data,true);
+  renderControlDashboard(data);
   enablePtz(data.online&&data.authenticated&&!data.probe_running);
   $('probe').disabled=!!data.probe_running||!!data.preview_active||!!data.ptz_moving;
   $('probe').textContent=data.probe_running?'Diagnosticando...':'Executar diagnóstico profundo';
   $('validateSubstreams').disabled=!!data.preview_probe_running||!!data.preview_active||!!data.probe_running||!!data.ptz_moving;
-  $('validateSubstreams').textContent=data.preview_probe_running?'Validando...':'Validar stream PTZ';
+  $('validateSubstreams').textContent=data.preview_probe_running?'Validando...':'Validar baixa resolução';
   if(data.preview_last_error&&!data.preview_active&&currentTab==='camera'){
     $('previewMessage').textContent='Preview: '+data.preview_last_error;
   }
@@ -1297,25 +1451,28 @@ directionButtons.forEach(button=>{
   button.addEventListener('pointerdown',event=>{
     event.preventDefault();
     activeDirection=direction;
+    const generation=++ptzHoldGeneration;
     button.setPointerCapture?.(event.pointerId);
-    void sendPtz(direction);
+    void holdPtz(direction,generation);
   });
   const stop=()=>{
-    if(activeDirection===direction){activeDirection=null;void sendPtz('stop')}
+    if(activeDirection===direction){
+      activeDirection=null;
+      ptzHoldGeneration++;
+      void sendPtz('stop');
+    }
   };
   button.addEventListener('pointerup',stop);
   button.addEventListener('pointercancel',stop);
   button.addEventListener('lostpointercapture',stop);
 });
-$('stop').addEventListener('click',()=>{activeDirection=null;void sendPtz('stop')});
+$('stop').addEventListener('click',()=>{activeDirection=null;ptzHoldGeneration++;void sendPtz('stop')});
 $('startLive').addEventListener('click',startLivePreview);
 $('stopLive').addEventListener('click',stopLivePreview);
-$('singleSnapshotButton').addEventListener('click',loadSingleSnapshot);
 $('validateSubstreams').addEventListener('click',validateSubstreams);
 $('probe').addEventListener('click',deepProbe);
 $('lightTest').addEventListener('click',lightTest);
 $('overviewRefreshSnapshots').addEventListener('click',()=>refreshSnapshots($('overviewMedia')));
-$('cameraRefreshSnapshots').addEventListener('click',()=>refreshSnapshots($('cameraMedia')));
 document.querySelectorAll('[data-lab-ptz]').forEach(button=>button.addEventListener('click',()=>labPtz(button.dataset.labPtz)));
 $('labIrOn').addEventListener('click',()=>labIr(true));
 $('labIrOff').addEventListener('click',()=>labIr(false));
@@ -1354,10 +1511,18 @@ $('labDiagProbe').addEventListener('click',labDiagProbe);
 $('labDiagDisable').addEventListener('click',labDiagDisable);
 $('labClearResult').addEventListener('click',()=>showLabResult('Nenhum teste executado.'));
 
-$('liveImage').addEventListener('load',()=>{$('previewMessage').textContent='Preview ao vivo ativo.'});
-$('liveImage').addEventListener('error',()=>{
-  if(liveActive)$('previewMessage').textContent='O preview PTZ foi interrompido. O backend tentará o stream principal se o substream não gerar vídeo.';
-});
+for(const channel of [0,1]){
+  $('liveFeed'+channel).addEventListener('load',()=>{
+    setFeedUi(channel,'live','Feed contínuo recebido pelo navegador.');
+    $('previewMessage').textContent='Feeds locais ativos. PTZ pode ser usado sem fechar o vídeo.';
+  });
+  $('liveFeed'+channel).addEventListener('error',()=>{
+    if(liveActive){
+      setFeedUi(channel,'error','Não foi possível manter este feed. Consulte o diagnóstico RTSP.');
+      $('previewMessage').textContent='Um dos feeds foi interrompido; o outro pode continuar ativo.';
+    }
+  });
+}
 
 window.addEventListener('blur',emergencyStop);
 document.addEventListener('visibilitychange',()=>{
