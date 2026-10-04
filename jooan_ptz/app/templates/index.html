@@ -23,48 +23,13 @@
 
     <div id="statusBanner" class="status-banner">Iniciando painel...</div>
 
-    <section class="dashboard-section" id="section-overview">
-      <div class="section-heading">
-        <div>
-          <span class="section-kicker">VISÃO GERAL</span>
-          <h2>Estado da câmera</h2>
-        </div>
-        <span class="badge neutral">Somente leitura</span>
-      </div>
-
-      <div id="overviewCards" class="stat-grid"></div>
-
-      <div class="content-grid two">
-        <article class="card">
-          <div class="card-heading">
-            <div>
-              <span class="section-kicker">RECURSOS</span>
-              <h2>Estado atual</h2>
-            </div>
-            <span class="badge neutral">Somente leitura</span>
-          </div>
-          <div id="quickFeatures" class="feature-grid"></div>
-        </article>
-
-        <article class="card">
-          <div class="card-heading">
-            <div>
-              <span class="section-kicker">REDE LOCAL</span>
-              <h2>Serviços</h2>
-            </div>
-          </div>
-          <div id="serviceList" class="service-list"></div>
-        </article>
-      </div>
-    </section>
-
-    <section class="dashboard-section" id="section-control">
-      <div class="section-heading">
+    <section class="dashboard-section primary-control-section" id="section-control">
+      <div class="section-heading primary-heading">
         <div>
           <span class="section-kicker">CÂMERAS & PTZ</span>
           <h2>Vídeo e controle</h2>
         </div>
-        <div class="toolbar compact">
+        <div class="toolbar compact primary-actions">
           <button id="refreshSnapshots" class="button secondary">Atualizar imagens</button>
           <button id="startLive" class="button primary">Iniciar os dois feeds</button>
           <button id="stopLive" class="button secondary" disabled>Parar feeds</button>
@@ -132,6 +97,7 @@
               </div>
             </article>
           </div>
+
           <p id="previewMessage" class="helper">
             Vídeo e snapshots só abrem RTSP quando solicitados. O painel não inicia mídia automaticamente.
           </p>
@@ -145,6 +111,7 @@
             </div>
             <span id="ptzState" class="badge neutral">Parado</span>
           </div>
+
           <div class="ptz-mode-row">
             <span id="ptzTransportBadge" class="badge neutral">CGI PTZ</span>
             <label class="control-label">Velocidade ONVIF
@@ -157,10 +124,12 @@
               </select>
             </label>
           </div>
+
           <p class="helper">
-            Na primeira movimentação, o backend tenta uma descoberta ONVIF mínima para habilitar velocidade variável.
-            Se não houver PTZ ONVIF utilizável ou ocorrer falha, o CGI validado é usado automaticamente.
+            Na primeira movimentação, o backend tenta ONVIF para habilitar velocidade variável.
+            Se não estiver disponível, o CGI é usado automaticamente.
           </p>
+
           <div class="ptz-grid">
             <div></div><button class="ptz-button" data-dir="up" aria-label="Cima">↑</button><div></div>
             <button class="ptz-button" data-dir="left" aria-label="Esquerda">←</button>
@@ -168,6 +137,7 @@
             <button class="ptz-button" data-dir="right" aria-label="Direita">→</button>
             <div></div><button class="ptz-button" data-dir="down" aria-label="Baixo">↓</button><div></div>
           </div>
+
           <p id="command" class="command-state"></p>
         </article>
 
@@ -184,131 +154,187 @@
       </div>
     </section>
 
-    <section class="dashboard-section" id="section-detection">
-      <div class="section-heading">
+    <section class="secondary-information" aria-label="Informações da câmera">
+      <div class="secondary-heading">
         <div>
-          <span class="section-kicker">DETECÇÃO</span>
-          <h2>Detecção, rastreamento e alertas</h2>
+          <span class="section-kicker">INFORMAÇÕES</span>
+          <h2>Dados e estado da câmera</h2>
         </div>
+        <span class="secondary-hint">Clique em uma seção para expandir</span>
       </div>
-      <div class="content-grid two">
-        <article class="card">
-          <div class="card-heading">
-            <div>
-              <span class="section-kicker">ANÁLISE LOCAL</span>
-              <h2>Detecção & rastreamento</h2>
+
+      <div class="info-accordion">
+        <details class="info-accordion-item" open>
+          <summary>
+            <span class="accordion-icon">01</span>
+            <span class="accordion-copy">
+              <strong>Resumo e serviços</strong>
+              <small>Estado geral, recursos e serviços locais</small>
+            </span>
+            <span class="accordion-chevron">⌄</span>
+          </summary>
+          <div class="accordion-body">
+            <div id="overviewCards" class="stat-grid"></div>
+            <div class="content-grid two compact-grid">
+              <article class="compact-card">
+                <div class="compact-card-heading">
+                  <div>
+                    <span class="section-kicker">RECURSOS</span>
+                    <h3>Estado atual</h3>
+                  </div>
+                  <span class="badge neutral">Leitura</span>
+                </div>
+                <div id="quickFeatures" class="feature-grid"></div>
+              </article>
+
+              <article class="compact-card">
+                <div class="compact-card-heading">
+                  <div>
+                    <span class="section-kicker">REDE LOCAL</span>
+                    <h3>Serviços</h3>
+                  </div>
+                </div>
+                <div id="serviceList" class="service-list"></div>
+              </article>
             </div>
           </div>
-          <div id="detectionGrid" class="setting-grid"></div>
-        </article>
+        </details>
 
-        <article class="card">
-          <div class="card-heading">
-            <div>
-              <span class="section-kicker">ILUMINAÇÃO & ALERTAS</span>
-              <h2>Luzes, buzzer e notificações</h2>
+        <details class="info-accordion-item">
+          <summary>
+            <span class="accordion-icon">02</span>
+            <span class="accordion-copy">
+              <strong>Detecção e alertas</strong>
+              <small>Movimento, tracking, luzes e notificações reportadas</small>
+            </span>
+            <span class="accordion-chevron">⌄</span>
+          </summary>
+          <div class="accordion-body">
+            <div class="content-grid two compact-grid">
+              <article class="compact-card">
+                <div class="compact-card-heading">
+                  <div>
+                    <span class="section-kicker">ANÁLISE LOCAL</span>
+                    <h3>Detecção & rastreamento</h3>
+                  </div>
+                </div>
+                <div id="detectionGrid" class="setting-grid"></div>
+              </article>
+
+              <article class="compact-card">
+                <div class="compact-card-heading">
+                  <div>
+                    <span class="section-kicker">ILUMINAÇÃO & ALERTAS</span>
+                    <h3>Estados reportados</h3>
+                  </div>
+                </div>
+                <div id="lightingGrid" class="setting-grid"></div>
+              </article>
             </div>
           </div>
-          <div id="lightingGrid" class="setting-grid"></div>
-        </article>
-      </div>
-    </section>
+        </details>
 
-    <section class="dashboard-section" id="section-recording">
-      <div class="section-heading">
-        <div>
-          <span class="section-kicker">GRAVAÇÃO</span>
-          <h2>Armazenamento e agendas</h2>
-        </div>
-      </div>
+        <details class="info-accordion-item">
+          <summary>
+            <span class="accordion-icon">03</span>
+            <span class="accordion-copy">
+              <strong>Gravação e armazenamento</strong>
+              <small>Cartão SD, estado da gravação e agendas</small>
+            </span>
+            <span class="accordion-chevron">⌄</span>
+          </summary>
+          <div class="accordion-body">
+            <div class="content-grid two compact-grid">
+              <article class="compact-card">
+                <div class="compact-card-heading">
+                  <div>
+                    <span class="section-kicker">ARMAZENAMENTO</span>
+                    <h3>Cartão SD</h3>
+                  </div>
+                </div>
+                <div id="storageCard"></div>
+              </article>
 
-      <div class="content-grid two">
-        <article class="card">
-          <div class="card-heading">
-            <div>
-              <span class="section-kicker">ARMAZENAMENTO</span>
-              <h2>Cartão SD</h2>
+              <article class="compact-card">
+                <div class="compact-card-heading">
+                  <div>
+                    <span class="section-kicker">ESTADO</span>
+                    <h3>Gravação local</h3>
+                  </div>
+                </div>
+                <div id="recordingCard"></div>
+              </article>
+            </div>
+
+            <article class="compact-card schedules-card">
+              <div class="compact-card-heading">
+                <div>
+                  <span class="section-kicker">AGENDAMENTOS</span>
+                  <h3>Agendas reportadas</h3>
+                </div>
+              </div>
+              <div id="scheduleGrid" class="schedule-grid"></div>
+            </article>
+          </div>
+        </details>
+
+        <details class="info-accordion-item">
+          <summary>
+            <span class="accordion-icon">04</span>
+            <span class="accordion-copy">
+              <strong>Diagnóstico técnico</strong>
+              <small>Serviços conhecidos, ONVIF e leituras técnicas</small>
+            </span>
+            <span class="accordion-chevron">⌄</span>
+          </summary>
+          <div class="accordion-body">
+            <div id="diagnosticSummary" class="diagnostic-grid"></div>
+            <p class="helper">
+              Somente leitura. Nenhum teste adicional de RTSP ou ONVIF é iniciado nesta seção.
+            </p>
+
+            <div class="content-grid two compact-grid">
+              <article class="compact-card">
+                <div class="compact-card-heading">
+                  <div>
+                    <span class="section-kicker">ONVIF</span>
+                    <h3>Resumo técnico</h3>
+                  </div>
+                  <span class="badge neutral">Leitura</span>
+                </div>
+                <div id="onvifSummary"></div>
+              </article>
+
+              <article class="compact-card">
+                <div class="compact-card-heading">
+                  <div>
+                    <span class="section-kicker">DADOS BRUTOS</span>
+                    <h3>Leituras técnicas</h3>
+                  </div>
+                </div>
+                <div id="rawDetails" class="details-stack"></div>
+              </article>
             </div>
           </div>
-          <div id="storageCard"></div>
-        </article>
+        </details>
 
-        <article class="card">
-          <div class="card-heading">
-            <div>
-              <span class="section-kicker">ESTADO</span>
-              <h2>Gravação local</h2>
-            </div>
+        <details class="info-accordion-item">
+          <summary>
+            <span class="accordion-icon">05</span>
+            <span class="accordion-copy">
+              <strong>Todas as configurações lidas</strong>
+              <small>Estado OEM, capabilities, rede, RTSP e ONVIF</small>
+            </span>
+            <span class="accordion-chevron">⌄</span>
+          </summary>
+          <div class="accordion-body">
+            <p class="helper">
+              Apenas valores realmente retornados pela câmera. Nenhum setter de configuração é exposto.
+            </p>
+            <div id="allReadSettings" class="read-settings-groups"></div>
           </div>
-          <div id="recordingCard"></div>
-        </article>
+        </details>
       </div>
-
-      <article class="card">
-        <div class="card-heading">
-          <div>
-            <span class="section-kicker">AGENDAMENTOS</span>
-            <h2>Agendas reportadas</h2>
-          </div>
-        </div>
-        <div id="scheduleGrid" class="schedule-grid"></div>
-      </article>
-    </section>
-
-    <section class="dashboard-section" id="section-diagnostics">
-      <div class="section-heading">
-        <div>
-          <span class="section-kicker">DIAGNÓSTICO</span>
-          <h2>Serviços e dados técnicos</h2>
-        </div>
-        <span class="badge neutral">Somente leitura</span>
-      </div>
-
-      <article class="card">
-        <div id="diagnosticSummary" class="diagnostic-grid"></div>
-        <p class="helper">
-          Esta seção apenas mostra o estado conhecido. Nenhum teste adicional de RTSP ou ONVIF é iniciado daqui.
-        </p>
-      </article>
-
-      <div class="content-grid two">
-        <article class="card">
-          <div class="card-heading">
-            <div>
-              <span class="section-kicker">ONVIF</span>
-              <h2>Resumo técnico</h2>
-            </div>
-            <span class="badge neutral">Leitura</span>
-          </div>
-          <div id="onvifSummary"></div>
-        </article>
-
-        <article class="card">
-          <div class="card-heading">
-            <div>
-              <span class="section-kicker">DADOS BRUTOS</span>
-              <h2>Leituras técnicas</h2>
-            </div>
-          </div>
-          <div id="rawDetails" class="details-stack"></div>
-        </article>
-      </div>
-    </section>
-
-    <section class="dashboard-section" id="section-settings">
-      <div class="section-heading">
-        <div>
-          <span class="section-kicker">ESTADO REPORTADO</span>
-          <h2>Todas as configurações lidas</h2>
-        </div>
-        <span class="badge neutral">Somente leitura</span>
-      </div>
-      <article class="card read-settings-card">
-        <p class="helper">
-          Somente valores realmente retornados pela câmera são exibidos aqui. Nenhum setter de configuração é exposto.
-        </p>
-        <div id="allReadSettings" class="read-settings-groups"></div>
-      </article>
     </section>
   </main>
 

@@ -375,6 +375,9 @@ def test_dashboard_template_is_served():
     assert "ptzSpeed" in body
     assert "generalInfo" in body
     assert "allReadSettings" in body
+    assert 'class="info-accordion"' in body
+    assert body.count('class="info-accordion-item"') == 5
+    assert body.index('id="section-control"') < body.index('id="overviewCards"')
     assert 'id="lightTest"' not in body
     assert 'id="probe"' not in body
     assert 'id="validateSubstreams"' not in body

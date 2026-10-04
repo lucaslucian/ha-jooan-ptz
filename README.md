@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <img alt="Version" src="https://img.shields.io/badge/version-0.18.1-blue">
+  <img alt="Version" src="https://img.shields.io/badge/version-0.18.2-blue">
   <img alt="Stage" src="https://img.shields.io/badge/stage-experimental-orange">
   <img alt="aarch64" src="https://img.shields.io/badge/aarch64-yes-success">
   <img alt="amd64" src="https://img.shields.io/badge/amd64-yes-success">
@@ -47,7 +47,7 @@ Se o botão não preencher o repositório automaticamente:
 
 ## Interface
 
-A v0.18.1 usa **uma única página**, sem abas e sem Laboratório. As únicas ações são PTZ e visualização das câmeras. As demais seções são somente leitura:
+A v0.18.2 usa **Câmeras & PTZ como área principal no topo**. Abaixo dela, as informações somente leitura ficam agrupadas em seções expansíveis para reduzir a poluição visual:
 
 - visão geral e saúde;
 - duas lentes com Snapshot / Ao vivo / Parar;
@@ -55,8 +55,12 @@ A v0.18.1 usa **uma única página**, sem abas e sem Laboratório. As únicas a�
 - informações gerais;
 - detecção, tracking, iluminação e alertas;
 - SD, gravação e agendas;
-- diagnóstico manual;
+- diagnóstico técnico somente leitura;
 - todas as configurações/estados lidos.
+
+<p align="center">
+  <img src="docs/images/dashboard-overview.svg" alt="Interface atual do JOOAN Local Control" width="900">
+</p>
 
 ## Uso de rede
 
@@ -75,7 +79,7 @@ A JA-A12 de referência mostrou comportamento sensível a várias conexões de m
 
 O controle CGI continua sendo o caminho comprovado.
 
-Quando ONVIF tiver sido descoberto manualmente e o PTZ ONVIF estiver disponível, o App tenta `ContinuousMove` primeiro para permitir velocidade variável. Se a operação falhar, o CGI é usado automaticamente como fallback.
+Na primeira movimentação PTZ, o App executa uma descoberta ONVIF mínima. Se houver PTZ ONVIF utilizável, tenta `ContinuousMove` para permitir velocidade variável; se não houver ou ocorrer falha, usa CGI automaticamente como fallback.
 
 ## Segurança
 

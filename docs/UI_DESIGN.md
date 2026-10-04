@@ -1,15 +1,42 @@
 # Direção visual do painel
 
-A v0.18 consolida o **JOOAN Local Control** em uma única página, sem abas e sem área experimental separada.
+A v0.18.2 consolida o **JOOAN Local Control** em uma única página com **Câmeras & PTZ como área principal**. Todo o restante fica abaixo em painéis expansíveis somente leitura.
+
+## Identidade visual
+
+A identidade do projeto usa a mesma paleta da extensão:
+
+| Uso | Cor |
+|---|---|
+| Fundo | `#0b0d11` |
+| Cards | `#12151b` |
+| Cards secundários | `#171b22` |
+| Bordas | `#2b323d` |
+| Texto | `#f4f7fb` |
+| Texto secundário | `#9ba7b5` |
+| Azul principal | `#4da3ff` |
+| Azul ativo | `#2588ef` |
+| Online | `#4fd08b` |
+
+O símbolo combina **duas lentes** com um arco de movimento PTZ. A mesma marca é usada no GitHub, no App Store e nos assets vetoriais.
+
+Assets principais:
+
+- `docs/images/jooan-local-control-logo.svg` — wordmark do GitHub;
+- `docs/images/jooan-icon.svg` — fonte vetorial do ícone;
+- `jooan_ptz/icon.png` — ícone 128×128 do Home Assistant;
+- `jooan_ptz/logo.png` — logo 250×100 do App Store;
+- `docs/images/dashboard-overview.svg` — representação atual da interface.
 
 ## Princípios
 
+- Câmeras e PTZ primeiro;
 - visual integrado ao Home Assistant;
 - cards simples e responsivos;
-- telemetria primeiro;
 - mídia somente sob demanda;
 - nenhuma configuração de escrita exposta;
-- informações avançadas abaixo das funções principais.
+- dados avançados abaixo das funções principais;
+- azul usado para ação/ênfase, sem excesso de cores.
 
 ## Estrutura
 
@@ -17,20 +44,15 @@ A v0.18 consolida o **JOOAN Local Control** em uma única página, sem abas e se
 ┌──────────────────────────────────────────────────────────────┐
 │ JOOAN Local Control · modelo · online/offline               │
 ├──────────────────────────────────────────────────────────────┤
-│ VISÃO GERAL                                                  │
-│ [dispositivo] [rede] [SD] [mídia]                           │
-│ [recursos]                    [serviços locais]              │
-├──────────────────────────────────────────────────────────────┤
 │ CÂMERAS & PTZ                                                │
 │ [Lente 1] [Lente 2]        [PTZ]        [Informações]        │
 ├──────────────────────────────────────────────────────────────┤
-│ DETECÇÃO / ALERTAS                                           │
-├──────────────────────────────────────────────────────────────┤
-│ GRAVAÇÃO / SD / AGENDAS                                      │
-├──────────────────────────────────────────────────────────────┤
-│ DIAGNÓSTICO MANUAL                                           │
-├──────────────────────────────────────────────────────────────┤
-│ TODAS AS CONFIGURAÇÕES LIDAS                                 │
+│ INFORMAÇÕES                                                  │
+│ ▼ Resumo e serviços                                          │
+│ ▶ Detecção e alertas                                         │
+│ ▶ Gravação e armazenamento                                   │
+│ ▶ Diagnóstico técnico                                        │
+│ ▶ Todas as configurações lidas                               │
 └──────────────────────────────────────────────────────────────┘
 ```
 
@@ -49,7 +71,8 @@ Nada é aberto automaticamente. Ao iniciar os dois feeds, o primeiro precisa con
 - pad direcional;
 - STOP;
 - seletor de velocidade ONVIF;
-- badge mostrando ONVIF ou fallback CGI.
+- badge mostrando ONVIF ou fallback CGI;
+- descoberta ONVIF mínima somente no primeiro movimento quando necessária.
 
 ## Informações gerais
 
@@ -65,18 +88,17 @@ Mostrar apenas leituras úteis:
 - ONVIF;
 - último contato.
 
-## Estado lido
+## Informações secundárias
 
-A área inferior agrupa os valores brutos/interpretados em:
+A área inferior usa `<details>` nativo para manter a página compacta. O primeiro grupo pode iniciar aberto; os demais ficam recolhidos.
 
-- OEM state;
-- propriedades OEM;
-- device features;
-- capabilities;
-- plataforma;
-- rede;
-- RTSP;
-- ONVIF.
+Os grupos são:
+
+1. resumo e serviços;
+2. detecção e alertas;
+3. gravação e armazenamento;
+4. diagnóstico técnico;
+5. todas as configurações lidas.
 
 ## Regras de UX
 
@@ -85,4 +107,5 @@ A área inferior agrupa os valores brutos/interpretados em:
 3. Recursos ausentes aparecem como **Não detectado**, não como falha geral.
 4. Erro RTSP/ONVIF não deve, por si só, marcar a câmera inteira como offline.
 5. Nenhuma mídia é aberta automaticamente.
-6. Diagnóstico de mídia permanece explícito e manual.
+6. Diagnóstico técnico é somente leitura.
+7. A identidade visual do GitHub e do App Store deve usar a mesma marca e paleta da interface.

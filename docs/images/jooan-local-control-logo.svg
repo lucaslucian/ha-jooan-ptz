@@ -1,21 +1,20 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1000" height="400" viewBox="0 0 1000 400" role="img" aria-labelledby="title desc">
-  <title id="title">JOOAN Local Control</title>
-  <desc id="desc">Logotipo vetorial do projeto JOOAN Local Control.</desc>
-  <defs>
-    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#32d4f2"/>
-      <stop offset="1" stop-color="#1687c9"/>
-    </linearGradient>
-  </defs>
-  <rect width="1000" height="400" rx="72" fill="#0c131b"/>
-  <g transform="translate(80 62)">
-    <rect x="0" y="36" width="270" height="210" rx="48" fill="#142330" stroke="#27485c" stroke-width="8"/>
-    <circle cx="135" cy="141" r="72" fill="#0a1118" stroke="url(#g)" stroke-width="16"/>
-    <circle cx="135" cy="141" r="34" fill="url(#g)"/>
-    <path d="M72 36l36-34h54l36 34" fill="none" stroke="#27485c" stroke-width="16" stroke-linejoin="round"/>
-    <path d="M82 273h106M135 246v42" stroke="#32d4f2" stroke-width="16" stroke-linecap="round"/>
-  </g>
-  <text x="410" y="170" fill="#f3f8fc" font-family="system-ui,-apple-system,Segoe UI,sans-serif" font-size="70" font-weight="750">JOOAN</text>
-  <text x="410" y="242" fill="#72dff5" font-family="system-ui,-apple-system,Segoe UI,sans-serif" font-size="50" font-weight="650">Local Control</text>
-  <text x="412" y="294" fill="#93a6b7" font-family="system-ui,-apple-system,Segoe UI,sans-serif" font-size="24" font-weight="500">Home Assistant · LAN only</text>
+<title id="title">JOOAN Local Control</title>
+<desc id="desc">Identidade visual do JOOAN Local Control alinhada ao painel Home Assistant.</desc>
+<defs><linearGradient id="blue" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#4da3ff"/><stop offset="1" stop-color="#2588ef"/></linearGradient></defs>
+<rect width="1000" height="400" rx="44" fill="#0b0d11"/>
+<g transform="translate(0 40)">
+<rect x="42" y="42" width="236" height="236" rx="44" fill="#12151b" stroke="#2b323d" stroke-width="5"/>
+<rect x="76" y="103" width="168" height="105" rx="24" fill="#171b22" stroke="#2b323d" stroke-width="4"/>
+<circle cx="128" cy="155" r="29" fill="#0b0d11" stroke="url(#blue)" stroke-width="9"/>
+<circle cx="128" cy="155" r="11" fill="#2588ef"/>
+<circle cx="194" cy="155" r="36" fill="#0b0d11" stroke="url(#blue)" stroke-width="10"/>
+<circle cx="194" cy="155" r="15" fill="#4da3ff"/>
+<circle cx="225" cy="125" r="5" fill="#4fd08b"/>
+<path d="M108 212 A72 52 0 0 0 218 212" fill="none" stroke="#4da3ff" stroke-width="8" stroke-linecap="round"/>
+<path d="M111 212l-16-6 7 16M215 212l16-6-7 16" fill="none" stroke="#4da3ff" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="330" y="132" fill="#f4f7fb" font-family="system-ui,-apple-system,Segoe UI,sans-serif" font-size="64" font-weight="800" letter-spacing="-1">JOOAN</text>
+<text x="330" y="194" fill="#4da3ff" font-family="system-ui,-apple-system,Segoe UI,sans-serif" font-size="38" font-weight="750">LOCAL CONTROL</text>
+<text x="332" y="238" fill="#9ba7b5" font-family="system-ui,-apple-system,Segoe UI,sans-serif" font-size="20" font-weight="500">Dual-lens · PTZ · LAN only · Home Assistant</text>
+</g>
 </svg>

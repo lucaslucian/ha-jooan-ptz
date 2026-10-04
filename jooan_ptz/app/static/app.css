@@ -189,6 +189,102 @@ details pre{
 .empty{color:var(--muted);border:1px dashed var(--border);border-radius:13px;padding:20px;text-align:center}
 code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:#b8dcff}
 
+/* Primary workspace */
+.primary-control-section{margin-bottom:28px}
+.primary-heading{margin-bottom:14px}
+.primary-heading h2{font-size:26px}
+.primary-actions{justify-content:flex-end}
+.primary-control-section .control-dashboard>.card{
+  box-shadow:0 14px 36px rgba(0,0,0,.18)
+}
+.primary-control-section .feeds-card,
+.primary-control-section .ptz-card,
+.primary-control-section .camera-info-card{
+  min-height:100%
+}
+
+/* Compact read-only area below the primary controls */
+.secondary-information{margin-top:8px}
+.secondary-heading{
+  display:flex;align-items:flex-end;justify-content:space-between;gap:18px;
+  margin:0 2px 12px
+}
+.secondary-heading h2{
+  font-size:21px;margin:5px 0 0;letter-spacing:-.025em
+}
+.secondary-hint{color:var(--muted-2);font-size:11px}
+.info-accordion{display:grid;gap:9px}
+.info-accordion-item{
+  border:1px solid var(--border);
+  background:var(--panel);
+  border-radius:15px;
+  overflow:hidden;
+  box-shadow:0 8px 24px rgba(0,0,0,.08)
+}
+.info-accordion-item>summary{
+  min-height:68px;
+  padding:12px 14px;
+  display:grid;
+  grid-template-columns:38px minmax(0,1fr) 26px;
+  align-items:center;
+  gap:12px;
+  cursor:pointer;
+  list-style:none;
+  user-select:none
+}
+.info-accordion-item>summary::-webkit-details-marker{display:none}
+.info-accordion-item>summary:hover{background:rgba(255,255,255,.018)}
+.info-accordion-item[open]>summary{
+  border-bottom:1px solid var(--border-soft);
+  background:rgba(77,163,255,.025)
+}
+.accordion-icon{
+  width:34px;height:34px;border-radius:10px;
+  display:grid;place-items:center;
+  background:var(--accent-soft);
+  color:var(--accent);
+  font-size:11px;font-weight:900;letter-spacing:.05em
+}
+.accordion-copy{min-width:0}
+.accordion-copy strong{
+  display:block;color:var(--text);font-size:13px;line-height:1.35
+}
+.accordion-copy small{
+  display:block;color:var(--muted);font-size:11px;line-height:1.4;margin-top:3px
+}
+.accordion-chevron{
+  color:var(--muted);font-size:18px;line-height:1;text-align:center;
+  transition:transform .18s ease
+}
+.info-accordion-item[open] .accordion-chevron{transform:rotate(180deg)}
+.accordion-body{padding:14px}
+.accordion-body>.stat-grid:last-child,
+.accordion-body>.content-grid:last-child{margin-bottom:0}
+.compact-grid{gap:12px}
+.compact-card{
+  border:1px solid var(--border-soft);
+  background:var(--panel-2);
+  border-radius:13px;
+  padding:13px
+}
+.compact-card-heading{
+  display:flex;align-items:flex-start;justify-content:space-between;gap:12px;
+  margin-bottom:12px
+}
+.compact-card-heading h3{
+  font-size:14px;line-height:1.25;margin:4px 0 0;letter-spacing:-.015em
+}
+.schedules-card{margin-top:12px}
+.info-accordion .stat-card{
+  min-height:108px;
+  background:var(--panel-2)
+}
+.info-accordion .stat-card .value{font-size:20px}
+.info-accordion .read-settings-group{background:var(--panel-2)}
+.info-accordion .details-stack details{
+  background:rgba(255,255,255,.018)
+}
+
 @media(max-width:1180px){
   .control-dashboard{grid-template-columns:repeat(2,minmax(0,1fr))}
   .feeds-card{grid-column:1/-1}
@@ -199,12 +295,16 @@ code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:#b8d
   .content-grid.two,.control-dashboard{grid-template-columns:1fr}
   .feeds-card{grid-column:auto}
   .setting-grid,.diagnostic-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
-  .section-heading{align-items:flex-start;flex-direction:column}
+  .section-heading,.secondary-heading{align-items:flex-start;flex-direction:column}
+  .primary-actions{justify-content:flex-start}
 }
 @media(max-width:620px){
   .shell{width:min(100% - 18px,1480px);padding-top:16px}
   .app-header{align-items:flex-start}
   .app-header p{font-size:12px}
+  .secondary-hint{display:none}
+  .info-accordion-item>summary{grid-template-columns:34px minmax(0,1fr) 22px;padding:11px 12px}
+  .accordion-body{padding:11px}
   .stat-grid,.dual-feed-grid,.feature-grid,.setting-grid,.schedule-grid,.diagnostic-grid,.onvif-grid,.read-setting-grid{grid-template-columns:1fr}
   .card{padding:14px;border-radius:15px}
   .ptz-grid{grid-template-columns:repeat(3,70px)}

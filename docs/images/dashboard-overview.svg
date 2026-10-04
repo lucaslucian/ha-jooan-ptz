@@ -1,104 +1,50 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900" role="img" aria-labelledby="title desc">
-  <title id="title">JOOAN Local Control — visão do dashboard</title>
-  <desc id="desc">Conceito vetorial do painel Home Assistant com estado da câmera, duas lentes, PTZ, detecção, gravação e diagnóstico local.</desc>
-  <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#0b1118"/>
-      <stop offset="1" stop-color="#111b26"/>
-    </linearGradient>
-    <linearGradient id="cyan" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#27c1e8"/>
-      <stop offset="1" stop-color="#1689c7"/>
-    </linearGradient>
-    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
-      <feDropShadow dx="0" dy="10" stdDeviation="18" flood-color="#000" flood-opacity=".28"/>
-    </filter>
-    <style>
-      .title{font:700 34px system-ui,-apple-system,Segoe UI,sans-serif;fill:#f4f7fb}
-      .sub{font:500 18px system-ui,-apple-system,Segoe UI,sans-serif;fill:#9fb0c2}
-      .kicker{font:700 13px system-ui,-apple-system,Segoe UI,sans-serif;letter-spacing:1.5px;fill:#64d7f1}
-      .h2{font:700 22px system-ui,-apple-system,Segoe UI,sans-serif;fill:#f4f7fb}
-      .body{font:500 16px system-ui,-apple-system,Segoe UI,sans-serif;fill:#b5c2cf}
-      .small{font:600 13px system-ui,-apple-system,Segoe UI,sans-serif;fill:#8ea0b2}
-      .value{font:700 18px system-ui,-apple-system,Segoe UI,sans-serif;fill:#ecf5fb}
-      .card{fill:#141f2a;stroke:#263849;stroke-width:2}
-      .soft{fill:#0f1821;stroke:#223241;stroke-width:1.5}
-    </style>
-  </defs>
-
-  <rect width="1600" height="900" rx="34" fill="url(#bg)"/>
-  <rect x="42" y="36" width="1516" height="94" rx="22" fill="#121c26" stroke="#263849" stroke-width="2"/>
-  <circle cx="86" cy="83" r="22" fill="url(#cyan)"/>
-  <path d="M77 82h18M86 73v18" stroke="#fff" stroke-width="4" stroke-linecap="round"/>
-  <text x="124" y="76" class="title">JOOAN Local Control</text>
-  <text x="124" y="104" class="sub">JA-A12 · LAN only · Home Assistant</text>
-  <rect x="1262" y="61" width="127" height="44" rx="22" fill="#16382d" stroke="#2a6e55"/>
-  <circle cx="1290" cy="83" r="7" fill="#4fd08b"/>
-  <text x="1310" y="89" class="body" fill="#86e8b4">Online</text>
-  <rect x="1402" y="61" width="122" height="44" rx="22" fill="#0d2834" stroke="#1d637b"/>
-  <text x="1430" y="89" class="body" fill="#71dff4">LAN only</text>
-
-  <g filter="url(#shadow)">
-    <rect class="card" x="42" y="158" width="480" height="315" rx="22"/>
-    <text x="70" y="190" class="kicker">CÂMERAS</text>
-    <text x="70" y="222" class="h2">Duas lentes locais</text>
-    <rect class="soft" x="70" y="248" width="206" height="150" rx="14"/>
-    <rect class="soft" x="290" y="248" width="204" height="150" rx="14"/>
-    <path d="M91 365l52-52 38 36 28-24 46 40" fill="none" stroke="#31546a" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
-    <circle cx="224" cy="286" r="15" fill="#2e617a"/>
-    <path d="M311 365l44-38 31 20 38-46 49 64" fill="none" stroke="#31546a" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
-    <circle cx="454" cy="286" r="15" fill="#2e617a"/>
-    <text x="83" y="424" class="small">ch00 · PTZ</text>
-    <text x="303" y="424" class="small">ch01 · fixa</text>
-    <text x="70" y="452" class="body">RTSP · H.264 · snapshot/preview local</text>
-
-    <rect class="card" x="544" y="158" width="372" height="315" rx="22"/>
-    <text x="572" y="190" class="kicker">MOVIMENTO</text>
-    <text x="572" y="222" class="h2">PTZ</text>
-    <circle cx="730" cy="329" r="80" fill="#0e1821" stroke="#2a4052" stroke-width="2"/>
-    <circle cx="730" cy="329" r="34" fill="#223647"/>
-    <text x="710" y="336" class="small" fill="#d8e5ef">STOP</text>
-    <path d="M730 263l-16 22h32zM730 395l-16-22h32zM664 329l22-16v32zM796 329l-22-16v32z" fill="#64d7f1"/>
-    <text x="572" y="446" class="body">CGI validado + ONVIF laboratório</text>
-
-    <rect class="card" x="938" y="158" width="620" height="315" rx="22"/>
-    <text x="966" y="190" class="kicker">ESTADO LOCAL</text>
-    <text x="966" y="222" class="h2">Detecção, luz e gravação</text>
-    <g transform="translate(966 252)">
-      <rect class="soft" width="178" height="78" rx="13"/><text x="16" y="28" class="small">Motion</text><text x="16" y="57" class="value">Ativo · média</text>
-      <rect class="soft" x="194" width="178" height="78" rx="13"/><text x="210" y="28" class="small">Floodlight</text><text x="210" y="57" class="value">Infravermelho</text>
-      <rect class="soft" x="388" width="178" height="78" rx="13"/><text x="404" y="28" class="small">Gravação</text><text x="404" y="57" class="value">SD · ativa</text>
-      <rect class="soft" y="94" width="178" height="78" rx="13"/><text x="16" y="122" class="small">Auto tracking</text><text x="16" y="151" class="value">Desligado</text>
-      <rect class="soft" x="194" y="94" width="178" height="78" rx="13"/><text x="210" y="122" class="small">Timezone</text><text x="210" y="151" class="value">GMT-03:00</text>
-      <rect class="soft" x="388" y="94" width="178" height="78" rx="13"/><text x="404" y="122" class="small">ONVIF Events</text><text x="404" y="151" class="value">PullPoint</text>
-    </g>
-    <text x="966" y="451" class="body">Porta 9898 · baseline/diff · estado sem cloud</text>
-  </g>
-
-  <g filter="url(#shadow)">
-    <rect class="card" x="42" y="500" width="480" height="340" rx="22"/>
-    <text x="70" y="532" class="kicker">SERVIÇOS</text>
-    <text x="70" y="564" class="h2">Saúde local</text>
-    <g transform="translate(70 594)">
-      <rect class="soft" width="424" height="48" rx="12"/><circle cx="24" cy="24" r="7" fill="#4fd08b"/><text x="44" y="30" class="body">HTTP / CGI · porta 80</text><text x="335" y="30" class="small">OK</text>
-      <rect class="soft" y="60" width="424" height="48" rx="12"/><circle cx="24" cy="84" r="7" fill="#4fd08b"/><text x="44" y="90" class="body">RTSP · porta 554</text><text x="335" y="90" class="small">OK</text>
-      <rect class="soft" y="120" width="424" height="48" rx="12"/><circle cx="24" cy="144" r="7" fill="#4fd08b"/><text x="44" y="150" class="body">OEM features · porta 9898</text><text x="335" y="150" class="small">OK</text>
-      <rect class="soft" y="180" width="424" height="48" rx="12"/><circle cx="24" cy="204" r="7" fill="#4fd08b"/><text x="44" y="210" class="body">ONVIF · porta 8899</text><text x="335" y="210" class="small">OK</text>
-    </g>
-
-    <rect class="card" x="544" y="500" width="1014" height="340" rx="22"/>
-    <text x="572" y="532" class="kicker">LABORATÓRIO</text>
-    <text x="572" y="564" class="h2">Testes controlados de protocolo</text>
-    <rect x="572" y="594" width="958" height="70" rx="14" fill="#10212b" stroke="#215369"/>
-    <text x="594" y="621" class="small">GoAhead CGI candidates</text>
-    <text x="594" y="650" class="body">getVideoSettings · getmotiondetectSettings · round-trip com readback</text>
-    <rect x="572" y="678" width="466" height="126" rx="14" fill="#101b24" stroke="#2a3e4e"/>
-    <text x="594" y="708" class="small">Escrita OEM mapeada</text>
-    <text x="594" y="738" class="body">floodlight · zonas · sensibilidade</text>
-    <text x="594" y="766" class="body">tracking · flip · timezone</text>
-    <rect x="1052" y="678" width="478" height="126" rx="14" fill="#211a14" stroke="#674b27"/>
-    <text x="1074" y="708" class="small" fill="#f5bd55">Guardrails</text>
-    <text x="1074" y="738" class="body">Sem firmware, reset, Wi-Fi ou proxy arbitrário</text>
-    <text x="1074" y="766" class="body">Credenciais permanecem somente no backend</text>
-  </g>
+<title id="title">JOOAN Local Control — interface atual</title>
+<desc id="desc">Câmeras e PTZ como área principal, com dados somente leitura em seções expansíveis.</desc>
+<defs>
+<style>
+.k{font:800 13px system-ui,-apple-system,Segoe UI,sans-serif;letter-spacing:1.7px;fill:#4da3ff}
+.h1{font:800 34px system-ui,-apple-system,Segoe UI,sans-serif;fill:#f4f7fb}
+.h2{font:750 20px system-ui,-apple-system,Segoe UI,sans-serif;fill:#f4f7fb}
+.b{font:500 14px system-ui,-apple-system,Segoe UI,sans-serif;fill:#9ba7b5}
+.s{font:700 12px system-ui,-apple-system,Segoe UI,sans-serif;fill:#9ba7b5}
+.v{font:700 14px system-ui,-apple-system,Segoe UI,sans-serif;fill:#f4f7fb}
+.card{fill:#12151b;stroke:#2b323d;stroke-width:2}.soft{fill:#171b22;stroke:#222831;stroke-width:1.5}
+</style>
+</defs>
+<rect width="1600" height="900" fill="#0b0d11"/>
+<rect x="34" y="28" width="1532" height="74" rx="18" fill="#12151b" stroke="#2b323d" stroke-width="2"/>
+<text x="62" y="57" class="k">JOOAN · CONTROLE LOCAL</text><text x="62" y="86" class="h2">JA-A12</text>
+<rect x="1408" y="47" width="122" height="38" rx="19" fill="#123126" stroke="#275c49"/><circle cx="1432" cy="66" r="6" fill="#4fd08b"/><text x="1450" y="71" class="v" fill="#4fd08b">Online</text>
+<text x="36" y="135" class="k">CÂMERAS &amp; PTZ</text><text x="36" y="170" class="h1">Vídeo e controle</text>
+<rect x="1198" y="128" width="118" height="38" rx="10" class="soft"/><text x="1216" y="152" class="s">Atualizar imagens</text>
+<rect x="1326" y="128" width="130" height="38" rx="10" fill="#124d7f"/><text x="1346" y="152" class="s" fill="#d9edff">Iniciar feeds</text>
+<rect x="1466" y="128" width="98" height="38" rx="10" class="soft"/><text x="1487" y="152" class="s">Parar</text>
+<rect x="34" y="188" width="760" height="430" rx="20" class="card"/>
+<text x="56" y="220" class="k">VÍDEO LOCAL</text><text x="56" y="249" class="h2">Duas lentes</text>
+<rect x="56" y="274" width="348" height="196" rx="14" fill="#020304" stroke="#2b323d"/><rect x="420" y="274" width="348" height="196" rx="14" fill="#020304" stroke="#2b323d"/>
+<text x="198" y="360" class="v">Lente 1</text><text x="562" y="360" class="v">Lente 2</text>
+<text x="148" y="390" class="b">Snapshot / Ao vivo</text><text x="512" y="390" class="b">Snapshot / Ao vivo</text>
+<rect x="56" y="486" width="348" height="105" rx="14" class="soft"/><rect x="420" y="486" width="348" height="105" rx="14" class="soft"/>
+<text x="72" y="514" class="v">Lente 1 · ch00</text><text x="436" y="514" class="v">Lente 2 · ch01</text>
+<rect x="72" y="536" width="83" height="34" rx="9" class="card"/><text x="89" y="558" class="s">Snapshot</text>
+<rect x="163" y="536" width="68" height="34" rx="9" fill="#124d7f"/><text x="181" y="558" class="s" fill="#d9edff">Ao vivo</text>
+<rect x="436" y="536" width="83" height="34" rx="9" class="card"/><text x="453" y="558" class="s">Snapshot</text>
+<rect x="527" y="536" width="68" height="34" rx="9" fill="#124d7f"/><text x="545" y="558" class="s" fill="#d9edff">Ao vivo</text>
+<rect x="812" y="188" width="326" height="430" rx="20" class="card"/>
+<text x="834" y="220" class="k">MOVIMENTO</text><text x="834" y="249" class="h2">PTZ</text>
+<rect x="834" y="272" width="84" height="32" rx="16" class="soft"/><text x="854" y="293" class="s">CGI PTZ</text>
+<text x="982" y="281" class="s">Velocidade</text><rect x="982" y="289" width="128" height="38" rx="9" class="soft"/><text x="1000" y="313" class="v">2 · normal</text>
+<rect x="936" y="354" width="70" height="70" rx="15" class="soft"/><text x="960" y="398" class="h2">↑</text>
+<rect x="850" y="440" width="70" height="70" rx="15" class="soft"/><text x="875" y="484" class="h2">←</text>
+<rect x="936" y="440" width="70" height="70" rx="15" class="soft"/><text x="952" y="481" class="s" fill="#ff6b73">STOP</text>
+<rect x="1022" y="440" width="70" height="70" rx="15" class="soft"/><text x="1047" y="484" class="h2">→</text>
+<rect x="936" y="526" width="70" height="70" rx="15" class="soft"/><text x="960" y="570" class="h2">↓</text>
+<rect x="1156" y="188" width="410" height="430" rx="20" class="card"/>
+<text x="1178" y="220" class="k">CÂMERA</text><text x="1178" y="249" class="h2">Informações gerais</text>
+<g class="b"><text x="1178" y="290">Modelo</text><text x="1510" y="290" text-anchor="end">JA-A12</text><text x="1178" y="330">Firmware</text><text x="1510" y="330" text-anchor="end">84025202</text><text x="1178" y="370">Canais</text><text x="1510" y="370" text-anchor="end">2</text><text x="1178" y="410">Codec</text><text x="1510" y="410" text-anchor="end">H.264</text><text x="1178" y="450">Timezone</text><text x="1510" y="450" text-anchor="end">GMT-03:00</text><text x="1178" y="490">RTSP</text><text x="1510" y="490" text-anchor="end">Sob demanda</text><text x="1178" y="530">ONVIF</text><text x="1510" y="530" text-anchor="end">PTZ</text><text x="1178" y="570">Estado</text><text x="1510" y="570" text-anchor="end">Leitura</text></g>
+<text x="36" y="665" class="k">INFORMAÇÕES</text><text x="36" y="696" class="h2">Dados e estado da câmera</text>
+<rect x="34" y="716" width="1532" height="62" rx="14" class="card"/><rect x="50" y="730" width="34" height="34" rx="10" fill="#13283b"/><text x="59" y="752" class="s" fill="#4da3ff">01</text><text x="101" y="745" class="v">Resumo e serviços</text><text x="101" y="763" class="b">Estado geral, recursos e serviços locais</text><text x="1534" y="753" class="h2">⌄</text>
+<rect x="34" y="788" width="1532" height="50" rx="14" class="card"/><text x="55" y="819" class="s" fill="#4da3ff">02</text><text x="101" y="819" class="v">Detecção e alertas</text><text x="1534" y="821" class="h2">⌄</text>
+<rect x="34" y="848" width="1532" height="36" rx="12" class="card"/><text x="55" y="871" class="s" fill="#4da3ff">03–05</text><text x="118" y="871" class="b">Gravação · Diagnóstico técnico · Todas as configurações lidas</text>
 </svg>
