@@ -2,30 +2,35 @@
 
 ![JOOAN Local Control](logo.png)
 
-Controle, mídia e diagnóstico **local** para câmeras JOOAN/CAM720 compatíveis no Home Assistant.
+Controle e monitoramento **local** para câmeras JOOAN/CAM720 compatíveis no Home Assistant.
 
 ### Recursos atuais
 
-- PTZ local com `stop` automático ao soltar;
-- descoberta e validação sequencial de streams RTSP;
-- snapshots e preview MJPEG local sem expor credenciais RTSP ao navegador;
-- diagnóstico HTTP/CGI, RTSP, porta 9898 e ONVIF;
-- leitura de dispositivo, SD, gravação, detecção, tracking, iluminação e agendas;
-- suporte a dual-lens quando reportado pelo firmware;
-- ONVIF Events/PullPoint com separação de estados iniciais, duplicatas e transições;
-- laboratório OEM com baseline/diff, planos de escrita e readback;
-- laboratório v0.16 para candidatos GoAhead CGI encontrados em firmware relacionado:
-  - `getVideoSettings` / `updateVideoSettings`;
-  - `getmotiondetectSettings` / `updatemotiondetectSettings`;
-  - candidato de timezone em `/goform/NTP`;
-- `SetDiagMode` limitado ao callback seguro e ao desligamento explícito.
+- PTZ CGI validado com `stop` ao soltar;
+- PTZ ONVIF com velocidade após descoberta manual, com fallback CGI;
+- duas lentes apresentadas lado a lado;
+- snapshots RTSP sob demanda;
+- preview MJPEG sob demanda, sem expor credenciais ao navegador;
+- leitura de dispositivo, rede, SD, gravação, detecção, tracking, iluminação e agendas;
+- capabilities/estado OEM pela porta 9898;
+- descoberta ONVIF mínima e manual;
+- teste RTSP manual;
+- painel único, sem abas.
+
+### Comportamento conservador de rede
+
+A JA-A12 de referência mostrou instabilidade quando várias sessões RTSP/ONVIF são abertas em sequência. A v0.18:
+
+- não abre RTSP na inicialização;
+- não inicia vídeo automaticamente;
+- usa ICMP para heartbeat;
+- deixa ONVIF e teste RTSP sob demanda;
+- abre os dois feeds em sequência, e não ao mesmo tempo.
 
 ### Segurança e escopo
 
-O App recusa destinos públicos, serializa o I/O com a câmera e mantém credenciais sensíveis somente no backend. Não existe proxy genérico de URL, `singleCMD`, SOAP, DP/MQTT ou shell de diagnóstico.
+O App mantém credenciais somente no backend e não oferece proxy genérico de URL ou `singleCMD`.
 
-Firmware, reset de fábrica e configuração de Wi-Fi permanecem deliberadamente fora de escopo.
+Escrita de configuração, firmware, reset, Wi-Fi, SetDiagMode e o antigo Laboratório não fazem parte da operação normal.
 
-> **Status:** experimental. A principal referência de testes é uma JOOAN JA-A12/CAM720 dual-lens stock. Outros modelos e revisões podem expor somente parte das superfícies documentadas.
-
-Consulte **Documentação** e a aba **Laboratório** antes dos testes de escrita.
+> **Status:** experimental. A principal referência é uma JOOAN JA-A12/CAM720 dual-lens stock.

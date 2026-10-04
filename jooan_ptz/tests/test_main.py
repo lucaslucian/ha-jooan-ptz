@@ -146,6 +146,9 @@ def test_stale_ptz_sequence_is_ignored(monkeypatch):
     commands = []
 
     class FakeCamera:
+        ip = "10.0.0.10"
+        onvif_port = 8899
+
         def command(self, direction):
             commands.append(direction)
             return {"result": "success"}
@@ -167,11 +170,14 @@ def test_ptz_prefers_onvif_and_passes_selected_speed(monkeypatch):
     calls = []
 
     class FakeCamera:
+        ip = "10.0.0.10"
+        onvif_port = 8899
+
         def command(self, direction):
             raise AssertionError("CGI fallback must not run when ONVIF succeeds")
 
-    def fake_onvif(camera, onvif_info, *, direction, speed, duration_ms):
-        calls.append((direction, speed, duration_ms))
+    def fake_onvif(host, port, onvif_info, *, direction, speed, duration_ms):
+        calls.append((host, port, direction, speed, duration_ms))
         return {
             "start": {"accepted": True},
             "stop": {"accepted": True},
@@ -195,13 +201,16 @@ def test_ptz_prefers_onvif_and_passes_selected_speed(monkeypatch):
     payload = response.get_json()
     assert payload["transport"] == "onvif"
     assert payload["speed"] == 0.8
-    assert calls == [("right", 0.8, 320)]
+    assert calls == [("10.0.0.10", 8899, "right", 0.8, 320)]
 
 
 def test_ptz_falls_back_to_cgi_when_onvif_is_rejected(monkeypatch):
     commands = []
 
     class FakeCamera:
+        ip = "10.0.0.10"
+        onvif_port = 8899
+
         def command(self, direction):
             commands.append(direction)
             return {"result": "success"}
@@ -357,15 +366,15 @@ def test_dashboard_template_is_served():
 
     assert response.status_code == 200
     body = response.get_data(as_text=True)
-    assert "Câmeras & PTZ" in body
+    assert "CÂMERAS & PTZ" in body
     assert "liveFeed0" in body
     assert "liveFeed1" in body
     assert "ptzSpeed" in body
     assert "generalInfo" in body
     assert "allReadSettings" in body
-    assert "labCgiProbeAll" in body
-    assert "labCgiRoundtrip" in body
-    assert "labCgiWrite" in body
+    assert 'class="tabs"' not in body
+    assert "Laboratório" not in body
+    assert "labCgiProbeAll" not in body
     assert "static/app.css" in body
     assert "static/app.js" in body
 
@@ -583,98 +592,10 @@ def test_preview_candidates_fall_back_from_substream_to_main():
 
 
 
-def test_recording_playback_probe_is_imported_by_main():
-    assert callable(main.onvif_recording_playback_probe)
 
-
-
-def test_oem_recording_lab_endpoint_is_read_only_snapshot(monkeypatch):
-    monkeypatch.setattr(
-        main,
-        "_lab_context",
-        lambda: (object(), {}),
-    )
-    monkeypatch.setattr(
-        main,
-        "oem_recording_snapshot",
-        lambda camera: {
-            "operation": "oem_recording_snapshot",
-            "properties": {"record_enable": 1},
-        },
-    )
+def test_laboratory_routes_are_removed():
     client = main.app.test_client()
 
-    response = client.post("/api/lab/oem/recording")
-
-    assert response.status_code == 200
-    assert response.get_json()["properties"]["record_enable"] == 1
-
-
-
-def test_oem_toggle_lab_endpoint_passes_selected_group(monkeypatch):
-    monkeypatch.setattr(main, "_lab_context", lambda: (object(), {}))
-    seen = {}
-
-    def fake_snapshot(camera, *, group):
-        seen["group"] = group
-        return {
-            "operation": "oem_toggle_snapshot",
-            "group": group,
-            "values": {"autotrack": 1},
-        }
-
-    monkeypatch.setattr(main, "oem_toggle_snapshot", fake_snapshot)
-    client = main.app.test_client()
-
-    response = client.post("/api/lab/oem/toggles", json={"group": "tracking"})
-
-    assert response.status_code == 200
-    assert seen["group"] == "tracking"
-    assert response.get_json()["values"]["autotrack"] == 1
-
-def test_legacy_cgi_probe_route_passes_only_selected_surface(monkeypatch):
-    monkeypatch.setattr(
-        main,
-        "_lab_execute",
-        lambda callback: main.jsonify(callback(object(), {})),
-    )
-    monkeypatch.setattr(
-        main,
-        "legacy_cgi_probe",
-        lambda camera, *, surface: {"operation": "legacy_cgi_probe", "surface": surface},
-    )
-
-    client = main.app.test_client()
-    response = client.post("/api/lab/cgi/probe", json={"surface": "motion"})
-
-    assert response.status_code == 200
-    assert response.get_json() == {
-        "operation": "legacy_cgi_probe",
-        "surface": "motion",
-    }
-
-
-def test_legacy_ntp_route_passes_only_timezone_value(monkeypatch):
-    monkeypatch.setattr(
-        main,
-        "_lab_execute",
-        lambda callback: main.jsonify(callback(object(), {})),
-    )
-    monkeypatch.setattr(
-        main,
-        "legacy_ntp_timezone_candidate",
-        lambda camera, *, timezone: {
-            "operation": "legacy_ntp_timezone_candidate",
-            "requested": timezone,
-        },
-    )
-
-    client = main.app.test_client()
-    response = client.post(
-        "/api/lab/cgi/ntp-timezone",
-        json={"timezone": "AST_-04", "NTPServerIP": "should-be-ignored"},
-    )
-
-    assert response.status_code == 200
-    assert response.get_json()["requested"] == "AST_-04"
-
+    assert client.post("/api/lab/cgi/probe").status_code == 404
+    assert client.post("/api/lab/onvif/ptz").status_code == 404
+    assert client.post("/api/lab/diag/probe").status_code == 404

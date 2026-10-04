@@ -1,6 +1,7 @@
 import xml.etree.ElementTree as ET
 
 import camera as camera_module
+import probe as probe_module
 from camera import JooanCamera
 from probe import (
     _extract_capability_services,
@@ -12,6 +13,7 @@ from probe import (
     _extract_stream_uri,
     _safe_rtsp_descriptor,
     _soap_fault,
+    onvif_ptz_discovery,
 )
 
 
@@ -285,3 +287,41 @@ def test_malformed_capability_xaddr_is_ignored():
     services = _extract_capability_services(root)
     assert "media" not in services
     assert services["ptz"]["path"] == "/onvif/Ptz"
+
+
+def test_minimal_onvif_ptz_discovery_uses_only_capabilities_and_profiles(monkeypatch):
+    calls = []
+    capabilities = b"""<s:Envelope xmlns:s="http://www.w3.org/2003/05/soap-envelope"
+      xmlns:tt="http://www.onvif.org/ver10/schema"><s:Body><GetCapabilitiesResponse>
+      <tt:Capabilities>
+        <tt:Media><tt:XAddr>http://127.0.0.1:8899/onvif/Media</tt:XAddr></tt:Media>
+        <tt:PTZ><tt:XAddr>http://127.0.0.1:8899/onvif/Ptz</tt:XAddr></tt:PTZ>
+      </tt:Capabilities></GetCapabilitiesResponse></s:Body></s:Envelope>"""
+    profiles = b"""<s:Envelope xmlns:s="http://www.w3.org/2003/05/soap-envelope"
+      xmlns:trt="http://www.onvif.org/ver10/media/wsdl"
+      xmlns:tt="http://www.onvif.org/ver10/schema"><s:Body><trt:GetProfilesResponse>
+      <trt:Profiles token="profile_0"><tt:Name>Main</tt:Name></trt:Profiles>
+      </trt:GetProfilesResponse></s:Body></s:Envelope>"""
+
+    responses = [
+        {"status": 200, "body": capabilities, "error": None, "authentication_required": False},
+        {"status": 200, "body": profiles, "error": None, "authentication_required": False},
+    ]
+
+    def fake_soap_post(host, port, path, body, *, action=None, timeout=3.0):
+        calls.append((host, port, path, action))
+        return responses[len(calls) - 1]
+
+    monkeypatch.setattr(probe_module, "_soap_post", fake_soap_post)
+
+    result = onvif_ptz_discovery("10.0.0.10", 8899)
+
+    assert result["probe_mode"] == "ptz-minimal"
+    assert result["reachable"] is True
+    assert result["ptz"] == {
+        "path": "/onvif/Ptz",
+        "profile_token": "profile_0",
+    }
+    assert len(calls) == 2
+    assert calls[0][2] == "/onvif/device_service"
+    assert calls[1][2] == "/onvif/Media"

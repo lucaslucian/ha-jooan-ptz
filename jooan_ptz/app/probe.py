@@ -4,6 +4,7 @@ import http.client
 import json
 import logging
 import re
+import re
 import subprocess
 import time
 import xml.etree.ElementTree as ET
@@ -838,6 +839,216 @@ def onvif_probe(host: str, port: int = 8899, timeout: float = 3.0) -> dict[str, 
             result["ptz"] = ptz
 
     return result
+
+
+def onvif_ptz_discovery(
+    host: str,
+    port: int = 8899,
+    timeout: float = 3.0,
+) -> dict[str, Any]:
+    """Discover only the ONVIF pieces required by the production PTZ control.
+
+    The full diagnostic probe is intentionally avoided here. This performs at
+    most GetCapabilities + GetProfiles and does not open RTSP, query presets,
+    enumerate nodes/configurations, or fan out into device diagnostics.
+    """
+    result: dict[str, Any] = {
+        "port": int(port),
+        "reachable": False,
+        "http_detected": False,
+        "path": None,
+        "status": None,
+        "authentication_required": None,
+        "services": {},
+        "profiles": [],
+        "ptz": {},
+        "error": None,
+        "probe_mode": "ptz-minimal",
+    }
+
+    device_request = _soap_envelope(
+        ONVIF_DEVICE,
+        "tds",
+        "<tds:GetCapabilities><tds:Category>All</tds:Category></tds:GetCapabilities>",
+    )
+
+    device_response = None
+    for path in ("/onvif/device_service", "/onvif/Device", "/onvif/device"):
+        response = _soap_post(
+            host,
+            port,
+            path,
+            device_request,
+            action=f"{ONVIF_DEVICE}/GetCapabilities",
+            timeout=timeout,
+        )
+        if response["status"] is None:
+            result["error"] = response["error"]
+            return result
+
+        result.update({
+            "http_detected": True,
+            "path": path,
+            "status": response["status"],
+            "authentication_required": response["authentication_required"],
+            "error": response["error"],
+        })
+        device_response = response
+        result["reachable"] = True
+        if response["status"] in {200, 401}:
+            break
+        if response["status"] != 404:
+            break
+
+    if not device_response or device_response["status"] != 200:
+        return result
+
+    root = _parse_xml(device_response["body"])
+    if root is None:
+        result["error"] = "ONVIF GetCapabilities returned non-XML data"
+        return result
+    fault = _soap_fault(root)
+    if fault:
+        result["error"] = f"ONVIF fault: {fault}"
+        return result
+
+    services = _extract_capability_services(root)
+    result["services"] = services
+    media_path = (services.get("media") or {}).get("path")
+    ptz_path = (services.get("ptz") or {}).get("path")
+
+    if not media_path:
+        result["error"] = "ONVIF media service was not advertised"
+        return result
+
+    profiles_response = _soap_post(
+        host,
+        port,
+        media_path,
+        _soap_envelope(ONVIF_MEDIA, "trt", "<trt:GetProfiles/>"),
+        action=f"{ONVIF_MEDIA}/GetProfiles",
+        timeout=timeout,
+    )
+    result["media_status"] = profiles_response["status"]
+    result["media_authentication_required"] = profiles_response["authentication_required"]
+    if profiles_response["status"] != 200:
+        result["error"] = (
+            profiles_response["error"]
+            or (
+                "ONVIF media authentication required"
+                if profiles_response["status"] == 401
+                else f"ONVIF GetProfiles returned HTTP {profiles_response['status']}"
+            )
+        )
+        return result
+
+    profiles_root = _parse_xml(profiles_response["body"])
+    profiles = _extract_profiles(profiles_root)
+    result["profiles"] = profiles
+
+    token = profiles[0].get("token") if profiles else None
+    if ptz_path and token:
+        result["ptz"] = {
+            "path": ptz_path,
+            "profile_token": token,
+        }
+
+    return result
+
+
+def _onvif_response_summary(response: dict[str, Any]) -> dict[str, Any]:
+    root = _parse_xml(response.get("body") or b"")
+    fault = _soap_fault(root)
+    return {
+        "http": response.get("status"),
+        "authentication_required": response.get("authentication_required"),
+        "accepted": response.get("status") == 200 and fault is None,
+        "fault": fault,
+        "error": response.get("error"),
+    }
+
+
+def onvif_continuous_move(
+    host: str,
+    port: int,
+    onvif_info: dict[str, Any],
+    *,
+    direction: str,
+    speed: float = 0.25,
+    duration_ms: int = 250,
+) -> dict[str, Any]:
+    """Run one bounded ONVIF PTZ pulse using previously discovered service data."""
+    if direction not in {"up", "down", "left", "right"}:
+        raise ValueError("Unsupported ONVIF PTZ direction")
+
+    speed = max(0.1, min(float(speed), 1.0))
+    duration_ms = max(80, min(int(duration_ms), 800))
+    ptz = onvif_info.get("ptz") or {}
+    path = _safe_service_path(
+        ptz.get("path")
+        or ((onvif_info.get("services") or {}).get("ptz") or {}).get("path")
+    )
+    token = str(ptz.get("profile_token") or "").strip()
+    if not path:
+        raise ValueError("ONVIF PTZ service was not discovered")
+    if not re.fullmatch(r"[A-Za-z0-9_.:\-]{1,128}", token):
+        raise ValueError("Invalid ONVIF PTZ profile token")
+
+    vectors = {
+        "up": (0.0, speed),
+        "down": (0.0, -speed),
+        "left": (-speed, 0.0),
+        "right": (speed, 0.0),
+    }
+    x, y = vectors[direction]
+
+    start_payload = (
+        "<tptz:ContinuousMove>"
+        f"<tptz:ProfileToken>{xml_escape(token)}</tptz:ProfileToken>"
+        "<tptz:Velocity>"
+        f'<tt:PanTilt x="{x:.3f}" y="{y:.3f}"/>'
+        "</tptz:Velocity>"
+        "</tptz:ContinuousMove>"
+    )
+    stop_payload = (
+        "<tptz:Stop>"
+        f"<tptz:ProfileToken>{xml_escape(token)}</tptz:ProfileToken>"
+        "<tptz:PanTilt>true</tptz:PanTilt>"
+        "<tptz:Zoom>true</tptz:Zoom>"
+        "</tptz:Stop>"
+    )
+
+    start_response: dict[str, Any] | None = None
+    stop_response: dict[str, Any] | None = None
+    try:
+        start_response = _soap_post(
+            host,
+            port,
+            path,
+            _soap_envelope(ONVIF_PTZ, "tptz", start_payload),
+            action=f"{ONVIF_PTZ}/ContinuousMove",
+            timeout=4.0,
+        )
+        if start_response.get("status") == 200:
+            time.sleep(duration_ms / 1000.0)
+    finally:
+        stop_response = _soap_post(
+            host,
+            port,
+            path,
+            _soap_envelope(ONVIF_PTZ, "tptz", stop_payload),
+            action=f"{ONVIF_PTZ}/Stop",
+            timeout=4.0,
+        )
+
+    return {
+        "operation": "onvif_continuous_move",
+        "direction": direction,
+        "speed": speed,
+        "duration_ms": duration_ms,
+        "start": _onvif_response_summary(start_response or {}),
+        "stop": _onvif_response_summary(stop_response or {}),
+    }
 
 
 def _run(command: list[str], timeout: float) -> subprocess.CompletedProcess[bytes]:

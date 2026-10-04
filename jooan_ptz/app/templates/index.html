@@ -23,24 +23,23 @@
 
     <div id="statusBanner" class="status-banner">Iniciando painel...</div>
 
-    <nav class="tabs" aria-label="Seções do painel">
-      <button class="tab active" data-tab="overview">Visão geral</button>
-      <button class="tab" data-tab="camera">Câmeras & PTZ</button>
-      <button class="tab" data-tab="detection">Detecção</button>
-      <button class="tab" data-tab="recording">Gravação</button>
-      <button class="tab" data-tab="diagnostics">Diagnóstico</button>
-      <button class="tab" data-tab="lab">Laboratório</button>
-    </nav>
+    <section class="dashboard-section" id="section-overview">
+      <div class="section-heading">
+        <div>
+          <span class="section-kicker">VISÃO GERAL</span>
+          <h2>Estado da câmera</h2>
+        </div>
+        <button id="lightTest" class="button secondary">Atualizar informações</button>
+      </div>
 
-    <section id="tab-overview" class="tab-panel active">
       <div id="overviewCards" class="stat-grid"></div>
 
       <div class="content-grid two">
         <article class="card">
           <div class="card-heading">
             <div>
-              <span class="section-kicker">ESTADO ATUAL</span>
-              <h2>Recursos da câmera</h2>
+              <span class="section-kicker">RECURSOS</span>
+              <h2>Estado atual</h2>
             </div>
             <span class="badge neutral">Somente leitura</span>
           </div>
@@ -57,41 +56,39 @@
           <div id="serviceList" class="service-list"></div>
         </article>
       </div>
-
-      <article class="card">
-        <div class="card-heading">
-          <div>
-            <span class="section-kicker">CÂMERAS</span>
-            <h2>Prévia rápida</h2>
-          </div>
-          <button id="overviewRefreshSnapshots" class="button secondary">Atualizar imagens</button>
-        </div>
-        <div id="overviewMedia" class="camera-grid"></div>
-      </article>
     </section>
 
-    <section id="tab-camera" class="tab-panel">
+    <section class="dashboard-section" id="section-control">
+      <div class="section-heading">
+        <div>
+          <span class="section-kicker">CÂMERAS & PTZ</span>
+          <h2>Vídeo e controle</h2>
+        </div>
+        <div class="toolbar compact">
+          <button id="refreshSnapshots" class="button secondary">Atualizar imagens</button>
+          <button id="startLive" class="button primary">Iniciar os dois feeds</button>
+          <button id="stopLive" class="button secondary" disabled>Parar feeds</button>
+        </div>
+      </div>
+
       <div class="control-dashboard">
         <article class="card feeds-card">
           <div class="card-heading">
             <div>
               <span class="section-kicker">VÍDEO LOCAL</span>
-              <h2>Duas lentes ao vivo</h2>
+              <h2>Duas lentes</h2>
             </div>
-            <div class="toolbar compact">
-              <button id="startLive" class="button primary">Iniciar feeds</button>
-              <button id="stopLive" class="button secondary" disabled>Parar feeds</button>
-              <button id="validateSubstreams" class="button ghost">Validar baixa resolução</button>
-            </div>
+            <span class="badge neutral">RTSP sob demanda</span>
           </div>
 
           <div class="dual-feed-grid">
             <article class="feed-tile">
               <div class="feed-stage">
+                <img id="snapshotFeed0" alt="Snapshot da lente 1" hidden>
                 <img id="liveFeed0" alt="Feed ao vivo da lente 1" hidden>
                 <div id="feedEmpty0" class="preview-empty">
                   <strong>Lente 1</strong>
-                  <span>Aguardando feed local.</span>
+                  <span>Atualize a imagem ou inicie o feed.</span>
                 </div>
                 <div class="live-indicator" id="feedLive0" hidden><span></span> AO VIVO</div>
               </div>
@@ -101,16 +98,22 @@
                   <span id="feedBadge0" class="badge neutral">Parado</span>
                 </div>
                 <div id="feedMeta0" class="stream-meta"></div>
-                <p id="feedMessage0" class="helper">O backend prioriza o substream de baixa resolução.</p>
+                <div class="toolbar compact">
+                  <button class="button secondary" data-snapshot-channel="0">Snapshot</button>
+                  <button class="button primary" data-live-channel="0">Ao vivo</button>
+                  <button class="button ghost" data-stop-channel="0" disabled>Parar</button>
+                </div>
+                <p id="feedMessage0" class="helper">Nenhuma sessão RTSP aberta.</p>
               </div>
             </article>
 
             <article class="feed-tile">
               <div class="feed-stage">
+                <img id="snapshotFeed1" alt="Snapshot da lente 2" hidden>
                 <img id="liveFeed1" alt="Feed ao vivo da lente 2" hidden>
                 <div id="feedEmpty1" class="preview-empty">
                   <strong>Lente 2</strong>
-                  <span>Aguardando feed local.</span>
+                  <span>Atualize a imagem ou inicie o feed.</span>
                 </div>
                 <div class="live-indicator" id="feedLive1" hidden><span></span> AO VIVO</div>
               </div>
@@ -120,11 +123,18 @@
                   <span id="feedBadge1" class="badge neutral">Parado</span>
                 </div>
                 <div id="feedMeta1" class="stream-meta"></div>
-                <p id="feedMessage1" class="helper">O backend prioriza o substream de baixa resolução.</p>
+                <div class="toolbar compact">
+                  <button class="button secondary" data-snapshot-channel="1">Snapshot</button>
+                  <button class="button primary" data-live-channel="1">Ao vivo</button>
+                  <button class="button ghost" data-stop-channel="1" disabled>Parar</button>
+                </div>
+                <p id="feedMessage1" class="helper">Nenhuma sessão RTSP aberta.</p>
               </div>
             </article>
           </div>
-          <p id="previewMessage" class="helper">Os feeds usam RTSP autenticado no backend; as credenciais nunca são enviadas ao navegador.</p>
+          <p id="previewMessage" class="helper">
+            Vídeo e snapshots só abrem RTSP quando solicitados. O painel não inicia mídia automaticamente.
+          </p>
         </article>
 
         <article class="card ptz-card">
@@ -136,9 +146,9 @@
             <span id="ptzState" class="badge neutral">Parado</span>
           </div>
           <div class="ptz-mode-row">
-            <span id="ptzTransportBadge" class="badge neutral">Detectando transporte</span>
-            <label class="ptz-speed-label">Velocidade
-              <select id="ptzSpeed" class="lab-select">
+            <span id="ptzTransportBadge" class="badge neutral">CGI PTZ</span>
+            <label class="control-label">Velocidade ONVIF
+              <select id="ptzSpeed" class="control-select">
                 <option value="0.2">1 · lenta</option>
                 <option value="0.4" selected>2 · normal</option>
                 <option value="0.6">3</option>
@@ -147,7 +157,10 @@
               </select>
             </label>
           </div>
-          <p class="helper">ONVIF é preferido para permitir velocidade variável. Se a câmera rejeitar o movimento ONVIF, o painel usa automaticamente o CGI PTZ já validado.</p>
+          <p class="helper">
+            Quando ONVIF tiver sido descoberto manualmente, ele é preferido e usa a velocidade acima.
+            Caso contrário ou em caso de falha, o controle CGI validado é usado automaticamente.
+          </p>
           <div class="ptz-grid">
             <div></div><button class="ptz-button" data-dir="up" aria-label="Cima">↑</button><div></div>
             <button class="ptz-button" data-dir="left" aria-label="Esquerda">←</button>
@@ -169,44 +182,46 @@
           <div id="generalInfo" class="info-list"></div>
         </article>
       </div>
-
-      <article class="card read-settings-card">
-        <div class="card-heading">
-          <div>
-            <span class="section-kicker">ESTADO REPORTADO</span>
-            <h2>Todas as configurações lidas</h2>
-          </div>
-          <span class="badge neutral">Somente leitura</span>
-        </div>
-        <p class="helper">Esta área reúne apenas dados realmente retornados pela câmera via API OEM, CGI, RTSP e ONVIF. Nenhum setter é inferido a partir destes valores.</p>
-        <div id="allReadSettings" class="read-settings-groups"></div>
-      </article>
     </section>
 
-    <section id="tab-detection" class="tab-panel">
-      <article class="card">
-        <div class="card-heading">
-          <div>
-            <span class="section-kicker">ANÁLISE LOCAL</span>
-            <h2>Detecção & rastreamento</h2>
-          </div>
-          <span class="badge neutral">Leitura atual</span>
+    <section class="dashboard-section" id="section-detection">
+      <div class="section-heading">
+        <div>
+          <span class="section-kicker">DETECÇÃO</span>
+          <h2>Detecção, rastreamento e alertas</h2>
         </div>
-        <div id="detectionGrid" class="setting-grid"></div>
-      </article>
+      </div>
+      <div class="content-grid two">
+        <article class="card">
+          <div class="card-heading">
+            <div>
+              <span class="section-kicker">ANÁLISE LOCAL</span>
+              <h2>Detecção & rastreamento</h2>
+            </div>
+          </div>
+          <div id="detectionGrid" class="setting-grid"></div>
+        </article>
 
-      <article class="card">
-        <div class="card-heading">
-          <div>
-            <span class="section-kicker">ILUMINAÇÃO & ALERTAS</span>
-            <h2>Luzes, buzzer e notificações</h2>
+        <article class="card">
+          <div class="card-heading">
+            <div>
+              <span class="section-kicker">ILUMINAÇÃO & ALERTAS</span>
+              <h2>Luzes, buzzer e notificações</h2>
+            </div>
           </div>
-        </div>
-        <div id="lightingGrid" class="setting-grid"></div>
-      </article>
+          <div id="lightingGrid" class="setting-grid"></div>
+        </article>
+      </div>
     </section>
 
-    <section id="tab-recording" class="tab-panel">
+    <section class="dashboard-section" id="section-recording">
+      <div class="section-heading">
+        <div>
+          <span class="section-kicker">GRAVAÇÃO</span>
+          <h2>Armazenamento e agendas</h2>
+        </div>
+      </div>
+
       <div class="content-grid two">
         <article class="card">
           <div class="card-heading">
@@ -221,8 +236,8 @@
         <article class="card">
           <div class="card-heading">
             <div>
-              <span class="section-kicker">GRAVAÇÃO</span>
-              <h2>Estado e agenda</h2>
+              <span class="section-kicker">ESTADO</span>
+              <h2>Gravação local</h2>
             </div>
           </div>
           <div id="recordingCard"></div>
@@ -233,63 +248,29 @@
         <div class="card-heading">
           <div>
             <span class="section-kicker">AGENDAMENTOS</span>
-            <h2>Resumo das agendas reportadas</h2>
+            <h2>Agendas reportadas</h2>
           </div>
         </div>
         <div id="scheduleGrid" class="schedule-grid"></div>
       </article>
     </section>
 
-    <section id="tab-diagnostics" class="tab-panel">
-      <article class="card">
-        <div class="card-heading">
-          <div>
-            <span class="section-kicker">DIAGNÓSTICO LOCAL</span>
-            <h2>Saúde e descoberta</h2>
-          </div>
-          <div class="toolbar compact">
-            <button id="probe" class="button primary">Executar diagnóstico profundo</button>
-            <button id="lightTest" class="button secondary">Validar CGI</button>
-          </div>
+    <section class="dashboard-section" id="section-diagnostics">
+      <div class="section-heading">
+        <div>
+          <span class="section-kicker">DIAGNÓSTICO</span>
+          <h2>Serviços e descoberta manual</h2>
         </div>
+        <div class="toolbar compact">
+          <button id="probe" class="button secondary">Descobrir ONVIF</button>
+          <button id="validateSubstreams" class="button secondary">Testar substreams RTSP</button>
+        </div>
+      </div>
+
+      <article class="card">
         <div id="diagnosticSummary" class="diagnostic-grid"></div>
-      </article>
-
-      <article class="card">
-        <div class="card-heading">
-          <div>
-            <span class="section-kicker">ONVIF</span>
-            <h2>Resumo técnico</h2>
-          </div>
-          <span class="badge neutral">Read-only</span>
-        </div>
-        <div id="onvifSummary"></div>
-      </article>
-
-      <article class="card">
-        <div class="card-heading">
-          <div>
-            <span class="section-kicker">DETALHES TÉCNICOS</span>
-            <h2>Dados brutos</h2>
-          </div>
-        </div>
-        <div id="rawDetails" class="details-stack"></div>
-      </article>
-    </section>
-    <section id="tab-lab" class="tab-panel">
-      <article class="card lab-warning">
-        <div class="card-heading">
-          <div>
-            <span class="section-kicker">EXPERIMENTAL · HARDWARE STOCK</span>
-            <h2>Laboratório de comandos locais</h2>
-          </div>
-          <span class="badge warning">Ações manuais</span>
-        </div>
         <p class="helper">
-          Esta aba concentra caminhos que ainda são úteis na JA-A12 validada e candidatos locais
-          com evidência externa suficiente para teste controlado. Presets, Imaging write e
-          Recording Job/Replay ONVIF foram removidos daqui após retornarem
-          <code>ActionNotSupported</code> ou não exporem jobs utilizáveis. Firmware, reset e Wi-Fi continuam fora de escopo.
+          O teste RTSP é manual porque esta câmera mostrou instabilidade quando várias sessões de mídia são abertas em sequência.
         </p>
       </article>
 
@@ -297,284 +278,43 @@
         <article class="card">
           <div class="card-heading">
             <div>
-              <span class="section-kicker">ONVIF PTZ</span>
-              <h2>ContinuousMove + Stop</h2>
+              <span class="section-kicker">ONVIF</span>
+              <h2>Resumo técnico</h2>
             </div>
-            <span class="badge success">Validado</span>
+            <span class="badge neutral">Sob demanda</span>
           </div>
-          <p class="helper">Movimento curto e limitado. O backend sempre tenta enviar Stop ao final.</p>
-          <div class="lab-controls">
-            <label>Velocidade
-              <select id="labPtzSpeed" class="lab-select">
-                <option value="0.2">1 · 0,2</option>
-                <option value="0.4">2 · 0,4</option>
-                <option value="0.6">3 · 0,6</option>
-                <option value="0.8">4 · 0,8</option>
-                <option value="1">5 · 1,0</option>
-              </select>
-            </label>
-            <label>Duração
-              <select id="labPtzDuration" class="lab-select">
-                <option value="150">150 ms</option>
-                <option value="250" selected>250 ms</option>
-                <option value="500">500 ms</option>
-              </select>
-            </label>
-          </div>
-          <div class="lab-direction-grid">
-            <div></div><button class="button secondary" data-lab-ptz="up">↑ Cima</button><div></div>
-            <button class="button secondary" data-lab-ptz="left">← Esquerda</button>
-            <span class="lab-center">ONVIF</span>
-            <button class="button secondary" data-lab-ptz="right">Direita →</button>
-            <div></div><button class="button secondary" data-lab-ptz="down">↓ Baixo</button><div></div>
-          </div>
+          <div id="onvifSummary"></div>
         </article>
 
         <article class="card">
           <div class="card-heading">
             <div>
-              <span class="section-kicker">AUXILIARY COMMAND</span>
-              <h2>IR Lamp</h2>
+              <span class="section-kicker">DADOS BRUTOS</span>
+              <h2>Leituras técnicas</h2>
             </div>
-            <span class="badge success">Comando aceito</span>
           </div>
-          <p class="helper">
-            Usa apenas <code>tt:Irlamp|On</code> / <code>tt:Irlamp|Off</code> quando anunciados pela própria câmera.
-          </p>
-          <div class="toolbar">
-            <button id="labIrOn" class="button primary">Ligar IR</button>
-            <button id="labIrOff" class="button secondary">Desligar IR</button>
-          </div>
+          <div id="rawDetails" class="details-stack"></div>
         </article>
       </div>
-
-      <article class="card">
-        <div class="card-heading">
-          <div>
-            <span class="section-kicker">ONVIF EVENTS</span>
-            <h2>Eventos locais / futuro HA</h2>
-          </div>
-          <span class="badge success">Validado</span>
-        </div>
-        <p class="helper">
-          PullPoint local confirmado para <code>MotionAlarm</code> e
-          <code>RuleEngine/CellMotionDetector/Motion</code>. O parser separa snapshots
-          <code>Initialized</code>, duplicatas e transições reais.
-        </p>
-        <div class="lab-controls">
-          <label>Janela de escuta
-            <select id="labEventsDuration" class="lab-select">
-              <option value="5">5 s</option>
-              <option value="15">15 s</option>
-              <option value="30">30 s</option>
-            </select>
-          </label>
-        </div>
-        <div class="toolbar">
-          <button id="labEventsDiscover" class="button secondary">Descobrir eventos</button>
-          <button id="labEventsPull" class="button primary">Escutar eventos</button>
-        </div>
-      </article>
-
-      <article class="card">
-        <div class="card-heading">
-          <div>
-            <span class="section-kicker">OEM RECORDING · PORTA 9898</span>
-            <h2>Mapear modos de gravação</h2>
-          </div>
-          <span class="badge success">Em mapeamento</span>
-        </div>
-        <p class="helper">
-          Capture uma linha de base, altere <strong>uma única opção</strong> de gravação no CAM720
-          e compare. Já observamos <code>record_type 1 → 2</code> e
-          <code>recordechannel 1 → 0</code> em uma troca de modo.
-        </p>
-        <div class="toolbar">
-          <button id="labOemRecordingRead" class="button secondary">Ler estado OEM agora</button>
-          <button id="labOemRecordingBaseline" class="button primary">Capturar baseline da gravação</button>
-          <button id="labOemRecordingCompare" class="button primary" disabled>Comparar gravação</button>
-        </div>
-        <div id="labOemRecordingSummary" class="lab-summary">Baseline da gravação ainda não capturada.</div>
-      </article>
-
-      <article class="card">
-        <div class="card-heading">
-          <div>
-            <span class="section-kicker">OEM TOGGLES · PORTA 9898</span>
-            <h2>Mapear recursos para ligar/desligar</h2>
-          </div>
-          <span class="badge success">Novo</span>
-        </div>
-        <p class="helper">
-          Escolha um grupo, capture a linha de base, altere <strong>uma única opção</strong> no CAM720
-          e compare. Além dos campos conhecidos do grupo, o backend calcula fingerprints de outras
-          propriedades OEM não sensíveis; se algo mudar fora da allowlist, o resultado mostra o nome
-          da propriedade sem expor seu valor. Em Motion, mudanças de <code>mdarea</code> também são
-          decodificadas como máscara de 25 bits.
-        </p>
-        <div class="lab-controls">
-          <label>Grupo de recursos
-            <select id="labOemToggleGroup" class="lab-select">
-              <option value="motion">Movimento / sensibilidade</option>
-              <option value="smart_detection">Pessoa / veículo</option>
-              <option value="tracking">Auto tracking / person tracking</option>
-              <option value="lighting">LED / floodlight / luz auxiliar</option>
-              <option value="alerts">Push / áudio / buzzer / sirene</option>
-              <option value="privacy">Privacy / PTZ hide / flip-mirror</option>
-              <option value="system">Sistema / fuso horário / vídeo</option>
-            </select>
-          </label>
-        </div>
-        <div class="toolbar">
-          <button id="labOemToggleRead" class="button secondary">Ler grupo agora</button>
-          <button id="labOemToggleBaseline" class="button primary">Capturar baseline deste grupo</button>
-          <button id="labOemToggleCompare" class="button primary" disabled>Comparar este grupo</button>
-        </div>
-        <div id="labOemToggleSummary" class="lab-summary">Baseline do grupo atual ainda não capturada.</div>
-        <div id="labOemToggleCurrent" class="setting-grid"></div>
-      </article>
-
-      <article class="card">
-        <div class="card-heading">
-          <div>
-            <span class="section-kicker">LEGACY GOAHEAD CGI · PORTA 80</span>
-            <h2>Testar APIs relacionadas encontradas publicamente</h2>
-          </div>
-          <span class="badge warning">Candidatos</span>
-        </div>
-        <p class="helper">
-          Estes endpoints foram encontrados em firmware/web UI relacionado que compartilha
-          <code>/goform/getVideoSettings</code> com câmeras JOOAN. O probe tenta a leitura por
-          POST-query usado pela página GoAhead original e só tenta GET quando o método é rejeitado.
-          O round-trip envia de volta <strong>os mesmos valores acabados de ler</strong> e compara
-          novamente o CGI e o estado OEM da porta 9898. Os setters abaixo são manuais, limitados
-          por allowlist e nunca aceitam caminho ou nome de parâmetro arbitrário.
-        </p>
-        <div class="lab-controls">
-          <label>Superfície
-            <select id="labCgiSurface" class="lab-select">
-              <option value="video">Vídeo / IR / flip / flicker</option>
-              <option value="motion">Movimento / sensibilidade</option>
-            </select>
-          </label>
-        </div>
-        <div class="toolbar">
-          <button id="labCgiProbeAll" class="button primary">Testar leituras encontradas</button>
-          <button id="labCgiProbeSelected" class="button secondary">Ler superfície selecionada</button>
-          <button id="labCgiRoundtrip" class="button secondary">Round-trip sem alteração</button>
-        </div>
-
-        <hr class="lab-divider">
-
-        <div class="lab-controls">
-          <label>Setter candidato
-            <select id="labCgiWriteTarget" class="lab-select">
-              <option value="motion_enable">Motion detect</option>
-              <option value="motion_sensitivity">Sensibilidade motion legada</option>
-              <option value="motion_zonemask">Motion zonemask (todas/nenhuma)</option>
-              <option value="rotation">Rotation / Flip</option>
-              <option value="ir">IR mode</option>
-              <option value="flicker">Flicker / frequência</option>
-              <option value="video_brightness">Brightness</option>
-              <option value="video_contrast">Contrast</option>
-              <option value="video_saturation">Saturation</option>
-              <option value="video_nbrightness">Night brightness</option>
-              <option value="video_ncontrast">Night contrast</option>
-              <option value="video_nsaturation">Night saturation</option>
-              <option value="timezone_legacy">Timezone via /goform/NTP</option>
-            </select>
-          </label>
-          <label>Valor
-            <select id="labCgiWriteValue" class="lab-select"></select>
-          </label>
-          <label>Modo de envio
-            <select id="labCgiWriteMode" class="lab-select">
-              <option value="safe">Seguro · exigir leitura para preservar estado</option>
-              <option value="force">Forçar · enviar só o campo se não houver readback</option>
-            </select>
-          </label>
-        </div>
-        <div class="toolbar">
-          <button id="labCgiWrite" class="button danger">Executar setter candidato</button>
-        </div>
-        <div id="labCgiSummary" class="lab-summary">
-          O modo seguro exige leitura para preservar o estado. O modo forçado permite uma única
-          tentativa com somente o campo allowlisted selecionado quando o readback estiver vazio ou
-          ausente; nesse caso não há rollback automático garantido. O candidato NTP continua separado.
-        </div>
-      </article>
-
-      <article class="card">
-        <div class="card-heading">
-          <div>
-            <span class="section-kicker">OEM WRITE</span>
-            <h2>Escrita OEM experimental</h2>
-          </div>
-          <span class="badge warning">Guardado</span>
-        </div>
-        <p class="helper">
-          Prepara alterações somente para valores que já confirmamos no hardware e verifica as
-          superfícies OEM conhecidas. Enquanto nenhum setter local de configuração estiver
-          comprovado, <strong>nenhum Set* inventado é enviado</strong>. O readback continua vindo
-          de <code>get_deviceFeatures</code> na porta 9898.
-        </p>
-        <div class="lab-controls">
-          <label>Alvo
-            <select id="labOemWriteTarget" class="lab-select">
-              <option value="floodlight">Modo de iluminação (floodlight)</option>
-              <option value="motion_zones">Detecção por zonas (todas/nenhuma)</option>
-              <option value="motion_sensitivity">Sensibilidade de movimento</option>
-              <option value="autotrack">Rastreamento automático</option>
-              <option value="flipmirror">Flip Mirror</option>
-              <option value="timezone">Fuso horário</option>
-            </select>
-          </label>
-          <label>Valor
-            <select id="labOemWriteValue" class="lab-select"></select>
-          </label>
-        </div>
-        <div class="toolbar">
-          <button id="labOemWriteSurface" class="button secondary">Inspecionar superfície OEM</button>
-          <button id="labOemWritePlan" class="button primary">Preparar teste de escrita</button>
-          <button id="labOemWriteExecute" class="button danger" disabled>Executar escrita · setter não confirmado</button>
-        </div>
-        <div id="labOemWriteSummary" class="lab-summary">
-          Nenhum writer de configuração OEM comprovado ainda. Use o probe para validar o que a câmera expõe.
-        </div>
-      </article>
-
-      <article class="card">
-        <div class="card-heading">
-          <div>
-            <span class="section-kicker">SETDIAGMODE</span>
-            <h2>Modo de diagnóstico OEM</h2>
-          </div>
-          <span class="badge danger">Restrito</span>
-        </div>
-        <p class="helper">
-          O teste ativo usa sink TCP dedicado na porta 49000, aceita conexão apenas da câmera,
-          não envia comandos pelo socket e força <strong>SetDiagMode OFF</strong> no final.
-        </p>
-        <div class="toolbar">
-          <button id="labDiagProbe" class="button primary">Testar callback seguro</button>
-          <button id="labDiagDisable" class="button secondary">Forçar SetDiagMode OFF</button>
-        </div>
-      </article>
-
-      <article class="card">
-        <div class="card-heading">
-          <div>
-            <span class="section-kicker">RESULTADO</span>
-            <h2>Última resposta do laboratório</h2>
-          </div>
-          <button id="labClearResult" class="button ghost">Limpar</button>
-        </div>
-        <pre id="labResult" class="lab-result">Nenhum teste executado.</pre>
-      </article>
     </section>
 
+    <section class="dashboard-section" id="section-settings">
+      <div class="section-heading">
+        <div>
+          <span class="section-kicker">ESTADO REPORTADO</span>
+          <h2>Todas as configurações lidas</h2>
+        </div>
+        <span class="badge neutral">Somente leitura</span>
+      </div>
+      <article class="card read-settings-card">
+        <p class="helper">
+          Somente valores realmente retornados pela câmera são exibidos aqui. Nenhum setter de configuração é exposto.
+        </p>
+        <div id="allReadSettings" class="read-settings-groups"></div>
+      </article>
+    </section>
   </main>
 
-  <script src="static/app.js" defer></script>
+  <script src="static/app.js"></script>
 </body>
 </html>

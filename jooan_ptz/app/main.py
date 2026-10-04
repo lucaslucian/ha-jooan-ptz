@@ -11,34 +11,8 @@ from pathlib import Path
 from flask import Flask, Response, jsonify, render_template, request
 
 from camera import JooanAuthError, JooanCamera, redact_secrets
-from lab import (
-    LabError,
-    disable_diag_mode,
-    legacy_cgi_probe,
-    legacy_cgi_roundtrip,
-    legacy_cgi_write_candidate,
-    legacy_ntp_timezone_candidate,
-    oem_recording_snapshot,
-    oem_toggle_snapshot,
-    oem_write_plan,
-    oem_write_surface_probe,
-    onvif_continuous_move,
-    onvif_create_test_preset,
-    onvif_delete_test_preset,
-    onvif_event_discovery,
-    onvif_goto_preset,
-    onvif_imaging_discovery,
-    onvif_imaging_path_probe,
-    onvif_set_imaging,
-    onvif_ir_lamp,
-    onvif_list_presets,
-    onvif_pull_events,
-    onvif_recording_job_discovery,
-    onvif_recording_playback_probe,
-    onvif_recording_pulse,
-    onvif_storage_discovery,
-    safe_diag_mode_callback_probe,
-)
+from probe import onvif_continuous_move, onvif_ptz_discovery
+
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
@@ -246,54 +220,62 @@ def _validate_camera_locked(*, deep: bool = False) -> bool:
             "last_seen": now,
         }
 
+        with _state_lock:
+            previous_services = dict(_state.get("services") or {})
+
+        services = {
+            "http": {
+                "port": camera.http_port,
+                "reachable": True,
+                "source": "authenticated_cgi",
+            },
+            "features": {
+                "port": camera.features_port,
+                "reachable": device_info is not None,
+                "source": "get_deviceFeatures",
+            },
+            "rtsp": {
+                "port": camera.rtsp_port,
+                "reachable": None,
+                "configured": bool((stream_info or {}).get("credentials_confirmed")),
+                "source": "credentials_only",
+            },
+            "onvif": dict(
+                previous_services.get("onvif")
+                or {
+                    "port": camera.onvif_port,
+                    "reachable": None,
+                    "source": "not_probed",
+                }
+            ),
+        }
+
         if deep:
+            # Manual deep diagnostics deliberately stop at ONVIF discovery.
+            # Do not fan out into ffprobe sessions here: repeated RTSP probes
+            # have been observed to coincide with camera instability.
             try:
                 values["onvif_info"] = camera.probe_onvif()
             except Exception as exc:
                 _LOGGER.warning("Could not probe ONVIF: %s", redact_secrets(exc))
                 values["onvif_info"] = {"reachable": False, "error": redact_secrets(exc)}
+
             ptz_channel, ptz_source = _infer_ptz_channel(values.get("onvif_info"))
             if ptz_channel is not None:
                 values["ptz_channel"] = ptz_channel
                 values["ptz_channel_source"] = ptz_source
+
             values["ptz_onvif_available"] = bool(
                 ((values.get("onvif_info") or {}).get("ptz") or {}).get("profile_token")
             )
-
-            try:
-                values["media_probe"] = camera.probe_rtsp_streams(
-                    values.get("onvif_info"),
-                    channel_count=channels,
-                )
-            except Exception as exc:
-                _LOGGER.warning("Could not probe RTSP streams: %s", redact_secrets(exc))
-                values["media_probe"] = {"reachable": False, "streams": [], "error": redact_secrets(exc)}
-
-            # Derive service health only from real protocol operations. Never
-            # open a socket merely to see whether a port accepts connections.
-            values["services"] = {
-                "http": {
-                    "port": camera.http_port,
-                    "reachable": True,
-                    "source": "authenticated_cgi",
-                },
-                "features": {
-                    "port": camera.features_port,
-                    "reachable": device_info is not None,
-                    "source": "get_deviceFeatures",
-                },
-                "rtsp": {
-                    "port": camera.rtsp_port,
-                    "reachable": bool((values.get("media_probe") or {}).get("reachable")),
-                    "source": "ffprobe",
-                },
-                "onvif": {
-                    "port": camera.onvif_port,
-                    "reachable": bool((values.get("onvif_info") or {}).get("reachable")),
-                    "source": "soap",
-                },
+            services["onvif"] = {
+                "port": camera.onvif_port,
+                "reachable": bool((values.get("onvif_info") or {}).get("reachable")),
+                "source": "soap",
             }
             values["last_deep_probe"] = time.time()
+
+        values["services"] = services
 
         values["initial_scan_complete"] = True
         update_state(**values)
@@ -369,10 +351,12 @@ def heartbeat_camera() -> bool:
 
 
 def validation_loop() -> None:
-    # Full discovery is intentionally performed only once at startup.
+    # Keep startup intentionally light. This camera is sensitive to bursts of
+    # HTTP/ONVIF/RTSP work; startup only reads the already proven CGI/OEM state.
+    # ONVIF discovery and RTSP validation are manual actions from the dashboard.
     update_state(probe_running=True, probe_started_at=time.time())
     try:
-        validate_camera(deep=True)
+        validate_camera(deep=False)
     finally:
         update_state(probe_running=False)
     while True:
@@ -503,7 +487,8 @@ def ptz(direction: str):
         ):
             try:
                 onvif_result = onvif_continuous_move(
-                    camera,
+                    camera.ip,
+                    camera.onvif_port,
                     onvif_info,
                     direction=direction,
                     speed=speed,
@@ -580,293 +565,6 @@ def test():
         return jsonify({"ok": _validate_camera_locked(deep=False)})
     finally:
         _camera_io_lock.release()
-
-
-def _lab_context() -> tuple[JooanCamera, dict]:
-    with _state_lock:
-        if not _state.get("online") or not _state.get("authenticated"):
-            raise LabError("Camera is not ready")
-        if _state.get("probe_running") or _state.get("preview_probe_running"):
-            raise LabError("Camera diagnostics are running")
-        if _state.get("preview_active"):
-            raise LabError("Stop live preview before running laboratory actions")
-        if _state.get("ptz_moving"):
-            raise LabError("Stop CGI PTZ movement before running laboratory actions")
-        onvif_info = dict(_state.get("onvif_info") or {})
-    return get_camera(), onvif_info
-
-
-def _lab_execute(callback):
-    try:
-        camera, onvif_info = _lab_context()
-    except LabError as exc:
-        return jsonify({"error": str(exc)}), 409
-
-    if not _camera_io_lock.acquire(blocking=False):
-        return jsonify({"error": "Camera is busy"}), 409
-    try:
-        return jsonify(callback(camera, onvif_info))
-    except LabError as exc:
-        return jsonify({"error": str(exc)}), 400
-    except JooanAuthError as exc:
-        safe_error = redact_secrets(exc)
-        update_state(authenticated=False, last_error=safe_error)
-        return jsonify({"error": safe_error}), 401
-    except Exception as exc:
-        safe_error = redact_secrets(exc)
-        _LOGGER.warning("Laboratory action failed: %s", safe_error)
-        return jsonify({"error": safe_error}), 502
-    finally:
-        _camera_io_lock.release()
-
-
-@app.post("/api/lab/onvif/ptz")
-def lab_onvif_ptz():
-    payload = request.get_json(silent=True) or {}
-    direction = str(payload.get("direction") or "")
-    try:
-        speed = float(payload.get("speed", 0.25))
-        duration_ms = int(payload.get("duration_ms", 250))
-    except (TypeError, ValueError):
-        return jsonify({"error": "Invalid PTZ speed/duration"}), 400
-
-    return _lab_execute(
-        lambda camera, onvif_info: onvif_continuous_move(
-            camera,
-            onvif_info,
-            direction=direction,
-            speed=speed,
-            duration_ms=duration_ms,
-        )
-    )
-
-
-@app.post("/api/lab/onvif/ir")
-def lab_onvif_ir():
-    payload = request.get_json(silent=True) or {}
-    enabled = payload.get("enabled")
-    if not isinstance(enabled, bool):
-        return jsonify({"error": "enabled must be boolean"}), 400
-    return _lab_execute(
-        lambda camera, onvif_info: onvif_ir_lamp(
-            camera,
-            onvif_info,
-            enabled=enabled,
-        )
-    )
-
-
-@app.get("/api/lab/onvif/presets")
-def lab_onvif_presets_list():
-    return _lab_execute(onvif_list_presets)
-
-
-@app.post("/api/lab/onvif/presets")
-def lab_onvif_presets_action():
-    payload = request.get_json(silent=True) or {}
-    action = str(payload.get("action") or "")
-    token = str(payload.get("token") or "")
-
-    if action == "create":
-        return _lab_execute(onvif_create_test_preset)
-    if action == "goto":
-        return _lab_execute(
-            lambda camera, onvif_info: onvif_goto_preset(
-                camera,
-                onvif_info,
-                token=token,
-            )
-        )
-    if action == "delete":
-        return _lab_execute(
-            lambda camera, onvif_info: onvif_delete_test_preset(
-                camera,
-                onvif_info,
-                token=token,
-            )
-        )
-    return jsonify({"error": "Unsupported preset laboratory action"}), 400
-
-
-@app.post("/api/lab/onvif/imaging")
-def lab_onvif_imaging():
-    payload = request.get_json(silent=True) or {}
-    action = str(payload.get("action") or "discover")
-    if action == "discover":
-        return _lab_execute(onvif_imaging_discovery)
-    if action == "path_probe":
-        return _lab_execute(onvif_imaging_path_probe)
-    if action == "set":
-        setting = str(payload.get("setting") or "")
-        value = payload.get("value")
-        return _lab_execute(
-            lambda camera, onvif_info: onvif_set_imaging(
-                camera,
-                onvif_info,
-                setting=setting,
-                value=value,
-            )
-        )
-    return jsonify({"error": "Unsupported ONVIF imaging laboratory action"}), 400
-
-
-@app.post("/api/lab/onvif/events")
-def lab_onvif_events():
-    payload = request.get_json(silent=True) or {}
-    action = str(payload.get("action") or "discover")
-    if action == "discover":
-        return _lab_execute(onvif_event_discovery)
-    if action == "pull":
-        try:
-            seconds = int(payload.get("seconds", 5))
-        except (TypeError, ValueError):
-            return jsonify({"error": "Invalid event listen duration"}), 400
-        return _lab_execute(
-            lambda camera, onvif_info: onvif_pull_events(
-                camera,
-                onvif_info,
-                listen_seconds=seconds,
-            )
-        )
-    return jsonify({"error": "Unsupported ONVIF event laboratory action"}), 400
-
-
-@app.post("/api/lab/oem/recording")
-def lab_oem_recording():
-    return _lab_execute(lambda camera, _onvif_info: oem_recording_snapshot(camera))
-
-
-@app.post("/api/lab/oem/toggles")
-def lab_oem_toggles():
-    payload = request.get_json(silent=True) or {}
-    group = str(payload.get("group") or "")
-    return _lab_execute(
-        lambda camera, _onvif_info: oem_toggle_snapshot(camera, group=group)
-    )
-
-
-@app.post("/api/lab/cgi/probe")
-def lab_legacy_cgi_probe():
-    payload = request.get_json(silent=True) or {}
-    surface = str(payload.get("surface") or "all")
-    return _lab_execute(
-        lambda camera, _onvif_info: legacy_cgi_probe(camera, surface=surface)
-    )
-
-
-@app.post("/api/lab/cgi/roundtrip")
-def lab_legacy_cgi_roundtrip():
-    payload = request.get_json(silent=True) or {}
-    surface = str(payload.get("surface") or "")
-    return _lab_execute(
-        lambda camera, _onvif_info: legacy_cgi_roundtrip(
-            camera,
-            surface=surface,
-        )
-    )
-
-
-@app.post("/api/lab/cgi/write")
-def lab_legacy_cgi_write():
-    payload = request.get_json(silent=True) or {}
-    target = str(payload.get("target") or "")
-    value = payload.get("value")
-    force_without_readback = payload.get("force_without_readback") is True
-    return _lab_execute(
-        lambda camera, _onvif_info: legacy_cgi_write_candidate(
-            camera,
-            target=target,
-            value=value,
-            force_without_readback=force_without_readback,
-        )
-    )
-
-
-@app.post("/api/lab/cgi/ntp-timezone")
-def lab_legacy_ntp_timezone():
-    payload = request.get_json(silent=True) or {}
-    timezone = str(payload.get("timezone") or "")
-    return _lab_execute(
-        lambda camera, _onvif_info: legacy_ntp_timezone_candidate(
-            camera,
-            timezone=timezone,
-        )
-    )
-
-
-@app.post("/api/lab/oem/write-surface")
-def lab_oem_write_surface():
-    return _lab_execute(
-        lambda camera, _onvif_info: oem_write_surface_probe(camera)
-    )
-
-
-@app.post("/api/lab/oem/write-plan")
-def lab_oem_write_plan():
-    payload = request.get_json(silent=True) or {}
-    target = str(payload.get("target") or "")
-    value = payload.get("value")
-    return _lab_execute(
-        lambda camera, _onvif_info: oem_write_plan(
-            camera,
-            target=target,
-            value=value,
-        )
-    )
-
-
-@app.post("/api/lab/onvif/storage")
-def lab_onvif_storage():
-    payload = request.get_json(silent=True) or {}
-    action = str(payload.get("action") or "discover")
-    if action == "discover":
-        return _lab_execute(onvif_storage_discovery)
-    if action == "playback_probe":
-        token = payload.get("recording_token")
-        return _lab_execute(
-            lambda camera, onvif_info: onvif_recording_playback_probe(
-                camera,
-                onvif_info,
-                recording_token=str(token) if token else None,
-            )
-        )
-    if action == "jobs":
-        return _lab_execute(onvif_recording_job_discovery)
-    if action == "record_pulse":
-        try:
-            seconds = int(payload.get("seconds", 5))
-        except (TypeError, ValueError):
-            return jsonify({"error": "Invalid recording pulse duration"}), 400
-        return _lab_execute(
-            lambda camera, onvif_info: onvif_recording_pulse(
-                camera,
-                onvif_info,
-                seconds=seconds,
-            )
-        )
-    return jsonify({"error": "Unsupported ONVIF storage laboratory action"}), 400
-
-
-@app.post("/api/lab/diag/disable")
-def lab_diag_disable():
-    return _lab_execute(lambda camera, _onvif_info: disable_diag_mode(camera))
-
-
-@app.post("/api/lab/diag/probe")
-def lab_diag_probe():
-    config = load_config()
-    callback_ip = str(config.get("diag_callback_ip") or "").strip()
-    if not callback_ip:
-        return jsonify({
-            "error": "Configure diag_callback_ip with the Home Assistant LAN IP before the safe callback test"
-        }), 400
-    return _lab_execute(
-        lambda camera, _onvif_info: safe_diag_mode_callback_probe(
-            camera,
-            callback_ip=callback_ip,
-            callback_port=49000,
-        )
-    )
 
 
 def _video_stream_available(item: dict | None) -> bool:
@@ -1192,7 +890,45 @@ def live_preview(channel: int):
 
 def _manual_probe_worker() -> None:
     try:
-        validate_camera(deep=True)
+        if not _camera_io_lock.acquire(blocking=False):
+            update_state(last_error="Camera is busy")
+            return
+        try:
+            camera = get_camera()
+            onvif_info = onvif_ptz_discovery(
+                camera.ip,
+                camera.onvif_port,
+            )
+            ptz_channel, ptz_source = _infer_ptz_channel(onvif_info)
+            with _state_lock:
+                services = dict(_state.get("services") or {})
+            services["onvif"] = {
+                "port": camera.onvif_port,
+                "reachable": bool(onvif_info.get("reachable")),
+                "source": "soap_ptz_minimal",
+            }
+            values = {
+                "onvif_info": onvif_info,
+                "ptz_onvif_available": bool(
+                    ((onvif_info.get("ptz") or {}).get("profile_token"))
+                ),
+                "services": services,
+                "last_deep_probe": time.time(),
+            }
+            if ptz_channel is not None:
+                values["ptz_channel"] = ptz_channel
+                values["ptz_channel_source"] = ptz_source
+            update_state(**values)
+        finally:
+            _camera_io_lock.release()
+    except Exception as exc:
+        safe_error = redact_secrets(exc)
+        _LOGGER.warning("ONVIF PTZ discovery failed: %s", safe_error)
+        update_state(
+            onvif_info={"reachable": False, "error": safe_error, "probe_mode": "ptz-minimal"},
+            ptz_onvif_available=False,
+            last_error=safe_error,
+        )
     finally:
         update_state(probe_running=False)
 
@@ -1211,8 +947,8 @@ def deep_probe():
                 "error": "Stop live preview/preview validation before deep diagnostics",
             }), 409
 
-    # Never keep a Gunicorn request open for a complete ONVIF + RTSP scan.
-    # Start one background probe and let /api/status report progress.
+    # Run only the minimal ONVIF discovery needed for PTZ in a background
+    # worker. RTSP probing is a separate explicit action.
     with _probe_start_lock:
         with _state_lock:
             if _state.get("probe_running"):
