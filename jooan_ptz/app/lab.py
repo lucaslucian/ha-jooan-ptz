@@ -305,12 +305,13 @@ def _legacy_response_summary(response, allowed_fields: tuple[str, ...]) -> dict[
     safe_fields = tuple(dict.fromkeys((*allowed_fields, "result")))
     fields = _legacy_parse_fields(response.text, safe_fields)
     content_type = str(response.headers.get("Content-Type") or "").split(";", 1)[0].strip()
+    recognized_fields = sum(1 for key in allowed_fields if key in fields)
     return {
         "http_status": int(response.status_code),
         "accepted": 200 <= int(response.status_code) < 300,
         "content_type": content_type or None,
         "body_bytes": len(response.content or b""),
-        "recognized_fields": len(fields),
+        "recognized_fields": recognized_fields,
         "fields": fields,
     }
 
