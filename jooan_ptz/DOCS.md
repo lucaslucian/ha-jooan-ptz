@@ -42,7 +42,8 @@ Durante uma movimentação PTZ:
 1. o comando PTZ é enviado primeiro;
 2. a lente PTZ é atualizada por snapshots com intervalo mínimo de 1 segundo;
 3. as capturas são sequenciais e nunca se sobrepõem;
-4. ao soltar o comando, o App envia `stop` e tenta capturar mais um frame mostrando a posição final.
+4. a captura de imagem não segura o lock de controle PTZ, então um FFmpeg lento não pode atrasar o comando `stop`;
+5. ao soltar o comando, o App envia `stop` e tenta capturar mais um frame mostrando a posição final.
 
 Se a câmera demorar mais de um segundo para gerar uma imagem, a taxa real fica abaixo de 1 FPS; o App nunca abre várias capturas em paralelo.
 
