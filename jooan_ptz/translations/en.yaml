@@ -19,7 +19,7 @@ configuration:
     description: Local RTSP media port. Usually 554.
   onvif_port:
     name: ONVIF candidate port
-    description: Port used for the read-only ONVIF capability probe. JA-A12 research suggests 8899.
+    description: Local ONVIF port. The reference JA-A12 was validated on 8899; other revisions may differ.
   diag_callback_ip:
     name: Home Assistant LAN IP for diagnostics
     description: Home Assistant host LAN IP on the same /24 as the camera, used only by the guarded SetDiagMode callback test. The browser cannot choose the destination or port.

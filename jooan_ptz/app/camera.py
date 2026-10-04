@@ -365,6 +365,100 @@ class JooanCamera:
             ) from exc
         return response
 
+    def _post_query(
+        self,
+        endpoint: str,
+        params=None,
+        *,
+        body: str = "n/a",
+        authenticated: bool = True,
+        port: int | None = None,
+    ):
+        """POST to a fixed endpoint with parameters in the query string.
+
+        Some related GoAhead camera pages issue their read requests this way.
+        This helper exists only for fixed backend calls; it is not exposed as
+        an arbitrary URL/method proxy.
+        """
+        query = {}
+        if authenticated:
+            query.update({"userid": self.username, "userkey": self.userkey})
+        if params:
+            query.update(params)
+
+        base = self.base_url if port is None else f"http://{self._url_host}:{port}"
+        url = urljoin(base + "/", endpoint.lstrip("/"))
+        prepared = requests.Request("POST", url, params=query, data=body).prepare()
+        self._debug_log("REQUEST: POST %s", self._safe_url(prepared.url or url))
+
+        try:
+            with requests.Session() as session:
+                session.trust_env = False
+                response = session.post(
+                    url,
+                    params=query,
+                    data=body,
+                    timeout=self.timeout,
+                    headers={"Connection": "close"},
+                )
+                _ = response.content
+        except requests.RequestException as exc:
+            raise JooanNetworkError(
+                f"Request to {endpoint} failed: {redact_secrets(exc)}"
+            ) from None
+
+        self._debug_log("RESPONSE: HTTP %s %s", response.status_code, endpoint)
+        try:
+            response.raise_for_status()
+        except requests.HTTPError as exc:
+            raise JooanNetworkError(
+                f"Camera returned HTTP {response.status_code} for {endpoint}"
+            ) from exc
+        return response
+
+    def _post_form(
+        self,
+        endpoint: str,
+        data=None,
+        *,
+        authenticated: bool = True,
+        port: int | None = None,
+    ):
+        """POST a fixed form endpoint while keeping camera credentials backend-only."""
+        query = {}
+        if authenticated:
+            query.update({"userid": self.username, "userkey": self.userkey})
+
+        base = self.base_url if port is None else f"http://{self._url_host}:{port}"
+        url = urljoin(base + "/", endpoint.lstrip("/"))
+        prepared = requests.Request("POST", url, params=query, data=data or {}).prepare()
+        self._debug_log("REQUEST: POST %s", self._safe_url(prepared.url or url))
+
+        try:
+            with requests.Session() as session:
+                session.trust_env = False
+                response = session.post(
+                    url,
+                    params=query,
+                    data=data or {},
+                    timeout=self.timeout,
+                    headers={"Connection": "close"},
+                )
+                _ = response.content
+        except requests.RequestException as exc:
+            raise JooanNetworkError(
+                f"Request to {endpoint} failed: {redact_secrets(exc)}"
+            ) from None
+
+        self._debug_log("RESPONSE: HTTP %s %s", response.status_code, endpoint)
+        try:
+            response.raise_for_status()
+        except requests.HTTPError as exc:
+            raise JooanNetworkError(
+                f"Camera returned HTTP {response.status_code} for {endpoint}"
+            ) from exc
+        return response
+
     @staticmethod
     def _parse_camera_response(text: str) -> dict:
         raw = text.strip()

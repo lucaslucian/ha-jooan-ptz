@@ -103,6 +103,49 @@ stop
 
 O backend usa allowlist fixa. O frontend nunca controla livremente o valor de `singleCMD`.
 
+### Candidatos GoAhead encontrados em firmware relacionado
+
+**CORROBORADO-EXTERNO / LABORATÓRIO v0.16.**
+
+Código público de uma interface GoAhead de câmera IP expõe um par leitura/escrita que coincide com um endpoint já observado em câmeras JOOAN:
+
+```text
+GET ou POST-query /goform/getVideoSettings
+GET               /goform/updateVideoSettings
+```
+
+Na interface encontrada, `updateVideoSettings` recebe campos como:
+
+```text
+rotation = NORMAL | VFLIP | MIRROR | MIRROR-VFLIP
+ir       = AUTO | ON | OFF
+flicker  = 50HZ | 60HZ
+brightness / contrast / saturation = 0..100
+nbrightness / ncontrast / nsaturation = 0..100
+resolution / resolution2 / codec / quality / quality2 / fps
+```
+
+A mesma base expõe motion detection como:
+
+```text
+GET ou POST-query /goform/getmotiondetectSettings?motionEnable=&sensitivity=
+GET               /goform/updatemotiondetectSettings
+motionEnable = YES | NO
+sensitivity  = 0..5
+zonemask     = campo presente em código relacionado, embora comentado na UI analisada
+```
+
+Também foi encontrado:
+
+```text
+POST /goform/NTP
+time_zone = valores legados como EBS_-03, AST_-04, PST_-08 ...
+```
+
+Esses writers **não são considerados confirmados na JA-A12** apenas pela semelhança. A v0.16 testa a leitura por GET e, se nenhum campo de configuração for reconhecido, repete pelo formato POST-query (`body=n/a`) usado pela página GoAhead original. Depois permite um round-trip no-op que reaplica os valores recém-lidos e compara novamente o CGI e a porta 9898. Escritas candidatas são manuais e usam somente caminhos, nomes de parâmetros e enums allowlisted.
+
+O candidato `/goform/NTP` é tratado separadamente: a fonte pública usa ASP interno para leitura e não oferece um CGI de leitura equivalente. O laboratório envia somente `time_zone` e nunca envia servidor NTP ou intervalo de sincronização.
+
 ## Porta 9898 — `get_deviceFeatures`
 
 ### Endpoint
@@ -226,7 +269,24 @@ Sem escrever nada na câmera já podemos ler:
 - frequência elétrica;
 - várias agendas de gravação, luz, alarme e privacidade.
 
-Nesta fase esses itens são **read-only**.
+Na interface normal esses itens permanecem **read-only**. O Laboratório pode executar writers candidatos específicos e sempre os trata como experimentais até haver validação por readback.
+
+### Mapeamentos confirmados na JA-A12 de referência
+
+Os testes controlados já fecharam os seguintes pares de valor:
+
+| Propriedade | Valores observados | Interpretação |
+|---|---|---|
+| `autotrack` | `0 / 1` | rastreamento automático desligado / ligado |
+| `flipmirror` | `0 / 3` | opção Flip Mirror do CAM720 desligada / ligada |
+| `floodlight` | `0 / 1 / 2 / 3` | infravermelho normal / modo LED branco / luz inteligente por detecção / infravermelho desligado |
+| `mdsensitivity`, `sub_mdsensitivity` | `1 / 2 / 3` | baixa / média / alta |
+| `mdarea`, `sub_mdarea` | máscara de 25 bits | `33554431 = 0x1ffffff` representa as 25 zonas ativas |
+| `timezone` | `GMT±HH:MM` | formato OEM observado diretamente |
+
+Nos testes de zona, as duas máscaras sempre mudaram juntas. O teste isolado do canto superior esquerdo produziu `33554431 → 33554430`, limpando o bit 0; o canto superior direito isolado correspondeu ao bit 4. Somado aos testes anteriores dos cantos opostos, isso é consistente com uma grade 5×5 em ordem de linha, bits 0..24.
+
+A estratégia proposta para um futuro switch de detecção continua sendo explícita: usar todas as zonas (`0x1ffffff`) para habilitar e nenhuma zona (`0`) para desabilitar apenas se o writer correspondente for validado. Um `motionEnable` nativo, se confirmado pelo CGI legado, será preferível.
 
 ## RTSP local
 
@@ -562,3 +622,15 @@ A auditoria posterior aos testes de hardware introduziu proteções adicionais p
 - RtspConf possui cache curto em memória para evitar uma consulta HTTP a cada snapshot;
 - o último snapshot válido tem TTL limitado, impedindo que uma imagem antiga seja servida indefinidamente;
 - erros de subprocessos RTSP recebem sanitização adicional para impedir vazamento de credenciais.
+
+
+## Referências públicas
+
+As referências abaixo servem para corroborar superfícies e arquitetura. Elas não transformam um endpoint em **CONFIRMADO-STOCK** até que a JA-A12 de referência o valide diretamente.
+
+- `peak3d/jooan-updater` — uso stock de `GetJsonConf` em câmera JOOAN;
+- `woofilian/sharedmemmory` — páginas GoAhead `camera.asp`, `Motion_detect.asp` e `adm/management.asp` que documentam os pares `get/updateVideoSettings`, `get/updatemotiondetectSettings` e o formulário `POST /goform/NTP`;
+- `ADCDS/jooan-w3u-local-firmware` — engenharia reversa de revisão W3-U/JA-A12 e comportamento local do `jooanipc`;
+- pesquisa pública de engenharia reversa do CAM720/JA-A12 — usada apenas para entender superfícies locais e `SetDiagMode`; o projeto não implementa execução de shell de diagnóstico.
+
+Sempre prevalece a evidência coletada na unidade stock usada pelo projeto.

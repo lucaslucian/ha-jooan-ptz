@@ -271,3 +271,105 @@ def test_preview_substream_probe_can_target_only_ptz_channel(monkeypatch):
     assert result["tested_channels"] == [0]
     assert [item["path"] for item in result["streams"]] == ["/live/ch00_1"]
     assert len(calls) == 1
+
+def test_post_form_uses_direct_session_and_keeps_credentials_out_of_form(monkeypatch):
+    camera = JooanCamera("10.0.0.10", "admin", "secret")
+    captured = {}
+
+    class FakeResponse:
+        status_code = 200
+        content = b"result:success"
+        text = "result:success"
+        headers = {"Content-Type": "text/plain"}
+
+        def raise_for_status(self):
+            return None
+
+    class FakeSession:
+        def __init__(self):
+            self.trust_env = True
+
+        def __enter__(self):
+            captured["session"] = self
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def post(self, url, *, params, data, timeout, headers):
+            captured.update({
+                "url": url,
+                "params": dict(params),
+                "data": dict(data),
+                "timeout": timeout,
+                "headers": dict(headers),
+                "trust_env_at_post": self.trust_env,
+            })
+            return FakeResponse()
+
+    monkeypatch.setattr(camera_module.requests, "Session", FakeSession)
+
+    response = camera._post_form(
+        "/goform/NTP",
+        {"time_zone": "AST_-04"},
+        authenticated=True,
+    )
+
+    assert response.status_code == 200
+    assert captured["url"] == "http://10.0.0.10:80/goform/NTP"
+    assert captured["params"]["userid"] == "admin"
+    assert "userkey" in captured["params"]
+    assert captured["data"] == {"time_zone": "AST_-04"}
+    assert "userid" not in captured["data"]
+    assert "userkey" not in captured["data"]
+    assert captured["trust_env_at_post"] is False
+    assert captured["headers"]["Connection"] == "close"
+
+def test_post_query_keeps_fields_in_query_and_uses_fixed_body(monkeypatch):
+    camera = JooanCamera("10.0.0.10", "admin", "secret")
+    captured = {}
+
+    class FakeResponse:
+        status_code = 200
+        content = b"motionEnable:YES"
+        text = "motionEnable:YES"
+        headers = {"Content-Type": "text/plain"}
+
+        def raise_for_status(self):
+            return None
+
+    class FakeSession:
+        def __init__(self):
+            self.trust_env = True
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def post(self, url, *, params, data, timeout, headers):
+            captured.update({
+                "url": url,
+                "params": dict(params),
+                "data": data,
+                "trust_env_at_post": self.trust_env,
+            })
+            return FakeResponse()
+
+    monkeypatch.setattr(camera_module.requests, "Session", FakeSession)
+
+    response = camera._post_query(
+        "/goform/getmotiondetectSettings",
+        {"motionEnable": "", "sensitivity": ""},
+        body="n/a",
+    )
+
+    assert response.status_code == 200
+    assert captured["url"] == "http://10.0.0.10:80/goform/getmotiondetectSettings"
+    assert captured["params"]["userid"] == "admin"
+    assert captured["params"]["motionEnable"] == ""
+    assert captured["params"]["sensitivity"] == ""
+    assert captured["data"] == "n/a"
+    assert captured["trust_env_at_post"] is False
+

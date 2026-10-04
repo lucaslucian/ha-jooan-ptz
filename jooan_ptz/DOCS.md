@@ -35,7 +35,7 @@ Para o primeiro teste, `debug: true` pode ajudar. Desative depois de concluir o 
 
 ## O que aparece no painel
 
-A interface v0.7 organiza os dados e testes em seis áreas:
+A interface v0.16 organiza os dados e testes em seis áreas:
 
 - **Visão geral** — saúde, dispositivo, armazenamento, serviços e estados principais;
 - **Câmeras & PTZ** — preview ao vivo, snapshots, seleção de lente e PTZ;
@@ -83,7 +83,7 @@ Quando disponíveis, são mostrados dados de:
 - privacy/PTZ hide;
 - schedules reportados pelo firmware.
 
-Esses recursos permanecem **somente leitura** até termos um comando LAN de escrita validado.
+Na interface normal esses recursos permanecem **somente leitura**. Escritas candidatas ficam isoladas na aba Laboratório, sempre manuais, allowlisted e acompanhadas de readback.
 
 ### Laboratório de escrita OEM
 
@@ -104,7 +104,39 @@ Os planos atuais conhecem estes valores observados:
 - `flipmirror`: 0/3;
 - `timezone`: formato `GMT±HH:MM`.
 
-O botão de execução só deve ser liberado depois que o protocolo real de escrita do firmware for identificado. `SetDiagMode` não é usado como shell para contornar essa restrição.
+O botão genérico de escrita OEM continua bloqueado. A v0.16 adiciona, em uma seção separada, candidatos CGI específicos encontrados em código público relacionado; eles não transformam o laboratório em um proxy genérico. `SetDiagMode` não é usado como shell para contornar essa restrição.
+
+### Candidatos GoAhead CGI
+
+A v0.16 acrescenta uma trilha experimental baseada em endpoints encontrados em interfaces GoAhead relacionadas e corroborados pela presença de `/goform/getVideoSettings` em câmeras JOOAN.
+
+Leituras allowlisted:
+
+```text
+GET ou POST-query /goform/getVideoSettings
+GET ou POST-query /goform/getmotiondetectSettings
+```
+
+Se GET responder sem nenhum campo conhecido, o laboratório tenta o formato da página GoAhead original: POST para o mesmo caminho, parâmetros na query e corpo fixo `n/a`.
+
+Writers candidatos correspondentes:
+
+```text
+GET  /goform/updateVideoSettings
+GET  /goform/updatemotiondetectSettings
+POST /goform/NTP
+```
+
+O fluxo recomendado é:
+
+1. **Testar leituras encontradas**;
+2. executar um **round-trip sem alteração**, que reaplica somente os valores recém-lidos;
+3. verificar o readback do CGI e da porta 9898;
+4. somente então testar um setter candidato específico.
+
+Os alvos de escrita expostos são fixos: motion on/off, zonemask todas/nenhuma, sensibilidade legada 0..5, rotation, IR, flicker, brilho/contraste/saturação diurno/noturno 0..100 e o conjunto fechado de timezones legado. Para Motion/Video, o campo-alvo precisa ter aparecido primeiro na própria leitura da câmera. Caminho CGI e nome de parâmetro nunca vêm livres do navegador.
+
+O candidato `/goform/NTP` fica separado porque a fonte pública não oferece um CGI de leitura equivalente. O App envia somente `time_zone`; não envia servidor NTP nem intervalo de sincronização.
 
 ### RTSP
 
@@ -163,11 +195,11 @@ A v0.4 amplia a descoberta somente leitura para:
 - `GetStatus` PTZ;
 - `GetPresets`.
 
-Nenhuma dessas operações altera a câmera. PTZ de escrita continua usando apenas o CGI já validado; presets ainda não são criados, removidos ou chamados via ONVIF.
+Nenhuma dessas operações de descoberta altera a câmera. Na operação normal, o PTZ continua usando o CGI já validado; a aba Laboratório também oferece ContinuousMove/Stop ONVIF de curta duração, já validado na unidade de referência. Presets continuam fora do fluxo normal porque o firmware não os expõe de forma utilizável.
 
 ## Laboratório experimental
 
-A v0.13 mantém a operação normal separada dos testes manuais e remove da interface caminhos que já foram encerrados na JA-A12 validada.
+A v0.16 mantém a operação normal separada dos testes manuais e remove da interface caminhos que já foram encerrados na JA-A12 validada.
 
 Permanecem na aba **Laboratório**:
 
@@ -176,6 +208,7 @@ Permanecem na aba **Laboratório**:
 - ONVIF Events com descoberta e PullPoint de 5/15/30 segundos;
 - mapper OEM de gravação via porta 9898 com baseline/diff;
 - mapper OEM de recursos liga/desliga via porta 9898 com grupos allowlisted;
+- laboratório GoAhead CGI com probe de leitura, round-trip no-op e setters candidatos específicos;
 - `SetDiagMode` restrito: OFF fixo e callback seguro de curta duração.
 
 Foram removidos da interface do laboratório na JA-A12:
@@ -299,13 +332,12 @@ A porta 8899 foi validada na JA-A12 usada no desenvolvimento, mas JOOAN possui r
 
 Ainda não estão implementados como recursos estáveis:
 
-- live video de baixa latência em formato nativo H.264/WebRTC (a v0.6 usa bridge MJPEG local);
-- presets/Home;
-- alteração de tracking/detecção;
-- controle de IR/floodlight;
-- playback real do microSD (v0.10 apenas solicita e sanitiza o URI ONVIF; ainda não abre o stream);
+- live video de baixa latência em formato nativo H.264/WebRTC (o painel usa bridge MJPEG local);
+- presets/Home no firmware stock validado;
+- controles estáveis de tracking/detecção/iluminação — hoje ainda são mapeamento e laboratório experimental;
+- playback real do microSD pela LAN;
 - talk-back;
-- descoberta UDP 7788.
+- descoberta/decodificação do UDP 7788.
 
 ## Pesquisa técnica
 

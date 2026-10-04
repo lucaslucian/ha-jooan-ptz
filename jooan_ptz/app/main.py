@@ -14,6 +14,10 @@ from camera import JooanAuthError, JooanCamera, redact_secrets
 from lab import (
     LabError,
     disable_diag_mode,
+    legacy_cgi_probe,
+    legacy_cgi_roundtrip,
+    legacy_cgi_write_candidate,
+    legacy_ntp_timezone_candidate,
     oem_recording_snapshot,
     oem_toggle_snapshot,
     oem_write_plan,
@@ -656,6 +660,53 @@ def lab_oem_toggles():
     group = str(payload.get("group") or "")
     return _lab_execute(
         lambda camera, _onvif_info: oem_toggle_snapshot(camera, group=group)
+    )
+
+
+@app.post("/api/lab/cgi/probe")
+def lab_legacy_cgi_probe():
+    payload = request.get_json(silent=True) or {}
+    surface = str(payload.get("surface") or "all")
+    return _lab_execute(
+        lambda camera, _onvif_info: legacy_cgi_probe(camera, surface=surface)
+    )
+
+
+@app.post("/api/lab/cgi/roundtrip")
+def lab_legacy_cgi_roundtrip():
+    payload = request.get_json(silent=True) or {}
+    surface = str(payload.get("surface") or "")
+    return _lab_execute(
+        lambda camera, _onvif_info: legacy_cgi_roundtrip(
+            camera,
+            surface=surface,
+        )
+    )
+
+
+@app.post("/api/lab/cgi/write")
+def lab_legacy_cgi_write():
+    payload = request.get_json(silent=True) or {}
+    target = str(payload.get("target") or "")
+    value = payload.get("value")
+    return _lab_execute(
+        lambda camera, _onvif_info: legacy_cgi_write_candidate(
+            camera,
+            target=target,
+            value=value,
+        )
+    )
+
+
+@app.post("/api/lab/cgi/ntp-timezone")
+def lab_legacy_ntp_timezone():
+    payload = request.get_json(silent=True) or {}
+    timezone = str(payload.get("timezone") or "")
+    return _lab_execute(
+        lambda camera, _onvif_info: legacy_ntp_timezone_candidate(
+            camera,
+            timezone=timezone,
+        )
     )
 
 

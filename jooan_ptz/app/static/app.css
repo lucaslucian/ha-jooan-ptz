@@ -173,6 +173,7 @@ details pre{margin:0;padding:0 14px 14px;color:#c8d1dd;white-space:pre-wrap;word
 .lab-direction-grid{display:grid;grid-template-columns:repeat(3,minmax(90px,140px));gap:8px;justify-content:center;align-items:center;margin-top:14px}
 .lab-center{display:grid;place-items:center;height:38px;border:1px dashed var(--border);border-radius:10px;color:var(--muted);font-size:11px;font-weight:800}
 .lab-summary{margin-top:12px;border:1px solid var(--border-soft);border-radius:11px;padding:10px 12px;background:var(--panel-2);color:var(--muted);font-size:12px}
+.lab-divider{border:0;border-top:1px solid var(--border-soft);margin:18px 0 10px}
 .lab-result{margin:0;border:1px solid var(--border-soft);border-radius:12px;background:#080a0d;color:#cbd5e1;padding:14px;white-space:pre-wrap;word-break:break-word;max-height:520px;overflow:auto;font-size:11px;line-height:1.5}
 code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:#b8dcff}
 @media(max-width:900px){

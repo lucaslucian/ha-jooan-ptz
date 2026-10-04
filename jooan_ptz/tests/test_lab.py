@@ -888,3 +888,275 @@ def test_oem_write_plan_rejects_unknown_target():
         assert "Unsupported OEM write target" in str(exc)
     else:
         raise AssertionError("arbitrary write target must be rejected")
+
+class _LegacyResponse:
+    def __init__(self, text="", status_code=200, content_type="text/plain"):
+        self.text = text
+        self.status_code = status_code
+        self.content = text.encode("utf-8")
+        self.headers = {"Content-Type": content_type}
+
+
+class _LegacyCamera:
+    def __init__(self):
+        self.calls = []
+        self.motion = {"motionEnable": "YES", "sensitivity": "2", "zonemask": "33554431"}
+        self.video = {
+            "contrast": "50",
+            "brightness": "50",
+            "saturation": "50",
+            "rotation": "NORMAL",
+            "flicker": "60HZ",
+            "ir": "AUTO",
+        }
+        self.oem = {
+            "md_enable": 1,
+            "sub_md_enable": 1,
+            "mdsensitivity": 2,
+            "sub_mdsensitivity": 2,
+            "mdarea": 33554431,
+            "sub_mdarea": 33554431,
+            "flipmirror": 0,
+            "floodlight": 0,
+            "powerfrequency": 0,
+            "qualitymode": 6,
+            "definition": 0,
+            "resolution": "16:9",
+            "timezone": "GMT-03:00",
+        }
+
+    def _get(self, endpoint, params=None, authenticated=True, port=None):
+        params = dict(params or {})
+        self.calls.append((endpoint, params, authenticated, port))
+        if endpoint == "/goform/getmotiondetectSettings":
+            return _LegacyResponse("\r".join(f"{k}:{v}" for k, v in self.motion.items()))
+        if endpoint == "/goform/updatemotiondetectSettings":
+            self.motion.update({k: str(v) for k, v in params.items() if k in self.motion})
+            self.oem["md_enable"] = 1 if self.motion["motionEnable"] == "YES" else 0
+            self.oem["sub_md_enable"] = self.oem["md_enable"]
+            self.oem["mdsensitivity"] = int(self.motion["sensitivity"])
+            self.oem["sub_mdsensitivity"] = int(self.motion["sensitivity"])
+            return _LegacyResponse("result:success")
+        if endpoint == "/goform/getVideoSettings":
+            return _LegacyResponse("\r".join(f"{k}:{v}" for k, v in self.video.items()))
+        if endpoint == "/goform/updateVideoSettings":
+            self.video.update({k: str(v) for k, v in params.items() if k in self.video})
+            self.oem["flipmirror"] = 3 if self.video["rotation"] == "MIRROR-VFLIP" else 0
+            return _LegacyResponse("result:success")
+        raise AssertionError(endpoint)
+
+    def _post_query(self, endpoint, params=None, body="n/a", authenticated=True, port=None):
+        params = dict(params or {})
+        self.calls.append((endpoint, params, authenticated, port, "POST_QUERY"))
+        if endpoint == "/goform/getmotiondetectSettings":
+            return _LegacyResponse("\r".join(f"{k}:{v}" for k, v in self.motion.items()))
+        if endpoint == "/goform/getVideoSettings":
+            return _LegacyResponse("\r".join(f"{k}:{v}" for k, v in self.video.items()))
+        raise AssertionError(endpoint)
+
+    def _post_form(self, endpoint, data=None, authenticated=True, port=None):
+        params = dict(data or {})
+        self.calls.append((endpoint, params, authenticated, port))
+        if endpoint == "/goform/NTP":
+            mapping = {
+                "EBS_-03": "GMT-03:00",
+                "UCT_-03": "GMT-03:00",
+                "AST_-04": "GMT-04:00",
+                "UCT_-04": "GMT-04:00",
+                "PST_-08": "GMT-08:00",
+            }
+            self.oem["timezone"] = mapping.get(params.get("time_zone"), self.oem["timezone"])
+            return _LegacyResponse("result:success")
+        raise AssertionError(endpoint)
+
+    def get_device_features(self):
+        properties = dict(self.oem)
+
+        class Info:
+            def as_dict(self_nonlocal):
+                return {"properties": properties}
+
+        return Info()
+
+
+def test_legacy_parser_accepts_json_html_and_colon_lines_without_raw_body():
+    assert lab._legacy_parse_fields(
+        '{"rotation":"NORMAL","password":"secret"}',
+        ("rotation", "ir"),
+    ) == {"rotation": "NORMAL"}
+
+    assert lab._legacy_parse_fields(
+        '<h2>{"ir":"AUTO","userkey":"secret"}</h2>',
+        ("rotation", "ir"),
+    ) == {"ir": "AUTO"}
+
+    assert lab._legacy_parse_fields(
+        "motionEnable:YES\rsensitivity:2\rpassword:secret",
+        ("motionEnable", "sensitivity"),
+    ) == {"motionEnable": "YES", "sensitivity": "2"}
+
+
+def test_legacy_cgi_probe_checks_only_fixed_read_surfaces():
+    camera = _LegacyCamera()
+    result = lab.legacy_cgi_probe(camera, surface="all")
+
+    assert result["writers_executed"] is False
+    assert result["surfaces"]["video"]["accepted"] is True
+    assert result["surfaces"]["motion"]["fields"]["motionEnable"] == "YES"
+    assert [call[0] for call in camera.calls] == [
+        "/goform/getVideoSettings",
+        "/goform/getmotiondetectSettings",
+    ]
+
+
+def test_legacy_video_roundtrip_replays_only_values_just_read():
+    camera = _LegacyCamera()
+    result = lab.legacy_cgi_roundtrip(camera, surface="video")
+
+    assert result["writer_candidate_accepted"] is True
+    assert result["state_changed"] is False
+    write_call = next(call for call in camera.calls if call[0] == "/goform/updateVideoSettings")
+    assert write_call[1]["rotation"] == "NORMAL"
+    assert write_call[1]["ir"] == "AUTO"
+    assert "userid" not in write_call[1]
+    assert "userkey" not in write_call[1]
+
+
+def test_legacy_motion_write_preserves_current_fields_and_verifies_oem_readback():
+    camera = _LegacyCamera()
+    result = lab.legacy_cgi_write_candidate(
+        camera,
+        target="motion_enable",
+        value="off",
+    )
+
+    assert result["requested"] == "NO"
+    assert result["candidate_readback"]["after"] == "NO"
+    assert result["oem_readback"]["changes"]["md_enable"] == {
+        "before": 1,
+        "after": 0,
+    }
+    write_call = next(
+        call for call in camera.calls
+        if call[0] == "/goform/updatemotiondetectSettings"
+    )
+    assert write_call[1]["sensitivity"] == "2"
+    assert write_call[1]["motionEnable"] == "NO"
+
+
+def test_legacy_video_writer_rejects_arbitrary_parameter_names():
+    camera = _LegacyCamera()
+    try:
+        lab.legacy_cgi_write_candidate(
+            camera,
+            target="singleCMD",
+            value="SetDiagMode",
+        )
+    except lab.LabError as exc:
+        assert "Unsupported legacy CGI write target" in str(exc)
+    else:
+        raise AssertionError("arbitrary CGI target must be rejected")
+
+
+def test_legacy_ntp_candidate_is_allowlisted_and_checks_9898_timezone(monkeypatch):
+    camera = _LegacyCamera()
+    monkeypatch.setattr(lab.time, "sleep", lambda _: None)
+    result = lab.legacy_ntp_timezone_candidate(camera, timezone="AST_-04")
+
+    assert result["requested"] == "AST_-04"
+    assert result["oem_readback"]["changes"]["timezone"] == {
+        "before": "GMT-03:00",
+        "after": "GMT-04:00",
+    }
+    ntp_call = next(call for call in camera.calls if call[0] == "/goform/NTP")
+    assert ntp_call[1] == {"time_zone": "AST_-04"}
+
+    try:
+        lab.legacy_ntp_timezone_candidate(camera, timezone="../../etc/passwd")
+    except lab.LabError:
+        pass
+    else:
+        raise AssertionError("arbitrary NTP timezone value must be rejected")
+
+def test_legacy_video_write_requires_target_to_be_exposed_by_reader():
+    camera = _LegacyCamera()
+    camera.video.pop("ir")
+
+    try:
+        lab.legacy_cgi_write_candidate(camera, target="ir", value="ON")
+    except lab.LabError as exc:
+        assert "did not expose the target field" in str(exc)
+    else:
+        raise AssertionError("writer must not add a field absent from camera readback")
+
+    assert all(call[0] != "/goform/updateVideoSettings" for call in camera.calls)
+
+def test_legacy_probe_falls_back_to_goahead_post_query_when_get_has_no_fields():
+    camera = _LegacyCamera()
+
+    def get_without_fields(endpoint, params=None, authenticated=True, port=None):
+        camera.calls.append((endpoint, dict(params or {}), authenticated, port, "GET"))
+        return _LegacyResponse("result:success")
+
+    camera._get = get_without_fields
+    result = lab.legacy_cgi_probe(camera, surface="motion")
+    motion = result["surfaces"]["motion"]
+
+    assert motion["probe_method"] == "POST_QUERY"
+    assert motion["recognized_fields"] >= 2
+    assert motion["fields"]["motionEnable"] == "YES"
+    assert [attempt["method"] for attempt in motion["attempts"]] == [
+        "GET",
+        "POST_QUERY",
+    ]
+    assert motion["attempts"][0]["recognized_fields"] == 0
+
+
+def test_legacy_motion_candidate_accepts_documented_zero_to_five_and_zonemask():
+    for level in range(6):
+        assert lab._legacy_candidate_value("motion_sensitivity", str(level)) == (
+            "motion",
+            "sensitivity",
+            str(level),
+        )
+
+    assert lab._legacy_candidate_value("motion_zonemask", "on") == (
+        "motion",
+        "zonemask",
+        "33554431",
+    )
+    assert lab._legacy_candidate_value("motion_zonemask", "off") == (
+        "motion",
+        "zonemask",
+        "0",
+    )
+
+    for bad in (-1, 6):
+        try:
+            lab._legacy_candidate_value("motion_sensitivity", bad)
+        except lab.LabError:
+            pass
+        else:
+            raise AssertionError(f"out-of-range legacy sensitivity accepted: {bad}")
+
+
+def test_legacy_video_numeric_candidates_are_bounded_to_public_zero_to_100_range():
+    assert lab._legacy_candidate_value("video_brightness", "0") == (
+        "video",
+        "brightness",
+        "0",
+    )
+    assert lab._legacy_candidate_value("video_nsaturation", "100") == (
+        "video",
+        "nsaturation",
+        "100",
+    )
+
+    for value in (-1, 101):
+        try:
+            lab._legacy_candidate_value("video_contrast", value)
+        except lab.LabError:
+            pass
+        else:
+            raise AssertionError(f"out-of-range video value accepted: {value}")
+

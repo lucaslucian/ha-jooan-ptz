@@ -69,7 +69,8 @@ jobs:
               base / "CHANGELOG.md",
               base / "icon.png",
               base / "logo.png",
-              Path("docs/images/dashboard-concept.jpg"),
+              Path("docs/images/dashboard-overview.svg"),
+              Path("docs/images/jooan-local-control-logo.svg"),
               Path("jooan_ptz/app/templates/index.html"),
               Path("jooan_ptz/app/static/app.css"),
               Path("jooan_ptz/app/static/app.js"),
@@ -91,10 +92,15 @@ jobs:
                   raise SystemExit("logo.png must be PNG")
               print(f"OK: logo.png {image.width}x{image.height}")
 
-          with Image.open("docs/images/dashboard-concept.jpg") as image:
-              if image.format != "JPEG":
-                  raise SystemExit("dashboard-concept.jpg must be JPEG")
-              print(f"OK: dashboard-concept.jpg {image.width}x{image.height}")
+          dashboard_svg = Path("docs/images/dashboard-overview.svg").read_text(encoding="utf-8")
+          if 'viewBox="0 0 1600 900"' not in dashboard_svg:
+              raise SystemExit("dashboard-overview.svg must keep the 1600x900 vector canvas")
+          print("OK: dashboard-overview.svg vector 1600x900")
+
+          logo_svg = Path("docs/images/jooan-local-control-logo.svg").read_text(encoding="utf-8")
+          if 'viewBox="0 0 1000 400"' not in logo_svg:
+              raise SystemExit("jooan-local-control-logo.svg must keep the 1000x400 vector canvas")
+          print("OK: jooan-local-control-logo.svg vector 1000x400")
           PY
 
   docker:
@@ -126,7 +132,7 @@ jobs:
           platforms: ${{ matrix.platform }}
           push: false
           build-args: |
-            BUILD_VERSION=0.15.0
+            BUILD_VERSION=0.16.0
             BUILD_ARCH=${{ matrix.arch }}
           tags: local/jooan-local-control:${{ matrix.arch }}
           cache-from: type=gha,scope=jooan-${{ matrix.arch }}

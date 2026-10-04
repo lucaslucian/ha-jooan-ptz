@@ -27,14 +27,15 @@ A família JOOAN/CAM720 contém várias revisões de hardware e firmware com nom
 | `ch00_1` | Detectado via ONVIF `GetStreamUri` (640×360, 15 fps, 256 kbps); validação RTSP contínua pendente |
 | `ch01_1` | Validado via probe manual da v0.6 (640×360 H.264) |
 | ONVIF 8899 | Validado: `/onvif/device_service` respondeu `GetCapabilities` com HTTP 200 |
-| `GetProfiles` / `GetStreamUri` / `GetStatus` / `GetPresets` | Experimental read-only v0.4 |
-| ONVIF ContinuousMove/Stop | Laboratório v0.7; precisa validação no hardware stock |
-| ONVIF auxiliary IR | Laboratório v0.7; câmera anunciou Irlamp On/Off, escrita precisa validação |
+| `GetProfiles` / `GetStreamUri` / `GetStatus` / `GetPresets` | Validado para leitura; presets retornam lista vazia nesta unidade |
+| ONVIF ContinuousMove/Stop | Validado no hardware stock, com velocidade/duração limitadas |
+| ONVIF auxiliary IR | Comando aceito pela câmera; efeito físico ainda não usado como fonte principal de estado |
 | ONVIF presets | GetPresets vazio; SetPreset não suportado na JA-A12 |
 | ONVIF Events PullPoint | Validado: MotionAlarm/CellMotionDetector entregues localmente |
 | UDP 7788 | Observado, formato em pesquisa |
-| playback microSD | ONVIF Replay não suportado; investigação OEM ativa v0.13 |
-| OEM toggle mapper | Baseline/diff read-only v0.13 |
+| playback microSD | ONVIF Replay não suportado; metadados OEM/Recording continuam úteis para investigação |
+| OEM toggle mapper | Validado para baseline/diff; mappings de motion, floodlight, tracking, flip e timezone registrados |
+| GoAhead CGI candidates | Laboratório v0.16: `getVideoSettings` / `getmotiondetectSettings`, round-trip no-op e writers allowlisted; validação no hardware pendente |
 | talk-back | Em pesquisa |
 
 ## Outros modelos
