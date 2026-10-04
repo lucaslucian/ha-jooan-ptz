@@ -1002,9 +1002,12 @@ function renderLegacyCgiWriteValues(){
   if(values.some(([value])=>String(value)===previous))select.value=previous;
   const summary=$('labCgiSummary');
   if(summary){
+    const forced=$('labCgiWriteMode')?.value==='force';
     summary.textContent=target==='timezone_legacy'
       ?'Timezone usa o candidato /goform/NTP. Não existe um CGI de leitura pareado na fonte encontrada; a validação será feita pelo timezone OEM da porta 9898.'
-      :'O writer preservará todos os campos que o endpoint de leitura candidato devolver antes de alterar somente o campo selecionado.';
+      :forced
+        ?'Modo forçado: se a leitura não fornecer estado suficiente, será enviado somente o campo allowlisted selecionado. Não há rollback automático garantido.'
+        :'Modo seguro: o writer só executa quando consegue preservar os campos retornados pelo endpoint de leitura.';
   }
 }
 
@@ -1055,19 +1058,33 @@ async function labLegacyCgiWrite(){
   const target=$('labCgiWriteTarget').value;
   const value=$('labCgiWriteValue').value;
   const isNtp=target==='timezone_legacy';
+  const forceWithoutReadback=!isNtp&&$('labCgiWriteMode')?.value==='force';
   const message=isNtp
     ?'Este teste enviará somente time_zone para /goform/NTP. A fonte relacionada não oferece leitura pareada de NTP. Executar mesmo assim?'
-    :'Este teste altera uma configuração real da câmera usando um writer candidato ainda experimental. Os demais campos lidos serão preservados. Executar?';
+    :forceWithoutReadback
+      ?'MODO FORÇADO: se a leitura não retornar estado suficiente, será enviado somente o campo selecionado ao writer candidato. Não haverá rollback automático garantido. Fazer esta tentativa?'
+      :'Este teste altera uma configuração real da câmera usando um writer candidato ainda experimental. Os demais campos lidos serão preservados. Executar?';
   if(!confirm(message))return;
   try{
     const payload=isNtp
       ?await labRequest('api/lab/cgi/ntp-timezone',{timezone:value})
-      :await labRequest('api/lab/cgi/write',{target,value});
+      :await labRequest('api/lab/cgi/write',{
+          target,
+          value,
+          force_without_readback:forceWithoutReadback
+        });
     const changes=payload?.oem_readback?.changes||{};
     const count=Object.keys(changes).length;
-    $('labCgiSummary').textContent=count
-      ?'Setter candidato executado; '+count+' campo(s) OEM mudaram. Revise o JSON abaixo.'
-      :'Setter candidato respondeu, mas nenhum campo OEM monitorado mudou.';
+    const status=payload?.writer_response?.http_status;
+    if(payload?.force_without_readback_used){
+      $('labCgiSummary').textContent=payload?.writer_candidate_accepted
+        ?'Setter forçado aceito'+(status?' (HTTP '+status+')':'')+'. Foi enviado somente o campo selecionado; revise o readback abaixo.'
+        :'Setter forçado não foi aceito'+(status?' (HTTP '+status+')':'')+'. Este writer pode ser descartado para esta câmera.';
+    }else{
+      $('labCgiSummary').textContent=count
+        ?'Setter candidato executado; '+count+' campo(s) OEM mudaram. Revise o JSON abaixo.'
+        :'Setter candidato respondeu, mas nenhum campo OEM monitorado mudou.';
+    }
   }catch(error){
     $('labCgiSummary').textContent='Setter CGI candidato: '+error.message;
   }
@@ -1328,6 +1345,7 @@ $('labCgiProbeAll').addEventListener('click',()=>labLegacyCgiProbe('all'));
 $('labCgiProbeSelected').addEventListener('click',()=>labLegacyCgiProbe($('labCgiSurface').value));
 $('labCgiRoundtrip').addEventListener('click',labLegacyCgiRoundtrip);
 $('labCgiWriteTarget').addEventListener('change',renderLegacyCgiWriteValues);
+$('labCgiWriteMode').addEventListener('change',renderLegacyCgiWriteValues);
 $('labCgiWrite').addEventListener('click',labLegacyCgiWrite);
 $('labOemWriteTarget').addEventListener('change',renderOemWriteValues);
 $('labOemWriteSurface').addEventListener('click',labOemWriteSurface);
