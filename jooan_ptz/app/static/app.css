@@ -123,12 +123,6 @@ button,select{font:inherit}
 .camera-title strong{font-size:14px}
 .preview-empty{display:flex;flex-direction:column;align-items:center;gap:6px;color:var(--muted);text-align:center;padding:20px}
 .preview-empty strong{color:var(--text)}
-.live-indicator{
-  position:absolute;top:10px;left:10px;background:rgba(10,12,16,.78);backdrop-filter:blur(10px);
-  border:1px solid rgba(255,255,255,.12);border-radius:999px;padding:6px 9px;
-  font-size:10px;font-weight:900;letter-spacing:.08em;z-index:3
-}
-.live-indicator span{display:inline-block;width:7px;height:7px;border-radius:50%;background:#ff4d57;margin-right:5px;box-shadow:0 0 0 4px rgba(255,77,87,.13)}
 .stream-meta{display:flex;gap:7px;flex-wrap:wrap;margin:10px 0}
 .meta-row{display:flex;gap:6px;flex-wrap:wrap}
 .meta-pill{font-size:11px;color:var(--muted);background:rgba(155,167,181,.07);border:1px solid var(--border-soft);border-radius:999px;padding:5px 8px}
