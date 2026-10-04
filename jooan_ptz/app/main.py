@@ -689,11 +689,13 @@ def lab_legacy_cgi_write():
     payload = request.get_json(silent=True) or {}
     target = str(payload.get("target") or "")
     value = payload.get("value")
+    force_without_readback = payload.get("force_without_readback") is True
     return _lab_execute(
         lambda camera, _onvif_info: legacy_cgi_write_candidate(
             camera,
             target=target,
             value=value,
+            force_without_readback=force_without_readback,
         )
     )
 
