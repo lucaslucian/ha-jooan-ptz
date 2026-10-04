@@ -120,9 +120,9 @@ Leituras allowlisted:
 Writers candidatos correspondentes:
 
 ```text
-/goform/updateVideoSettings
-/goform/updatemotiondetectSettings
-/goform/NTP
+GET  /goform/updateVideoSettings
+GET  /goform/updatemotiondetectSettings
+POST /goform/NTP
 ```
 
 O fluxo recomendado é:
@@ -132,7 +132,7 @@ O fluxo recomendado é:
 3. verificar o readback do CGI e da porta 9898;
 4. somente então testar um setter candidato específico.
 
-Os alvos de escrita expostos são fixos: motion on/off, sensibilidade 1/2/3, rotation, IR, flicker e o conjunto fechado de timezones legado. Caminho CGI e nome de parâmetro nunca vêm livres do navegador.
+Os alvos de escrita expostos são fixos: motion on/off, sensibilidade 1/2/3, rotation, IR, flicker e o conjunto fechado de timezones legado. Para Motion/Video, o campo-alvo precisa ter aparecido primeiro na própria leitura da câmera. Caminho CGI e nome de parâmetro nunca vêm livres do navegador.
 
 O candidato `/goform/NTP` fica separado porque a fonte pública não oferece um CGI de leitura equivalente. O App envia somente `time_zone`; não envia servidor NTP nem intervalo de sincronização.
 
