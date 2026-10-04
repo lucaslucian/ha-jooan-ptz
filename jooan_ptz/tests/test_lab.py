@@ -945,7 +945,15 @@ class _LegacyCamera:
             return _LegacyResponse("result:success")
         raise AssertionError(endpoint)
 
-    def _post_query(self, endpoint, params=None, body="n/a", authenticated=True, port=None):
+    def _post_query(
+        self,
+        endpoint,
+        params=None,
+        body="n/a",
+        authenticated=True,
+        port=None,
+        allow_http_error=False,
+    ):
         params = dict(params or {})
         self.calls.append((endpoint, params, authenticated, port, "POST_QUERY"))
         if endpoint == "/goform/getmotiondetectSettings":
@@ -1007,6 +1015,7 @@ def test_legacy_cgi_probe_checks_only_fixed_read_surfaces():
         "/goform/getVideoSettings",
         "/goform/getmotiondetectSettings",
     ]
+    assert all(call[-1] == "POST_QUERY" for call in camera.calls)
 
 
 def test_legacy_video_roundtrip_replays_only_values_just_read():
@@ -1159,4 +1168,55 @@ def test_legacy_video_numeric_candidates_are_bounded_to_public_zero_to_100_range
             pass
         else:
             raise AssertionError(f"out-of-range video value accepted: {value}")
+
+def test_legacy_probe_stops_after_404_without_retrying_get():
+    camera = _LegacyCamera()
+    calls = []
+
+    def post_query(endpoint, params=None, body="n/a", authenticated=True, port=None, allow_http_error=False):
+        calls.append(("POST_QUERY", endpoint))
+
+        class Response:
+            status_code = 404
+            text = "Not Found"
+            content = b"Not Found"
+            headers = {"Content-Type": "text/plain"}
+
+        return Response()
+
+    def get_should_not_run(*args, **kwargs):
+        raise AssertionError("GET fallback must not run after a clean 404")
+
+    camera._post_query = post_query
+    camera._get = get_should_not_run
+
+    result = lab.legacy_cgi_probe(camera, surface="motion")
+
+    assert result["surfaces"]["motion"]["http_status"] == 404
+    assert result["surfaces"]["motion"]["endpoint_present"] is False
+    assert result["surfaces"]["motion"]["usable"] is False
+    assert calls == [("POST_QUERY", "/goform/getmotiondetectSettings")]
+
+
+def test_legacy_probe_does_not_retry_after_transport_timeout():
+    camera = _LegacyCamera()
+    calls = []
+
+    def post_query(*args, **kwargs):
+        calls.append("POST_QUERY")
+        raise TimeoutError("simulated stalled CGI")
+
+    def get_should_not_run(*args, **kwargs):
+        raise AssertionError("GET fallback must not run after timeout")
+
+    camera._post_query = post_query
+    camera._get = get_should_not_run
+
+    result = lab.legacy_cgi_probe(camera, surface="video")
+
+    surface = result["surfaces"]["video"]
+    assert surface["accepted"] is False
+    assert surface["usable"] is False
+    assert surface["attempts"][0]["error_type"] == "TimeoutError"
+    assert calls == ["POST_QUERY"]
 
