@@ -11,7 +11,7 @@ from pathlib import Path
 from flask import Flask, Response, jsonify, render_template, request
 
 from camera import JooanAuthError, JooanCamera, redact_secrets
-from probe import onvif_continuous_move
+from probe import onvif_continuous_move, onvif_ptz_discovery
 
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -890,7 +890,45 @@ def live_preview(channel: int):
 
 def _manual_probe_worker() -> None:
     try:
-        validate_camera(deep=True)
+        if not _camera_io_lock.acquire(blocking=False):
+            update_state(last_error="Camera is busy")
+            return
+        try:
+            camera = get_camera()
+            onvif_info = onvif_ptz_discovery(
+                camera.ip,
+                camera.onvif_port,
+            )
+            ptz_channel, ptz_source = _infer_ptz_channel(onvif_info)
+            with _state_lock:
+                services = dict(_state.get("services") or {})
+            services["onvif"] = {
+                "port": camera.onvif_port,
+                "reachable": bool(onvif_info.get("reachable")),
+                "source": "soap_ptz_minimal",
+            }
+            values = {
+                "onvif_info": onvif_info,
+                "ptz_onvif_available": bool(
+                    ((onvif_info.get("ptz") or {}).get("profile_token"))
+                ),
+                "services": services,
+                "last_deep_probe": time.time(),
+            }
+            if ptz_channel is not None:
+                values["ptz_channel"] = ptz_channel
+                values["ptz_channel_source"] = ptz_source
+            update_state(**values)
+        finally:
+            _camera_io_lock.release()
+    except Exception as exc:
+        safe_error = redact_secrets(exc)
+        _LOGGER.warning("ONVIF PTZ discovery failed: %s", safe_error)
+        update_state(
+            onvif_info={"reachable": False, "error": safe_error, "probe_mode": "ptz-minimal"},
+            ptz_onvif_available=False,
+            last_error=safe_error,
+        )
     finally:
         update_state(probe_running=False)
 
@@ -909,8 +947,8 @@ def deep_probe():
                 "error": "Stop live preview/preview validation before deep diagnostics",
             }), 409
 
-    # Never keep a Gunicorn request open for a complete ONVIF + RTSP scan.
-    # Start one background probe and let /api/status report progress.
+    # Run only the minimal ONVIF discovery needed for PTZ in a background
+    # worker. RTSP probing is a separate explicit action.
     with _probe_start_lock:
         with _state_lock:
             if _state.get("probe_running"):
