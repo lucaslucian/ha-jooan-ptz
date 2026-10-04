@@ -74,14 +74,11 @@ São exibidos:
 
 ### Diagnóstico
 
-Existem duas ações manuais:
+A seção de diagnóstico é **somente leitura**. Não existem mais botões para descoberta ONVIF, `ffprobe` ou outros testes.
 
-- **Descobrir ONVIF** — executa a descoberta SOAP;
-- **Testar substreams RTSP** — roda `ffprobe` nos substreams.
+Nos testes da JA-A12, múltiplas conexões RTSP/ONVIF em sequência coincidiram com períodos em que a câmera continuava respondendo ping, mas seus serviços ficavam instáveis. Por isso o App não executa scan RTSP automático e não expõe mais esse tipo de teste na interface.
 
-O teste RTSP é propositalmente manual.
-
-Nos testes da JA-A12, múltiplas conexões RTSP/ONVIF em sequência coincidiram com períodos em que a câmera continuava respondendo ping, mas seus serviços ficavam instáveis. Por isso a v0.18 não executa mais scan RTSP na inicialização nem dentro da descoberta ONVIF.
+A descoberta ONVIF mínima ocorre apenas na primeira movimentação PTZ, porque ela é necessária exclusivamente para tentar velocidade variável. Se falhar, o CGI PTZ é usado.
 
 ### Todas as configurações lidas
 
@@ -109,7 +106,7 @@ Na inicialização o App executa somente a validação leve:
 5. `get_deviceFeatures`;
 6. leitura da configuração/credenciais RTSP, sem abrir o stream.
 
-Depois disso o processo em background usa ICMP para acompanhar online/offline.
+Depois disso o processo em background usa ICMP para acompanhar online/offline. Nenhum diagnóstico adicional é disparado pela interface.
 
 Se a câmera voltar à rede mas a autenticação do App estiver marcada como inválida, uma validação CGI leve pode ser refeita com intervalo de recuperação.
 
