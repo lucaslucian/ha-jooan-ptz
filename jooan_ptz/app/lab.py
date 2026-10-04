@@ -311,7 +311,8 @@ def _legacy_parse_fields(text: str, allowed_fields: tuple[str, ...]) -> dict[str
 
 
 def _legacy_response_summary(response, allowed_fields: tuple[str, ...]) -> dict[str, Any]:
-    fields = _legacy_parse_fields(response.text, allowed_fields)
+    safe_fields = tuple(dict.fromkeys((*allowed_fields, "result")))
+    fields = _legacy_parse_fields(response.text, safe_fields)
     content_type = str(response.headers.get("Content-Type") or "").split(";", 1)[0].strip()
     return {
         "http_status": int(response.status_code),
