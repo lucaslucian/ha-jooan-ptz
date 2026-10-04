@@ -1069,3 +1069,16 @@ def test_legacy_ntp_candidate_is_allowlisted_and_checks_9898_timezone(monkeypatc
     else:
         raise AssertionError("arbitrary NTP timezone value must be rejected")
 
+def test_legacy_video_write_requires_target_to_be_exposed_by_reader():
+    camera = _LegacyCamera()
+    camera.video.pop("ir")
+
+    try:
+        lab.legacy_cgi_write_candidate(camera, target="ir", value="ON")
+    except lab.LabError as exc:
+        assert "did not expose the target field" in str(exc)
+    else:
+        raise AssertionError("writer must not add a field absent from camera readback")
+
+    assert all(call[0] != "/goform/updateVideoSettings" for call in camera.calls)
+
