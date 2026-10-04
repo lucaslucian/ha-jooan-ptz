@@ -1013,7 +1013,14 @@ function summarizeLegacyProbe(payload){
   const labels=[];
   for(const [name,item] of Object.entries(surfaces)){
     if(item?.accepted){
-      labels.push(name+': '+(item.probe_method||'HTTP')+' aceito, '+Number(item.recognized_fields||0)+' campo(s) reconhecido(s)');
+      const count=Number(item.recognized_fields||0);
+      const method=item?.probe_method||'HTTP';
+      labels.push(
+        name+': HTTP '+String(item.http_status||200)+' via '+method+
+        (count
+          ?', '+count+' campo(s) reconhecido(s)'
+          :', mas 0 campos reconhecidos — resposta ainda não prova uma API utilizável')
+      );
     }else{
       labels.push(name+': não confirmado'+(item?.error_type?' ('+item.error_type+')':''));
     }
