@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.18.0
+
+- Removed the **Laboratory** feature completely from the App UI and backend API. The `/api/lab/*` routes, SetDiagMode callback port/configuration and laboratory test suite were removed.
+- Replaced the tabbed interface with a single organized dashboard page containing: overview, dual-lens media/PTZ, detection, recording, diagnostics and all read camera settings.
+- Startup validation is now intentionally lightweight: only the proven CGI/OEM reads run automatically. ONVIF discovery is manual and RTSP stream probing is never part of startup.
+- Deep diagnostics no longer fan out into `ffprobe` sessions. This change is intended to reduce pressure on the camera after repeated observations of instability/offline behavior around media probing.
+- Snapshots and live RTSP previews are fully **on demand**. No media session is opened automatically when the panel loads.
+- Added per-lens Snapshot / Live / Stop controls. Starting both live feeds negotiates the first feed before opening the second to avoid simultaneous RTSP handshakes.
+- ONVIF PTZ remains available as a production feature after manual ONVIF discovery, with CGI PTZ as the automatic fallback.
+- Moved the bounded ONVIF ContinuousMove implementation from the removed laboratory module into the production probe module.
+- Removed the laboratory-only port `49000` and `diag_callback_ip` option.
+
+
 ## 0.17.0
 
 - Rebuilt the main **Câmeras & PTZ** workspace around the validated local-control use case instead of experimental camera configuration.
