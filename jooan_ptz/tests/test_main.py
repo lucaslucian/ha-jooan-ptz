@@ -9,6 +9,9 @@ def setup_function():
     main._stop_live_preview()
     main._snapshot_cache.clear()
     main._ptz_sequences.clear()
+    main._preview_processes.clear()
+    main._preview_generations.update({0: 0, 1: 0})
+    main._ptz_onvif_disabled_until = 0.0
     main.update_state(
         online=False,
         authenticated=False,
@@ -16,10 +19,15 @@ def setup_function():
         ptz_moving=False,
         ptz_channel=None,
         ptz_channel_source=None,
+        ptz_onvif_available=False,
+        ptz_last_transport=None,
+        ptz_last_error=None,
         preview_active=False,
         preview_channel=None,
         preview_stream=None,
         preview_source=None,
+        preview_channels=[],
+        preview_streams={},
         preview_probe=None,
         preview_probe_running=False,
         preview_last_error=None,
@@ -155,6 +163,77 @@ def test_stale_ptz_sequence_is_ignored(monkeypatch):
     assert commands == ["stop"]
 
 
+def test_ptz_prefers_onvif_and_passes_selected_speed(monkeypatch):
+    calls = []
+
+    class FakeCamera:
+        def command(self, direction):
+            raise AssertionError("CGI fallback must not run when ONVIF succeeds")
+
+    def fake_onvif(camera, onvif_info, *, direction, speed, duration_ms):
+        calls.append((direction, speed, duration_ms))
+        return {
+            "start": {"accepted": True},
+            "stop": {"accepted": True},
+        }
+
+    monkeypatch.setattr(main, "get_camera", lambda: FakeCamera())
+    monkeypatch.setattr(main, "onvif_continuous_move", fake_onvif)
+    main.update_state(
+        online=True,
+        authenticated=True,
+        ptz_onvif_available=True,
+        onvif_info={"ptz": {"profile_token": "profile_0"}},
+    )
+    client = main.app.test_client()
+
+    response = client.post(
+        "/api/ptz/right?client=test-client&seq=1&speed=0.8&duration_ms=320"
+    )
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["transport"] == "onvif"
+    assert payload["speed"] == 0.8
+    assert calls == [("right", 0.8, 320)]
+
+
+def test_ptz_falls_back_to_cgi_when_onvif_is_rejected(monkeypatch):
+    commands = []
+
+    class FakeCamera:
+        def command(self, direction):
+            commands.append(direction)
+            return {"result": "success"}
+
+    monkeypatch.setattr(main, "get_camera", lambda: FakeCamera())
+    monkeypatch.setattr(
+        main,
+        "onvif_continuous_move",
+        lambda *args, **kwargs: {
+            "start": {"accepted": False, "fault": "ActionNotSupported"},
+            "stop": {"accepted": True},
+        },
+    )
+    main.update_state(
+        online=True,
+        authenticated=True,
+        ptz_onvif_available=True,
+        onvif_info={"ptz": {"profile_token": "profile_0"}},
+    )
+    client = main.app.test_client()
+
+    response = client.post(
+        "/api/ptz/left?client=test-client&seq=1&speed=0.6&duration_ms=280"
+    )
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["transport"] == "cgi-fallback"
+    assert commands == ["left"]
+    assert "ActionNotSupported" in payload["onvif_error"]
+
+
 def test_invalid_ptz_direction_is_rejected_without_camera_call(monkeypatch):
     monkeypatch.setattr(
         main,
@@ -279,6 +358,11 @@ def test_dashboard_template_is_served():
     assert response.status_code == 200
     body = response.get_data(as_text=True)
     assert "Câmeras & PTZ" in body
+    assert "liveFeed0" in body
+    assert "liveFeed1" in body
+    assert "ptzSpeed" in body
+    assert "generalInfo" in body
+    assert "allReadSettings" in body
     assert "labCgiProbeAll" in body
     assert "labCgiRoundtrip" in body
     assert "labCgiWrite" in body
@@ -380,6 +464,45 @@ def test_live_preview_streams_mjpeg_without_exposing_rtsp(monkeypatch):
     assert response.headers["X-JOOAN-Preview-Stream"] == "/live/ch00_1"
     assert b"JPEG" in response.data
     assert "rtsp://" not in response.get_data(as_text=True)
+
+
+def test_stopping_one_live_preview_keeps_the_other_running():
+    class FakeProcess:
+        def __init__(self):
+            self.terminated = False
+
+        def poll(self):
+            return 0 if self.terminated else None
+
+        def terminate(self):
+            self.terminated = True
+
+        def wait(self, timeout=None):
+            return 0
+
+        def kill(self):
+            self.terminated = True
+
+    first = FakeProcess()
+    second = FakeProcess()
+    main._preview_processes[0] = first
+    main._preview_processes[1] = second
+    main.update_state(
+        preview_active=True,
+        preview_channels=[0, 1],
+        preview_streams={
+            "0": {"path": "/live/ch00_1", "source": "test"},
+            "1": {"path": "/live/ch01_1", "source": "test"},
+        },
+    )
+
+    assert main._stop_live_preview(0) is True
+    assert first.terminated is True
+    assert second.terminated is False
+    assert sorted(main._preview_processes) == [1]
+    with main._state_lock:
+        assert main._state["preview_active"] is True
+        assert main._state["preview_channels"] == [1]
 
 
 def test_snapshot_uses_cache_while_live_preview_is_active(monkeypatch):
