@@ -220,6 +220,9 @@ def _validate_camera_locked(*, deep: bool = False) -> bool:
             "last_seen": now,
         }
 
+        with _state_lock:
+            previous_services = dict(_state.get("services") or {})
+
         services = {
             "http": {
                 "port": camera.http_port,
@@ -237,11 +240,14 @@ def _validate_camera_locked(*, deep: bool = False) -> bool:
                 "configured": bool((stream_info or {}).get("credentials_confirmed")),
                 "source": "credentials_only",
             },
-            "onvif": {
-                "port": camera.onvif_port,
-                "reachable": None,
-                "source": "not_probed",
-            },
+            "onvif": dict(
+                previous_services.get("onvif")
+                or {
+                    "port": camera.onvif_port,
+                    "reachable": None,
+                    "source": "not_probed",
+                }
+            ),
         }
 
         if deep:
