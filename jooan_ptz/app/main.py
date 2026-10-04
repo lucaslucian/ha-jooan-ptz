@@ -586,8 +586,18 @@ def _snapshot_cache_key(stream: str) -> tuple[str, int, str]:
     )
 
 
-def _capture_snapshot_with_fallback(stream: str) -> tuple[bytes, bool]:
-    """Capture one frame safely and keep only a short-lived last-good image."""
+def _capture_snapshot_with_fallback(
+    stream: str,
+    *,
+    ptz_preview: bool = False,
+) -> tuple[bytes, bool]:
+    """Capture one frame and keep a short-lived last-good image.
+
+    Normal/manual snapshots share the camera I/O lock with diagnostics and PTZ.
+    PTZ preview frames deliberately bypass that lock so a slow FFmpeg capture
+    can never delay a STOP command. The snapshot lock still prevents multiple
+    RTSP captures from being opened by this App at the same time.
+    """
     key = _snapshot_cache_key(stream)
     with _snapshot_lock:
         now = time.monotonic()
@@ -600,10 +610,13 @@ def _capture_snapshot_with_fallback(stream: str) -> tuple[bytes, bool]:
             else:
                 _snapshot_cache.pop(key, None)
 
-        if not _camera_io_lock.acquire(timeout=CAMERA_IO_LOCK_TIMEOUT):
-            if cached is not None:
-                return cached, True
-            raise RuntimeError("Camera is busy with diagnostics or another media operation")
+        camera_lock_acquired = False
+        if not ptz_preview:
+            camera_lock_acquired = _camera_io_lock.acquire(timeout=CAMERA_IO_LOCK_TIMEOUT)
+            if not camera_lock_acquired:
+                if cached is not None:
+                    return cached, True
+                raise RuntimeError("Camera is busy with diagnostics or another media operation")
 
         try:
             image = get_camera().snapshot(stream)
@@ -612,7 +625,8 @@ def _capture_snapshot_with_fallback(stream: str) -> tuple[bytes, bool]:
                 return cached, True
             raise
         finally:
-            _camera_io_lock.release()
+            if camera_lock_acquired:
+                _camera_io_lock.release()
 
         _snapshot_cache[key] = (time.monotonic(), image)
         return image, False
@@ -621,7 +635,11 @@ def _capture_snapshot_with_fallback(stream: str) -> tuple[bytes, bool]:
 @app.get("/api/snapshot/<stream>")
 def snapshot(stream: str):
     try:
-        image, stale = _capture_snapshot_with_fallback(stream)
+        ptz_preview = request.args.get("ptz") == "1"
+        image, stale = _capture_snapshot_with_fallback(
+            stream,
+            ptz_preview=ptz_preview,
+        )
         return Response(
             image,
             mimetype="image/jpeg",
