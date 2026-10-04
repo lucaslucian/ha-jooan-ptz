@@ -551,7 +551,7 @@ def legacy_ntp_timezone_candidate(camera, *, timezone: str) -> dict[str, Any]:
         raise LabError("Unsupported legacy NTP timezone value")
 
     before = _legacy_oem_readback(camera, ("timezone",))
-    response = camera._get(
+    response = camera._post_form(
         "/goform/NTP",
         {"time_zone": candidate},
         authenticated=True,
