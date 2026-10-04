@@ -1,149 +1,88 @@
 # Direção visual do painel
 
-Este documento registra a referência visual escolhida para a evolução do painel completo do **JOOAN Local Control**.
+A v0.18 consolida o **JOOAN Local Control** em uma única página, sem abas e sem área experimental separada.
 
-![Visão vetorial do painel JOOAN Local Control](images/dashboard-overview.svg)
+## Princípios
 
-> O diagrama vetorial substitui o antigo JPG 320×180 para manter nitidez em telas HiDPI. Ele representa a arquitetura visual da interface; não é uma captura da câmera.
+- visual integrado ao Home Assistant;
+- cards simples e responsivos;
+- telemetria primeiro;
+- mídia somente sob demanda;
+- nenhuma configuração de escrita exposta;
+- informações avançadas abaixo das funções principais.
 
-## Estilo
-
-A interface deve parecer parte do ecossistema Home Assistant:
-
-- layout limpo, responsivo e baseado em cards;
-- azul/ciano como destaque principal;
-- verde para estado saudável/online;
-- vermelho somente para erro real;
-- boa leitura em desktop e mobile;
-- suporte futuro a tema claro/escuro;
-- informações técnicas avançadas recolhidas por padrão;
-- ações destrutivas ou de escrita claramente separadas da telemetria.
-
-## Estrutura desejada
-
-### Cabeçalho
-
-- nome do App;
-- modelo da câmera;
-- estado online/offline;
-- indicação **LAN only**;
-- último check;
-- botão para diagnóstico profundo.
-
-### Área principal
-
-Em telas grandes:
+## Estrutura
 
 ```text
-┌─────────────────────────────────────────────────────────────┐
-│ JOOAN Local Control       Online · LAN only · JA-A12       │
-├───────────────────┬─────────────────────────────────────────┤
-│ PTZ               │ Câmera / Streams                       │
-│                   │ ┌──────────────┐ ┌──────────────┐       │
-│       ▲           │ │ Lens / ch00 │ │ Lens / ch01 │       │
-│    ◀ STOP ▶       │ └──────────────┘ └──────────────┘       │
-│       ▼           │                                         │
-├───────────────────┼───────────────────┬─────────────────────┤
-│ Diagnóstico       │ ONVIF / RTSP      │ Dispositivo         │
-├───────────────────┼───────────────────┼─────────────────────┤
-│ SD / gravação     │ Detecção/tracking │ Luz / privacy       │
-└───────────────────┴───────────────────┴─────────────────────┘
+┌──────────────────────────────────────────────────────────────┐
+│ JOOAN Local Control · modelo · online/offline               │
+├──────────────────────────────────────────────────────────────┤
+│ VISÃO GERAL                                                  │
+│ [dispositivo] [rede] [SD] [mídia]                           │
+│ [recursos]                    [serviços locais]              │
+├──────────────────────────────────────────────────────────────┤
+│ CÂMERAS & PTZ                                                │
+│ [Lente 1] [Lente 2]        [PTZ]        [Informações]        │
+├──────────────────────────────────────────────────────────────┤
+│ DETECÇÃO / ALERTAS                                           │
+├──────────────────────────────────────────────────────────────┤
+│ GRAVAÇÃO / SD / AGENDAS                                      │
+├──────────────────────────────────────────────────────────────┤
+│ DIAGNÓSTICO MANUAL                                           │
+├──────────────────────────────────────────────────────────────┤
+│ TODAS AS CONFIGURAÇÕES LIDAS                                 │
+└──────────────────────────────────────────────────────────────┘
 ```
 
-## Cards
+## Mídia
 
-### PTZ
+Cada lente oferece:
 
-- pad direcional grande;
-- stop central;
-- feedback visual enquanto pressionado;
-- futuros presets abaixo, somente quando validados.
+- Snapshot;
+- Ao vivo;
+- Parar.
 
-### Mídia
+Nada é aberto automaticamente. Ao iniciar os dois feeds, o primeiro precisa concluir a negociação antes do segundo ser solicitado.
 
-- duas lentes lado a lado quando disponíveis;
-- badge de stream principal/substream;
-- codec e resolução em informação secundária;
-- refresh/snapshot;
-- futuro vídeo contínuo sem mostrar URL RTSP autenticada.
+## PTZ
 
-### Diagnóstico
+- pad direcional;
+- STOP;
+- seletor de velocidade ONVIF;
+- badge mostrando ONVIF ou fallback CGI.
 
-Mostrar estados resumidos:
+## Informações gerais
 
-- Camera API;
-- RTSP;
-- porta 9898;
-- ONVIF;
-- autenticação;
-- última validação.
-
-O JSON bruto deve ficar em uma seção avançada expansível.
-
-### Dispositivo
+Mostrar apenas leituras úteis:
 
 - modelo;
 - firmware;
-- MAC;
-- IP;
+- ID/MAC/IP;
+- canais;
+- codec;
 - timezone;
-- dual-lens;
-- capabilities relevantes.
+- RTSP;
+- ONVIF;
+- último contato.
 
-### SD e gravação
+## Estado lido
 
-- estado do cartão;
-- capacidade total;
-- espaço livre;
-- gravação habilitada;
-- tipo/canal;
-- schedules somente como detalhe.
+A área inferior agrupa os valores brutos/interpretados em:
 
-### Detecção
-
-- motion;
-- sensitivity;
-- person;
-- vehicle;
-- auto tracking.
-
-Inicialmente read-only. Toggles só devem aparecer após validação de escrita LAN.
-
-### Iluminação e privacy
-
-- LED;
-- floodlight;
-- yellow light;
-- flip/mirror;
-- PTZ hide/privacy.
+- OEM state;
+- propriedades OEM;
+- device features;
+- capabilities;
+- plataforma;
+- rede;
+- RTSP;
+- ONVIF.
 
 ## Regras de UX
 
 1. Nunca mostrar senha, `userkey`, RTSP key ou URL autenticada.
-2. Nunca mostrar um controle de escrita se o backend só confirmou leitura.
-3. Recursos não suportados devem aparecer como **Não detectado**, e não como erro.
-4. Erro ONVIF não deve marcar a câmera inteira como offline.
-5. Diagnóstico avançado não deve dominar a tela principal.
-6. O painel deve continuar útil mesmo com a Internet da câmera bloqueada.
-
-## Implementado até a v0.16
-
-- frontend separado em template, CSS e JavaScript;
-- abas de Visão geral, Câmeras & PTZ, Detecção, Gravação, Diagnóstico e Laboratório;
-- cards amigáveis para estado, serviços e capabilities;
-- JSON bruto recolhido em detalhes expansíveis;
-- duas lentes apresentadas como canais separados;
-- preview contínuo local sob demanda;
-- seleção automática de substream quando validado/disponível;
-- PTZ ao lado do preview;
-- suporte a tema claro/escuro;
-- layout responsivo.
-
-## Próximos refinamentos
-
-- validar o substream da segunda lente;
-- medir CPU/latência do bridge MJPEG no Raspberry Pi;
-- decidir se MJPEG permanece como preview padrão ou se evolui para HLS/WebRTC/go2rtc;
-- promover setters do Laboratório para controles normais somente após readback confiável no hardware;
-- manter presets fora da UI principal enquanto o firmware stock retornar `ActionNotSupported`/lista vazia;
-- evoluir o resultado técnico do laboratório para comparações mais visuais sem esconder o JSON original.
+2. Nenhum controle de escrita de configuração.
+3. Recursos ausentes aparecem como **Não detectado**, não como falha geral.
+4. Erro RTSP/ONVIF não deve, por si só, marcar a câmera inteira como offline.
+5. Nenhuma mídia é aberta automaticamente.
+6. Diagnóstico de mídia permanece explícito e manual.
