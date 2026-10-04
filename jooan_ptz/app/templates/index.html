@@ -387,6 +387,45 @@
       <article class="card">
         <div class="card-heading">
           <div>
+            <span class="section-kicker">OEM WRITE</span>
+            <h2>Escrita OEM experimental</h2>
+          </div>
+          <span class="badge warning">Guardado</span>
+        </div>
+        <p class="helper">
+          Prepara alterações somente para valores que já confirmamos no hardware e verifica as
+          superfícies OEM conhecidas. Enquanto nenhum setter local de configuração estiver
+          comprovado, <strong>nenhum Set* inventado é enviado</strong>. O readback continua vindo
+          de <code>get_deviceFeatures</code> na porta 9898.
+        </p>
+        <div class="lab-controls">
+          <label>Alvo
+            <select id="labOemWriteTarget" class="lab-select">
+              <option value="floodlight">Modo de iluminação (floodlight)</option>
+              <option value="motion_zones">Detecção por zonas (todas/nenhuma)</option>
+              <option value="motion_sensitivity">Sensibilidade de movimento</option>
+              <option value="autotrack">Rastreamento automático</option>
+              <option value="flipmirror">Flip Mirror</option>
+              <option value="timezone">Fuso horário</option>
+            </select>
+          </label>
+          <label>Valor
+            <select id="labOemWriteValue" class="lab-select"></select>
+          </label>
+        </div>
+        <div class="toolbar">
+          <button id="labOemWriteSurface" class="button secondary">Inspecionar superfície OEM</button>
+          <button id="labOemWritePlan" class="button primary">Preparar teste de escrita</button>
+          <button id="labOemWriteExecute" class="button danger" disabled>Executar escrita · setter não confirmado</button>
+        </div>
+        <div id="labOemWriteSummary" class="lab-summary">
+          Nenhum writer de configuração OEM comprovado ainda. Use o probe para validar o que a câmera expõe.
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-heading">
+          <div>
             <span class="section-kicker">SETDIAGMODE</span>
             <h2>Modo de diagnóstico OEM</h2>
           </div>

@@ -104,6 +104,20 @@ OEM_TOGGLE_GROUPS: dict[str, tuple[str, ...]] = {
 }
 
 
+OEM_WRITE_PROPERTY_KEYS = (
+    "floodlight",
+    "autotrack",
+    "flipmirror",
+    "mdarea",
+    "sub_mdarea",
+    "mdsensitivity",
+    "sub_mdsensitivity",
+    "timezone",
+)
+OEM_MOTION_ALL_ZONES = (1 << 25) - 1
+OEM_TIMEZONE_RE = re.compile(r"^GMT[+-](?:0\d|1[0-4]):(?:00|15|30|45)$")
+
+
 class LabError(RuntimeError):
     """Raised when an experimental action cannot be executed safely."""
 
@@ -155,6 +169,202 @@ def _oem_property_fingerprints(properties: dict[str, Any]) -> dict[str, dict[str
         if len(result) >= 256:
             break
     return result
+
+
+def _coerce_oem_write_plan(target: str, value: Any) -> dict[str, Any]:
+    """Validate one strictly allowlisted OEM write target.
+
+    This function describes a desired mutation only. It intentionally does not
+    select or guess a transport; a stock local configuration writer has not yet
+    been proven for this firmware.
+    """
+    target = str(target or "").strip()
+
+    if target == "floodlight":
+        try:
+            mode = int(value)
+        except (TypeError, ValueError) as exc:
+            raise LabError("floodlight must be 0, 1, 2 or 3") from exc
+        if mode not in {0, 1, 2, 3}:
+            raise LabError("floodlight must be 0, 1, 2 or 3")
+        return {"floodlight": mode}
+
+    if target == "autotrack":
+        if value in (True, 1, "1", "on", "true"):
+            enabled = 1
+        elif value in (False, 0, "0", "off", "false"):
+            enabled = 0
+        else:
+            raise LabError("autotrack must be on/off")
+        return {"autotrack": enabled}
+
+    if target == "flipmirror":
+        if value in (True, 3, "3", "on", "true"):
+            enabled = 3
+        elif value in (False, 0, "0", "off", "false"):
+            enabled = 0
+        else:
+            raise LabError("flipmirror must be on/off")
+        return {"flipmirror": enabled}
+
+    if target == "motion_zones":
+        normalized = str(value or "").strip().lower()
+        if normalized in {"on", "all", "1", "true"}:
+            mask = OEM_MOTION_ALL_ZONES
+        elif normalized in {"off", "none", "0", "false"}:
+            mask = 0
+        else:
+            raise LabError("motion_zones must be on/off")
+        return {"mdarea": mask, "sub_mdarea": mask}
+
+    if target == "motion_sensitivity":
+        try:
+            sensitivity = int(value)
+        except (TypeError, ValueError) as exc:
+            raise LabError("motion_sensitivity must be 1, 2 or 3") from exc
+        if sensitivity not in {1, 2, 3}:
+            raise LabError("motion_sensitivity must be 1, 2 or 3")
+        return {
+            "mdsensitivity": sensitivity,
+            "sub_mdsensitivity": sensitivity,
+        }
+
+    if target == "timezone":
+        timezone = str(value or "").strip().upper()
+        if not OEM_TIMEZONE_RE.fullmatch(timezone):
+            raise LabError("timezone must use the confirmed GMT±HH:MM format")
+        return {"timezone": timezone}
+
+    raise LabError("Unsupported OEM write target")
+
+
+def oem_write_plan(camera, *, target: str, value: Any) -> dict[str, Any]:
+    """Build a mutation plan from confirmed value mappings without writing."""
+    requested = _coerce_oem_write_plan(target, value)
+    info = camera.get_device_features().as_dict()
+    properties = info.get("properties") or {}
+    before = {
+        key: properties.get(key)
+        for key in requested
+        if key in properties
+    }
+    differences = {
+        key: {"before": properties.get(key), "after": expected}
+        for key, expected in requested.items()
+        if properties.get(key) != expected
+    }
+    return {
+        "operation": "oem_write_plan",
+        "target": str(target or "").strip(),
+        "requested": requested,
+        "before": before,
+        "differences": differences,
+        "would_change": bool(differences),
+        "writer_ready": False,
+        "executed": False,
+        "reason": (
+            "No stock local OEM configuration setter has been evidenced yet; "
+            "the laboratory will not guess a Set* command."
+        ),
+    }
+
+
+def _safe_get_json_conf_summary(data: Any) -> dict[str, Any]:
+    """Return only non-secret fields from the fixed GetJsonConf probe."""
+    if not isinstance(data, dict):
+        return {"parsed": False}
+
+    result: dict[str, Any] = {"parsed": True}
+    if "result" in data:
+        result["result"] = data.get("result")
+
+    system = data.get("SystemInfo")
+    if isinstance(system, dict) and "ProductName" in system:
+        result["product_name"] = system.get("ProductName")
+
+    # Some firmwares wrap the query result under another object/string. Search
+    # only for ProductName and never echo the full configuration response.
+    if "product_name" not in result:
+        def find_product_name(node: Any, depth: int = 0) -> Any:
+            if depth > 4:
+                return None
+            if isinstance(node, dict):
+                for key, item in node.items():
+                    if str(key) == "ProductName" and isinstance(item, (str, int, float)):
+                        return item
+                    found = find_product_name(item, depth + 1)
+                    if found is not None:
+                        return found
+            elif isinstance(node, list):
+                for item in node[:16]:
+                    found = find_product_name(item, depth + 1)
+                    if found is not None:
+                        return found
+            return None
+
+        product = find_product_name(data)
+        if product is not None:
+            result["product_name"] = product
+    return result
+
+
+def oem_write_surface_probe(camera) -> dict[str, Any]:
+    """Inspect only evidenced OEM configuration surfaces; never mutate state."""
+    info = camera.get_device_features().as_dict()
+    properties = info.get("properties") or {}
+    current = {
+        key: properties.get(key)
+        for key in OEM_WRITE_PROPERTY_KEYS
+        if key in properties
+    }
+
+    get_json_conf: dict[str, Any]
+    try:
+        response = camera._goform(
+            "/goform/getOtherSetttings",
+            {
+                "singleCMD": "GetJsonConf",
+                "json_string": json.dumps(
+                    {"SystemInfo": {"ProductName": ""}},
+                    separators=(",", ":"),
+                ),
+            },
+        )
+        get_json_conf = {
+            "accepted": True,
+            **_safe_get_json_conf_summary(response),
+        }
+    except Exception as exc:
+        get_json_conf = {
+            "accepted": False,
+            "error_type": type(exc).__name__,
+        }
+
+    return {
+        "operation": "oem_write_surface_probe",
+        "readback_9898": current,
+        "get_json_conf": get_json_conf,
+        "configuration_writer_discovered": False,
+        "write_transports": {
+            "cgi_single_command": {
+                "known_writable": True,
+                "scope": ["PTZ", "SetDiagMode"],
+                "configuration_setter_known": False,
+            },
+            "features_9898": {
+                "known_read": "GET /get?singleCMD=get_deviceFeatures",
+                "configuration_setter_known": False,
+            },
+            "get_json_conf": {
+                "known_read": "GetJsonConf with a fixed SystemInfo/ProductName query",
+                "configuration_setter_known": False,
+            },
+        },
+        "next_step": (
+            "Capture or reverse the exact CAM720 configuration write request. "
+            "No arbitrary CGI, DP/MQTT or diagnostic-shell command is attempted."
+        ),
+    }
 
 
 def oem_toggle_snapshot(camera, *, group: str) -> dict[str, Any]:

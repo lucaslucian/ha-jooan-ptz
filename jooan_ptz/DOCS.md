@@ -85,6 +85,27 @@ Quando disponíveis, são mostrados dados de:
 
 Esses recursos permanecem **somente leitura** até termos um comando LAN de escrita validado.
 
+### Laboratório de escrita OEM
+
+A v0.15 adiciona um laboratório de escrita **guardado**. Ele não inventa um setter. Em vez disso:
+
+- lê novamente os valores atuais via `get_deviceFeatures` na porta 9898;
+- valida apenas alvos já mapeados no hardware: iluminação, zonas e sensibilidade de movimento, auto tracking, Flip Mirror e timezone;
+- produz um plano exato de `before → after`;
+- consulta o `GetJsonConf` comprovado usando somente a consulta fixa `SystemInfo/ProductName`;
+- mantém a execução bloqueada enquanto nenhum writer local de configuração tiver sido confirmado.
+
+Os planos atuais conhecem estes valores observados:
+
+- `floodlight`: 0 IR, 1 LED branco, 2 inteligente, 3 IR/visão noturna desligado;
+- `mdarea/sub_mdarea`: máscara 25 bits, 33554431 = todas as zonas e 0 = nenhuma;
+- `mdsensitivity/sub_mdsensitivity`: 1 baixa, 2 média, 3 alta;
+- `autotrack`: 0/1;
+- `flipmirror`: 0/3;
+- `timezone`: formato `GMT±HH:MM`.
+
+O botão de execução só deve ser liberado depois que o protocolo real de escrita do firmware for identificado. `SetDiagMode` não é usado como shell para contornar essa restrição.
+
 ### RTSP
 
 O App obtém a configuração RTSP somente no backend e testa primeiro os caminhos conhecidos:

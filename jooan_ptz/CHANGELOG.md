@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.15.0
+
+- Added a guarded **OEM write laboratory** for values already mapped on the JA-A12.
+- Added strict write plans for `floodlight`, motion zones, motion sensitivity, `autotrack`, `flipmirror` and `timezone`.
+- Motion ON/OFF plans use the confirmed paired 25-bit masks: `mdarea/sub_mdarea = 33554431` for all zones and `0` for no zones.
+- The lighting plan exposes the confirmed `floodlight` enum: 0 infrared, 1 white LED, 2 smart detection light, 3 IR/night vision disabled.
+- Flip Mirror plans map OFF/ON to the observed values 0/3; sensitivity maps low/medium/high to 1/2/3 on both main/sub fields.
+- Added a fixed, read-only `GetJsonConf` probe for `SystemInfo/ProductName` plus 9898 readback to inspect the stock configuration surface without leaking the full config.
+- No guessed configuration setter is executed. The Execute button stays locked until a stock local writer is evidenced.
+- The laboratory continues to forbid arbitrary CGI/singleCMD, DP/MQTT and diagnostic-shell execution.
+
+
 ## 0.14.1
 
 - Added a read-only OEM `system` mapper group for stock port 9898.

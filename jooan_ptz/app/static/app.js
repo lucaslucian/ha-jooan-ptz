@@ -606,6 +606,7 @@ function updateLabAvailability(data){
   document.querySelectorAll('#tab-lab button').forEach(button=>{
     if(button.id==='labClearResult')return;
     if(button.id==='labPresetGoto'||button.id==='labPresetDelete')return;
+    if(button.id==='labOemWriteExecute')return;
     button.disabled=!ready;
   });
 
@@ -898,6 +899,120 @@ async function labOemToggle(action){
   }
 }
 
+const OEM_WRITE_VALUES={
+  floodlight:[
+    ['0','Infravermelho (0)'],
+    ['1','LED branco (1)'],
+    ['2','Inteligente por detecção (2)'],
+    ['3','Visão noturna / IR desligado (3)']
+  ],
+  motion_zones:[
+    ['on','Todas as 25 zonas ativas'],
+    ['off','Nenhuma zona ativa']
+  ],
+  motion_sensitivity:[
+    ['1','Baixa (1)'],
+    ['2','Média (2)'],
+    ['3','Alta (3)']
+  ],
+  autotrack:[
+    ['off','Desligado (0)'],
+    ['on','Ligado (1)']
+  ],
+  flipmirror:[
+    ['off','Desligado (0)'],
+    ['on','Ligado (3)']
+  ],
+  timezone:[
+    ['GMT-12:00','GMT-12:00'],
+    ['GMT-11:00','GMT-11:00'],
+    ['GMT-10:00','GMT-10:00'],
+    ['GMT-09:30','GMT-09:30'],
+    ['GMT-09:00','GMT-09:00'],
+    ['GMT-08:00','GMT-08:00'],
+    ['GMT-07:00','GMT-07:00'],
+    ['GMT-06:00','GMT-06:00'],
+    ['GMT-05:00','GMT-05:00'],
+    ['GMT-04:30','GMT-04:30'],
+    ['GMT-04:00','GMT-04:00'],
+    ['GMT-03:30','GMT-03:30'],
+    ['GMT-03:00','GMT-03:00'],
+    ['GMT-02:00','GMT-02:00'],
+    ['GMT-01:00','GMT-01:00'],
+    ['GMT+00:00','GMT+00:00'],
+    ['GMT+01:00','GMT+01:00'],
+    ['GMT+02:00','GMT+02:00'],
+    ['GMT+03:00','GMT+03:00'],
+    ['GMT+03:30','GMT+03:30'],
+    ['GMT+04:00','GMT+04:00'],
+    ['GMT+04:30','GMT+04:30'],
+    ['GMT+05:00','GMT+05:00'],
+    ['GMT+05:30','GMT+05:30'],
+    ['GMT+05:45','GMT+05:45'],
+    ['GMT+06:00','GMT+06:00'],
+    ['GMT+06:30','GMT+06:30'],
+    ['GMT+07:00','GMT+07:00'],
+    ['GMT+08:00','GMT+08:00'],
+    ['GMT+09:00','GMT+09:00'],
+    ['GMT+09:30','GMT+09:30'],
+    ['GMT+10:00','GMT+10:00'],
+    ['GMT+10:30','GMT+10:30'],
+    ['GMT+11:00','GMT+11:00'],
+    ['GMT+12:00','GMT+12:00'],
+    ['GMT+13:00','GMT+13:00'],
+    ['GMT+14:00','GMT+14:00']
+  ]
+};
+
+function renderOemWriteValues(){
+  const target=$('labOemWriteTarget')?.value;
+  const select=$('labOemWriteValue');
+  if(!target||!select)return;
+  const previous=select.value;
+  const values=OEM_WRITE_VALUES[target]||[];
+  select.innerHTML=values.map(([value,label])=>
+    '<option value="'+esc(value)+'">'+esc(label)+'</option>'
+  ).join('');
+  if(values.some(([value])=>String(value)===previous))select.value=previous;
+  $('labOemWriteSummary').textContent=
+    'Alvo '+target+' preparado. O botão de execução permanece bloqueado até existir um setter OEM comprovado.';
+}
+
+async function labOemWriteSurface(){
+  try{
+    const payload=await labRequest('api/lab/oem/write-surface');
+    const accepted=payload?.get_json_conf?.accepted===true;
+    $('labOemWriteSummary').textContent=accepted
+      ?'GetJsonConf e leitura 9898 confirmados. Ainda não foi encontrado um writer local de configuração.'
+      :'Leitura 9898 disponível; GetJsonConf não foi confirmado neste teste. Nenhum write foi executado.';
+  }catch(error){
+    showLabResult('OEM write surface: '+error.message);
+  }finally{
+    $('labOemWriteExecute').disabled=true;
+    if(lastData)updateLabAvailability(lastData);
+  }
+}
+
+async function labOemWritePlan(){
+  const target=$('labOemWriteTarget').value;
+  const value=$('labOemWriteValue').value;
+  try{
+    const payload=await labRequest('api/lab/oem/write-plan',{target,value});
+    if(!payload?.would_change){
+      $('labOemWriteSummary').textContent=
+        'O valor pedido já corresponde ao readback atual; nenhuma alteração seria necessária.';
+    }else{
+      $('labOemWriteSummary').textContent=
+        'Plano validado, mas não executado: falta comprovar o setter OEM local para este firmware.';
+    }
+  }catch(error){
+    showLabResult('OEM write plan: '+error.message);
+  }finally{
+    $('labOemWriteExecute').disabled=true;
+    if(lastData)updateLabAvailability(lastData);
+  }
+}
+
 function resetOemToggleBaseline(){
   labOemToggleBaseline=null;
   $('labOemToggleSummary').textContent='Grupo alterado. Capture a baseline deste grupo antes de comparar.';
@@ -1034,6 +1149,9 @@ $('labOemToggleRead').addEventListener('click',()=>labOemToggle('read'));
 $('labOemToggleBaseline').addEventListener('click',()=>labOemToggle('baseline'));
 $('labOemToggleCompare').addEventListener('click',()=>labOemToggle('compare'));
 $('labOemToggleGroup').addEventListener('change',resetOemToggleBaseline);
+$('labOemWriteTarget').addEventListener('change',renderOemWriteValues);
+$('labOemWriteSurface').addEventListener('click',labOemWriteSurface);
+$('labOemWritePlan').addEventListener('click',labOemWritePlan);
 $('labDiagProbe').addEventListener('click',labDiagProbe);
 $('labDiagDisable').addEventListener('click',labDiagDisable);
 $('labClearResult').addEventListener('click',()=>showLabResult('Nenhum teste executado.'));
@@ -1051,5 +1169,6 @@ document.addEventListener('visibilitychange',()=>{
 window.addEventListener('pagehide',()=>{emergencyStop();void stopLivePreview();stopPolling()});
 window.addEventListener('pageshow',()=>{if(!document.hidden)startPolling()});
 
+renderOemWriteValues();
 enablePtz(false);
 startPolling();
