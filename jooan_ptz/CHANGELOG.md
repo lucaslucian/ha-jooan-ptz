@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.18.1
+
+- Finalized the operational scope: the only user actions are **PTZ** and **camera image/video viewing**.
+- Removed the remaining manual action endpoints for light refresh, ONVIF diagnostics and RTSP substream validation.
+- Removed the corresponding buttons from the dashboard; overview, detection, recording, service diagnostics and raw settings are now strictly read-only.
+- ONVIF PTZ discovery is now lazy: the first directional PTZ command performs one minimal `GetCapabilities` + `GetProfiles` discovery. If usable ONVIF PTZ is unavailable, the App stays on the proven CGI PTZ fallback.
+- No auxiliary light/floodlight controls were promoted after the final hardware tests produced no physical/state change.
+
+
 ## 0.18.0
 
 - Removed the **Laboratory** feature completely from the App UI and backend API. The `/api/lab/*` routes, SetDiagMode callback port/configuration and laboratory test suite were removed.
