@@ -13,18 +13,17 @@ Controle e monitoramento **local** para câmeras JOOAN/CAM720 compatíveis no Ho
 - preview MJPEG sob demanda, sem expor credenciais ao navegador;
 - leitura de dispositivo, rede, SD, gravação, detecção, tracking, iluminação e agendas;
 - capabilities/estado OEM pela porta 9898;
-- descoberta ONVIF mínima e manual;
-- teste RTSP manual;
+- descoberta ONVIF mínima, acionada somente pela primeira movimentação PTZ;
 - painel único, sem abas.
 
 ### Comportamento conservador de rede
 
-A JA-A12 de referência mostrou instabilidade quando várias sessões RTSP/ONVIF são abertas em sequência. A v0.18:
+A JA-A12 de referência mostrou instabilidade quando várias sessões RTSP/ONVIF são abertas em sequência. A v0.18.1:
 
 - não abre RTSP na inicialização;
 - não inicia vídeo automaticamente;
 - usa ICMP para heartbeat;
-- deixa ONVIF e teste RTSP sob demanda;
+- não expõe ações de diagnóstico; ONVIF é consultado somente pelo fluxo PTZ;
 - abre os dois feeds em sequência, e não ao mesmo tempo.
 
 ### Segurança e escopo
