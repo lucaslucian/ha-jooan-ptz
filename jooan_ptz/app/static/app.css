@@ -31,7 +31,7 @@ body{
   font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
 }
 button{font:inherit}
-.shell{width:min(1220px,calc(100% - 28px));margin:0 auto;padding:28px 0 56px}
+.shell{width:min(1480px,calc(100% - 28px));margin:0 auto;padding:28px 0 56px}
 .app-header{display:flex;align-items:center;justify-content:space-between;gap:24px;margin-bottom:16px}
 .app-header h1{font-size:clamp(28px,4vw,42px);line-height:1;margin:7px 0 8px;letter-spacing:-.035em}
 .app-header p{margin:0;color:var(--muted)}
@@ -120,6 +120,36 @@ button{font:inherit}
 .meta-pill{font-size:11px;color:var(--muted);background:rgba(155,167,181,.07);border:1px solid var(--border-soft);border-radius:999px;padding:5px 8px}
 .camera-workspace{display:grid;grid-template-columns:minmax(0,1.7fr) minmax(300px,.8fr);gap:16px}
 .live-card,.ptz-card{margin-bottom:16px}
+.control-dashboard{
+  display:grid;
+  grid-template-columns:minmax(520px,1.7fr) minmax(270px,.72fr) minmax(300px,.82fr);
+  gap:16px;
+  align-items:start
+}
+.control-dashboard>.card{height:100%;margin-bottom:16px}
+.dual-feed-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.feed-tile{border:1px solid var(--border);border-radius:15px;overflow:hidden;background:var(--panel-2)}
+.feed-stage{
+  aspect-ratio:16/9;background:#030405;position:relative;display:grid;place-items:center;
+  border-bottom:1px solid var(--border-soft);overflow:hidden
+}
+.feed-stage img{width:100%;height:100%;object-fit:contain;background:#000;display:block}
+.feed-body{padding:12px}
+.ptz-mode-row{display:flex;align-items:end;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.ptz-speed-label{display:grid;gap:6px;color:var(--muted);font-size:11px;font-weight:750}
+.camera-info-card .info-list{margin-top:0}
+.camera-info-card .info-row strong{max-width:62%;text-align:right;overflow-wrap:anywhere}
+.read-settings-groups{display:grid;gap:14px}
+.read-settings-group{border:1px solid var(--border-soft);background:var(--panel-2);border-radius:14px;padding:13px}
+.read-settings-group h3{font-size:13px;margin:0 0 10px;color:var(--text)}
+.read-setting-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.read-setting{
+  min-width:0;border:1px solid var(--border-soft);background:rgba(255,255,255,.015);
+  border-radius:10px;padding:9px 10px
+}
+.read-setting span{display:block;color:var(--muted);font-size:10px;line-height:1.35;overflow-wrap:anywhere}
+.read-setting strong{display:block;font-size:12px;margin-top:4px;line-height:1.35;overflow-wrap:anywhere;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+
 .preview-stage{
   aspect-ratio:16/9;border-radius:14px;overflow:hidden;background:#030405;position:relative;
   border:1px solid var(--border-soft);display:grid;place-items:center
@@ -176,16 +206,22 @@ details pre{margin:0;padding:0 14px 14px;color:#c8d1dd;white-space:pre-wrap;word
 .lab-divider{border:0;border-top:1px solid var(--border-soft);margin:18px 0 10px}
 .lab-result{margin:0;border:1px solid var(--border-soft);border-radius:12px;background:#080a0d;color:#cbd5e1;padding:14px;white-space:pre-wrap;word-break:break-word;max-height:520px;overflow:auto;font-size:11px;line-height:1.5}
 code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:#b8dcff}
+@media(max-width:1150px){
+  .control-dashboard{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .feeds-card{grid-column:1/-1}
+  .read-setting-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
 @media(max-width:900px){
   .stat-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
-  .content-grid.two,.camera-workspace{grid-template-columns:1fr}
+  .content-grid.two,.camera-workspace,.control-dashboard{grid-template-columns:1fr}
+  .feeds-card{grid-column:auto}
   .setting-grid,.diagnostic-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
 }
 @media(max-width:620px){
   .shell{width:min(100% - 18px,1220px);padding-top:16px}
   .app-header{align-items:flex-start}
   .app-header p{font-size:12px}
-  .stat-grid,.camera-grid,.feature-grid,.setting-grid,.schedule-grid,.diagnostic-grid,.onvif-grid{grid-template-columns:1fr}
+  .stat-grid,.camera-grid,.dual-feed-grid,.feature-grid,.setting-grid,.schedule-grid,.diagnostic-grid,.onvif-grid,.read-setting-grid{grid-template-columns:1fr}
   .card{padding:14px;border-radius:15px}
   .ptz-grid{grid-template-columns:repeat(3,70px)}
   .tabs{top:4px}
