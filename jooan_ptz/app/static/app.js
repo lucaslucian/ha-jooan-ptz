@@ -401,7 +401,7 @@ function renderDiagnostics(data){
   const profiles=onvif.profiles||[];
   const dev=onvif.device_diagnostics?.device_information?.data||{};
   if(!onvif.reachable){
-    $('onvifSummary').innerHTML='<div class="empty">ONVIF ainda não foi descoberto nesta sessão.</div>';
+    $('onvifSummary').innerHTML='<div class="empty">ONVIF ainda não foi necessário. A descoberta mínima ocorre somente ao usar o PTZ.</div>';
   }else{
     $('onvifSummary').innerHTML=
       '<div class="onvif-grid">'+
@@ -465,9 +465,7 @@ function enableControls(data){
     button.disabled=!mediaEnabled||liveChannels.size>0;
   });
 
-  $('probe').disabled=!mediaEnabled||liveChannels.size>0;
-  $('validateSubstreams').disabled=!mediaEnabled||liveChannels.size>0;
-  $('lightTest').disabled=!mediaEnabled||liveChannels.size>0;
+
 }
 
 function renderAll(data){
@@ -686,72 +684,6 @@ function emergencyStop(){
   void sendPtz('stop',true);
 }
 
-async function lightRefresh(){
-  const button=$('lightTest');
-  button.disabled=true;
-  button.textContent='Atualizando...';
-  try{
-    const response=await fetch(api('api/test'),{method:'POST'});
-    if(!response.ok){
-      const body=await response.json();
-      throw new Error(body.error||(body.busy?'Câmera ocupada':'HTTP '+response.status));
-    }
-    await refreshStatus();
-  }catch(error){
-    $('statusBanner').textContent='Atualização: '+error.message;
-  }finally{
-    button.textContent='Atualizar informações';
-    if(lastData)enableControls(lastData);
-  }
-}
-
-async function deepProbe(){
-  const button=$('probe');
-  button.disabled=true;
-  button.textContent='Descobrindo...';
-  try{
-    const response=await fetch(api('api/probe'),{method:'POST'});
-    if(!response.ok){
-      const body=await response.json();
-      throw new Error(body.error||('HTTP '+response.status));
-    }
-    for(let i=0;i<30;i++){
-      await sleep(1000);
-      await refreshStatus();
-      if(!lastData?.probe_running)break;
-    }
-  }catch(error){
-    $('statusBanner').textContent='ONVIF: '+error.message;
-  }finally{
-    button.textContent='Descobrir ONVIF';
-    if(lastData)enableControls(lastData);
-  }
-}
-
-async function validateSubstreams(){
-  const button=$('validateSubstreams');
-  button.disabled=true;
-  button.textContent='Testando...';
-  try{
-    const response=await fetch(api('api/preview/validate'),{method:'POST'});
-    if(!response.ok){
-      const body=await response.json();
-      throw new Error(body.error||('HTTP '+response.status));
-    }
-    for(let i=0;i<20;i++){
-      await sleep(1000);
-      await refreshStatus();
-      if(!lastData?.preview_probe_running)break;
-    }
-    $('previewMessage').textContent='Teste RTSP concluído. Consulte Diagnóstico e Todas as configurações lidas.';
-  }catch(error){
-    $('previewMessage').textContent='Teste RTSP: '+error.message;
-  }finally{
-    button.textContent='Testar substreams RTSP';
-    if(lastData)enableControls(lastData);
-  }
-}
-
 for(const channel of [0,1]){
   const live=$('liveFeed'+channel);
   live.addEventListener('load',()=>{
@@ -805,9 +737,6 @@ $('stop').addEventListener('click',()=>{
 $('refreshSnapshots').addEventListener('click',refreshSnapshots);
 $('startLive').addEventListener('click',startAllFeeds);
 $('stopLive').addEventListener('click',stopAllFeeds);
-$('lightTest').addEventListener('click',lightRefresh);
-$('probe').addEventListener('click',deepProbe);
-$('validateSubstreams').addEventListener('click',validateSubstreams);
 
 window.addEventListener('blur',emergencyStop);
 document.addEventListener('visibilitychange',()=>{

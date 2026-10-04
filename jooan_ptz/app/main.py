@@ -34,10 +34,8 @@ def security_headers(response):
 CONFIG_PATH = Path("/data/options.json")
 _state_lock = threading.Lock()
 _camera_io_lock = threading.Lock()
-_probe_start_lock = threading.Lock()
 _preview_state_lock = threading.Lock()
 _preview_start_lock = threading.Lock()
-_preview_probe_start_lock = threading.Lock()
 _ptz_order_lock = threading.Lock()
 _snapshot_lock = threading.Lock()
 _snapshot_cache: dict[tuple[str, int, str], tuple[float, bytes]] = {}
@@ -53,6 +51,7 @@ _ptz_sequences: dict[str, int] = {}
 _preview_processes: dict[int, object] = {}
 _preview_generations = {0: 0, 1: 0}
 _ptz_onvif_disabled_until = 0.0
+_ptz_onvif_discovery_attempted = False
 PREVIEW_START_TIMEOUT = 10.0
 _validation_started = False
 _state = {
@@ -441,7 +440,7 @@ def _ptz_sequence_is_current(client_id: str | None, sequence: int | None) -> boo
 
 @app.post("/api/ptz/<direction>")
 def ptz(direction: str):
-    global _ptz_onvif_disabled_until
+    global _ptz_onvif_disabled_until, _ptz_onvif_discovery_attempted
 
     if direction not in PTZ_DIRECTIONS:
         return jsonify({"error": "Unsupported PTZ command"}), 400
@@ -476,10 +475,55 @@ def ptz(direction: str):
         camera = get_camera()
         onvif_error = None
 
-        # Prefer ONVIF for directional movement because it exposes a real
-        # normalized speed control. Each request is a bounded pulse that always
-        # sends ONVIF Stop in a finally block. A failed ONVIF attempt is cooled
-        # down briefly and the proven CGI PTZ becomes the automatic fallback.
+        # ONVIF is not exposed as a separate diagnostic action anymore. The
+        # first real PTZ movement performs one minimal capabilities/profiles
+        # discovery. If the camera does not provide usable ONVIF PTZ, all
+        # subsequent movement stays on the already-proven CGI transport.
+        if (
+            direction != "stop"
+            and not onvif_available
+            and not _ptz_onvif_discovery_attempted
+        ):
+            _ptz_onvif_discovery_attempted = True
+            try:
+                discovered = onvif_ptz_discovery(
+                    camera.ip,
+                    camera.onvif_port,
+                )
+                onvif_info = discovered
+                onvif_available = bool(
+                    ((discovered.get("ptz") or {}).get("profile_token"))
+                )
+                with _state_lock:
+                    services = dict(_state.get("services") or {})
+                services["onvif"] = {
+                    "port": camera.onvif_port,
+                    "reachable": bool(discovered.get("reachable")),
+                    "source": "ptz_lazy_discovery",
+                }
+                update_state(
+                    onvif_info=discovered,
+                    ptz_onvif_available=onvif_available,
+                    services=services,
+                    last_deep_probe=time.time(),
+                )
+            except Exception as exc:
+                onvif_error = redact_secrets(exc)
+                with _state_lock:
+                    services = dict(_state.get("services") or {})
+                services["onvif"] = {
+                    "port": camera.onvif_port,
+                    "reachable": False,
+                    "source": "ptz_lazy_discovery",
+                }
+                update_state(
+                    ptz_onvif_available=False,
+                    ptz_last_error=str(onvif_error),
+                    services=services,
+                )
+
+        # Prefer ONVIF only when the lazy discovery produced a usable PTZ
+        # profile. A failed move is cooled down briefly and falls back to CGI.
         if (
             direction != "stop"
             and onvif_available
@@ -545,24 +589,6 @@ def ptz(direction: str):
         safe_error = redact_secrets(exc)
         update_state(last_error=safe_error)
         return jsonify({"error": safe_error}), 502
-    finally:
-        _camera_io_lock.release()
-
-
-@app.post("/api/test")
-def test():
-    with _state_lock:
-        if (
-            _state.get("probe_running")
-            or _state.get("ptz_moving")
-            or _state.get("preview_active")
-            or _state.get("preview_probe_running")
-        ):
-            return jsonify({"ok": False, "busy": True}), 409
-    if not _camera_io_lock.acquire(blocking=False):
-        return jsonify({"ok": False, "busy": True}), 409
-    try:
-        return jsonify({"ok": _validate_camera_locked(deep=False)})
     finally:
         _camera_io_lock.release()
 
@@ -719,58 +745,6 @@ def _stop_live_preview(channel: int | None = None) -> bool:
     )
     return bool(targets)
 
-def _preview_probe_worker() -> None:
-    try:
-        with _camera_io_lock:
-            with _state_lock:
-                channel_count = int(
-                    (_state.get("device_info") or {}).get("channel_count", 1)
-                )
-                ptz_channel = _state.get("ptz_channel")
-            result = get_camera().probe_preview_substreams(
-                channel_count,
-                channels=None,
-            )
-            update_state(preview_probe=result)
-    except Exception as exc:
-        update_state(
-            preview_probe={
-                "probe_mode": "substreams-only",
-                "reachable": False,
-                "streams": [],
-                "error": redact_secrets(exc),
-            }
-        )
-    finally:
-        update_state(preview_probe_running=False)
-
-
-@app.post("/api/preview/validate")
-def validate_preview_substreams():
-    with _state_lock:
-        if (
-            _state.get("probe_running")
-            or _state.get("preview_active")
-            or _state.get("ptz_moving")
-        ):
-            return jsonify({
-                "ok": False,
-                "error": "Camera is busy with preview, PTZ or diagnostics",
-            }), 409
-
-    with _preview_probe_start_lock:
-        with _state_lock:
-            if _state.get("preview_probe_running"):
-                return jsonify({"ok": True, "started": False, "running": True}), 202
-        update_state(preview_probe_running=True)
-        threading.Thread(
-            target=_preview_probe_worker,
-            name="camera-preview-probe",
-            daemon=True,
-        ).start()
-    return jsonify({"ok": True, "started": True, "running": True}), 202
-
-
 @app.post("/api/live/stop")
 def stop_live_preview():
     raw_channel = request.args.get("channel")
@@ -886,84 +860,6 @@ def live_ptz_preview():
 @app.get("/api/live/<int:channel>")
 def live_preview(channel: int):
     return _live_preview_response(channel)
-
-
-def _manual_probe_worker() -> None:
-    try:
-        if not _camera_io_lock.acquire(blocking=False):
-            update_state(last_error="Camera is busy")
-            return
-        try:
-            camera = get_camera()
-            onvif_info = onvif_ptz_discovery(
-                camera.ip,
-                camera.onvif_port,
-            )
-            ptz_channel, ptz_source = _infer_ptz_channel(onvif_info)
-            with _state_lock:
-                services = dict(_state.get("services") or {})
-            services["onvif"] = {
-                "port": camera.onvif_port,
-                "reachable": bool(onvif_info.get("reachable")),
-                "source": "soap_ptz_minimal",
-            }
-            values = {
-                "onvif_info": onvif_info,
-                "ptz_onvif_available": bool(
-                    ((onvif_info.get("ptz") or {}).get("profile_token"))
-                ),
-                "services": services,
-                "last_deep_probe": time.time(),
-            }
-            if ptz_channel is not None:
-                values["ptz_channel"] = ptz_channel
-                values["ptz_channel_source"] = ptz_source
-            update_state(**values)
-        finally:
-            _camera_io_lock.release()
-    except Exception as exc:
-        safe_error = redact_secrets(exc)
-        _LOGGER.warning("ONVIF PTZ discovery failed: %s", safe_error)
-        update_state(
-            onvif_info={"reachable": False, "error": safe_error, "probe_mode": "ptz-minimal"},
-            ptz_onvif_available=False,
-            last_error=safe_error,
-        )
-    finally:
-        update_state(probe_running=False)
-
-
-@app.post("/api/probe")
-def deep_probe():
-    with _state_lock:
-        if _state.get("ptz_moving"):
-            return jsonify({
-                "ok": False,
-                "error": "Stop PTZ movement before starting diagnostics",
-            }), 409
-        if _state.get("preview_active") or _state.get("preview_probe_running"):
-            return jsonify({
-                "ok": False,
-                "error": "Stop live preview/preview validation before deep diagnostics",
-            }), 409
-
-    # Run only the minimal ONVIF discovery needed for PTZ in a background
-    # worker. RTSP probing is a separate explicit action.
-    with _probe_start_lock:
-        with _state_lock:
-            if _state.get("probe_running"):
-                return jsonify({"ok": True, "started": False, "running": True}), 202
-        update_state(probe_running=True, probe_started_at=time.time())
-        try:
-            threading.Thread(
-                target=_manual_probe_worker,
-                name="camera-manual-probe",
-                daemon=True,
-            ).start()
-        except Exception:
-            update_state(probe_running=False)
-            raise
-    return jsonify({"ok": True, "started": True, "running": True}), 202
 
 
 def _snapshot_cache_key(stream: str) -> tuple[str, int, str]:

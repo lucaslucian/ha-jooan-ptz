@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <img alt="Version" src="https://img.shields.io/badge/version-0.18.0-blue">
+  <img alt="Version" src="https://img.shields.io/badge/version-0.18.1-blue">
   <img alt="Stage" src="https://img.shields.io/badge/stage-experimental-orange">
   <img alt="aarch64" src="https://img.shields.io/badge/aarch64-yes-success">
   <img alt="amd64" src="https://img.shields.io/badge/amd64-yes-success">
@@ -42,13 +42,12 @@ Se o botão não preencher o repositório automaticamente:
 | Credenciais RTSP locais | ✅ backend-only |
 | Snapshots JPEG | ✅ sob demanda |
 | Preview MJPEG | 🧪 sob demanda |
-| ONVIF 8899 | ✅ descoberta manual |
-| Teste de substreams RTSP | 🧪 manual |
+| ONVIF 8899 | ✅ descoberta mínima sob demanda do PTZ |
 | Escrita de configurações da câmera | ❌ removida |
 
 ## Interface
 
-A v0.18 usa **uma única página**, sem abas e sem Laboratório. As seções são:
+A v0.18.1 usa **uma única página**, sem abas e sem Laboratório. As únicas ações são PTZ e visualização das câmeras. As demais seções são somente leitura:
 
 - visão geral e saúde;
 - duas lentes com Snapshot / Ao vivo / Parar;
@@ -65,8 +64,8 @@ A JA-A12 de referência mostrou comportamento sensível a várias conexões de m
 
 - na inicialização são feitas apenas leituras CGI/OEM já comprovadas;
 - o monitoramento de online/offline usa ICMP;
-- ONVIF só é descoberto quando o usuário solicita;
-- `ffprobe` RTSP só roda no botão de teste manual;
+- ONVIF só é descoberto uma vez quando o usuário realmente movimenta o PTZ;
+- não existe mais botão de `ffprobe`/teste RTSP no painel;
 - snapshots só abrem RTSP quando solicitados;
 - preview ao vivo só abre RTSP quando solicitado;
 - nenhum feed é iniciado automaticamente ao abrir o painel;
