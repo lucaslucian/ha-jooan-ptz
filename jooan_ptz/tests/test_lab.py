@@ -943,6 +943,11 @@ class _LegacyCamera:
             self.video.update({k: str(v) for k, v in params.items() if k in self.video})
             self.oem["flipmirror"] = 3 if self.video["rotation"] == "MIRROR-VFLIP" else 0
             return _LegacyResponse("result:success")
+        raise AssertionError(endpoint)
+
+    def _post_form(self, endpoint, data=None, authenticated=True, port=None):
+        params = dict(data or {})
+        self.calls.append((endpoint, params, authenticated, port))
         if endpoint == "/goform/NTP":
             mapping = {
                 "EBS_-03": "GMT-03:00",
