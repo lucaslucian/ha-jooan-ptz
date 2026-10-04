@@ -142,6 +142,17 @@ POST /goform/NTP
 time_zone = valores legados como EBS_-03, AST_-04, PST_-08 ...
 ```
 
+### Resultado na JA-A12 de referência
+
+Teste direto em 2026-10-04:
+
+- `GET /goform/getVideoSettings` manteve o worker HTTP ocupado até timeout;
+- `POST /goform/getVideoSettings?...fields...` com corpo `n/a` respondeu **HTTP 200**;
+- `GET /goform/getmotiondetectSettings` respondeu **HTTP 404**;
+- `POST-query /goform/getmotiondetectSettings` também respondeu **HTTP 404**.
+
+Isso reforça que a câmera tem um servidor HTTP muito limitado: uma requisição candidata que trava pode deixar ICMP/ping funcionando enquanto HTTP/CGI parece indisponível. A v0.16.1 passa a preferir POST-query, não repete método após timeout e não tenta um segundo método depois de 404. Um 404 limpo também é memorizado até o reinício do App para evitar bater repetidamente no mesmo CGI ausente.
+
 Esses writers **não são considerados confirmados na JA-A12** apenas pela semelhança. A v0.16 testa a leitura por GET e, se nenhum campo de configuração for reconhecido, repete pelo formato POST-query (`body=n/a`) usado pela página GoAhead original. Depois permite um round-trip no-op que reaplica os valores recém-lidos e compara novamente o CGI e a porta 9898. Escritas candidatas são manuais e usam somente caminhos, nomes de parâmetros e enums allowlisted.
 
 O candidato `/goform/NTP` é tratado separadamente: a fonte pública usa ASP interno para leitura e não oferece um CGI de leitura equivalente. O laboratório envia somente `time_zone` e nunca envia servidor NTP ou intervalo de sincronização.
