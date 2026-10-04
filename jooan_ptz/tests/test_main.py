@@ -1,4 +1,3 @@
-import io
 import threading
 import time
 
@@ -6,11 +5,8 @@ import main
 
 
 def setup_function():
-    main._stop_live_preview()
     main._snapshot_cache.clear()
     main._ptz_sequences.clear()
-    main._preview_processes.clear()
-    main._preview_generations.update({0: 0, 1: 0})
     main._ptz_onvif_disabled_until = 0.0
     main._ptz_onvif_discovery_attempted = False
     main.update_state(
@@ -23,15 +19,6 @@ def setup_function():
         ptz_onvif_available=False,
         ptz_last_transport=None,
         ptz_last_error=None,
-        preview_active=False,
-        preview_channel=None,
-        preview_stream=None,
-        preview_source=None,
-        preview_channels=[],
-        preview_streams={},
-        preview_probe=None,
-        preview_probe_running=False,
-        preview_last_error=None,
         last_error=None,
     )
 
@@ -345,22 +332,22 @@ def test_unavailable_icmp_preserves_last_known_online_state(monkeypatch):
         assert main._state["heartbeat_error"] is not None
 
 
-def test_snapshot_does_not_open_rtsp_while_ptz_is_moving(monkeypatch):
+def test_snapshot_can_capture_while_ptz_is_moving(monkeypatch):
     key = ("10.0.0.10", 554, "ch00_0")
-    main._snapshot_cache[key] = (time.monotonic(), b"cached-frame")
     monkeypatch.setattr(main, "_snapshot_cache_key", lambda stream: key)
 
     class FakeCamera:
         def snapshot(self, stream):
-            raise AssertionError("RTSP must not open while PTZ is moving")
+            assert stream == "ch00_0"
+            return b"jpeg-while-ptz-moves"
 
     monkeypatch.setattr(main, "get_camera", lambda: FakeCamera())
     main.update_state(ptz_moving=True)
 
     image, stale = main._capture_snapshot_with_fallback("ch00_0")
 
-    assert image == b"cached-frame"
-    assert stale is True
+    assert image == b"jpeg-while-ptz-moves"
+    assert stale is False
 
 
 def test_dashboard_template_is_served():
@@ -370,8 +357,13 @@ def test_dashboard_template_is_served():
     assert response.status_code == 200
     body = response.get_data(as_text=True)
     assert "CÂMERAS & PTZ" in body
-    assert "liveFeed0" in body
-    assert "liveFeed1" in body
+    assert "snapshotFeed0" in body
+    assert "snapshotFeed1" in body
+    assert "liveFeed0" not in body
+    assert "liveFeed1" not in body
+    assert 'id="startLive"' not in body
+    assert 'id="stopLive"' not in body
+    assert "Preview PTZ · 1 FPS" in body
     assert "ptzSpeed" in body
     assert "generalInfo" in body
     assert "allReadSettings" in body
@@ -386,158 +378,6 @@ def test_dashboard_template_is_served():
     assert "labCgiProbeAll" not in body
     assert "static/app.css" in body
     assert "static/app.js" in body
-
-
-def test_preview_prefers_onvif_substream():
-    main.update_state(
-        onvif_info={
-            "profiles": [
-                {
-                    "name": "SubStream",
-                    "stream": {"path": "/live/ch00_1"},
-                    "video": {"width": 640, "height": 360},
-                }
-            ]
-        },
-        media_probe={
-            "streams": [
-                {
-                    "path": "/live/ch00_0",
-                    "available": True,
-                    "streams": [{"codec_type": "video"}],
-                }
-            ]
-        },
-    )
-
-    assert main._select_preview_stream(0) == ("/live/ch00_1", "onvif_substream")
-
-
-def test_preview_prefers_validated_substream_over_onvif():
-    main.update_state(
-        preview_probe={
-            "streams": [
-                {
-                    "path": "/live/ch01_1",
-                    "available": True,
-                    "streams": [{"codec_type": "video"}],
-                }
-            ]
-        },
-        onvif_info={"profiles": []},
-        media_probe={"streams": []},
-    )
-
-    assert main._select_preview_stream(1) == (
-        "/live/ch01_1",
-        "validated_substream",
-    )
-
-
-def test_live_preview_streams_mjpeg_without_exposing_rtsp(monkeypatch):
-    class FakeProcess:
-        def __init__(self):
-            self.stdout = io.BytesIO(b"TAIL")
-            self.terminated = False
-
-        def poll(self):
-            return 0 if self.terminated else None
-
-        def terminate(self):
-            self.terminated = True
-
-        def wait(self, timeout=None):
-            return 0
-
-        def kill(self):
-            self.terminated = True
-
-    process = FakeProcess()
-    first = b"--jooanframe\r\nContent-Type: image/jpeg\r\n\r\nJPEG\r\n"
-    monkeypatch.setattr(
-        main,
-        "_start_preview_process",
-        lambda channel: (
-            process,
-            first,
-            "/live/ch00_1",
-            "onvif_substream",
-        ),
-    )
-    main.update_state(
-        online=True,
-        authenticated=True,
-        probe_running=False,
-        preview_probe_running=False,
-        ptz_channel=0,
-    )
-
-    client = main.app.test_client()
-    response = client.get("/api/live/ptz")
-
-    assert response.status_code == 200
-    assert response.headers["Content-Type"].startswith(
-        "multipart/x-mixed-replace"
-    )
-    assert response.headers["X-JOOAN-Preview-Stream"] == "/live/ch00_1"
-    assert b"JPEG" in response.data
-    assert "rtsp://" not in response.get_data(as_text=True)
-
-
-def test_stopping_one_live_preview_keeps_the_other_running():
-    class FakeProcess:
-        def __init__(self):
-            self.terminated = False
-
-        def poll(self):
-            return 0 if self.terminated else None
-
-        def terminate(self):
-            self.terminated = True
-
-        def wait(self, timeout=None):
-            return 0
-
-        def kill(self):
-            self.terminated = True
-
-    first = FakeProcess()
-    second = FakeProcess()
-    main._preview_processes[0] = first
-    main._preview_processes[1] = second
-    main.update_state(
-        preview_active=True,
-        preview_channels=[0, 1],
-        preview_streams={
-            "0": {"path": "/live/ch00_1", "source": "test"},
-            "1": {"path": "/live/ch01_1", "source": "test"},
-        },
-    )
-
-    assert main._stop_live_preview(0) is True
-    assert first.terminated is True
-    assert second.terminated is False
-    assert sorted(main._preview_processes) == [1]
-    with main._state_lock:
-        assert main._state["preview_active"] is True
-        assert main._state["preview_channels"] == [1]
-
-
-def test_snapshot_uses_cache_while_live_preview_is_active(monkeypatch):
-    key = ("10.0.0.10", 554, "ch00_0")
-    main._snapshot_cache[key] = (time.monotonic(), b"cached-live-frame")
-    monkeypatch.setattr(main, "_snapshot_cache_key", lambda stream: key)
-    main.update_state(preview_active=True, ptz_moving=False)
-
-    class FakeCamera:
-        def snapshot(self, stream):
-            raise AssertionError("snapshot RTSP must not open during live preview")
-
-    monkeypatch.setattr(main, "get_camera", lambda: FakeCamera())
-    image, stale = main._capture_snapshot_with_fallback("ch00_0")
-
-    assert image == b"cached-live-frame"
-    assert stale is True
 
 
 def test_ptz_channel_is_inferred_from_onvif_profile_mapping():
@@ -561,43 +401,24 @@ def test_ptz_channel_is_inferred_from_onvif_profile_mapping():
     assert source == "onvif_profile_mapping"
 
 
-def test_preview_candidates_fall_back_from_substream_to_main():
-    main.update_state(
-        preview_probe={
-            "streams": [
-                {
-                    "path": "/live/ch00_1",
-                    "available": True,
-                    "streams": [{"codec_type": "video"}],
-                }
-            ]
-        },
-        onvif_info={"profiles": []},
-        media_probe={
-            "streams": [
-                {
-                    "path": "/live/ch00_0",
-                    "available": True,
-                    "streams": [{"codec_type": "video"}],
-                }
-            ]
-        },
-    )
-
-    assert main._preview_candidates(0) == [
-        ("/live/ch00_1", "validated_substream"),
-        ("/live/ch00_0", "confirmed_main"),
-    ]
-
-
-
-
-def test_non_control_action_routes_are_removed():
+def test_non_control_and_continuous_preview_routes_are_removed():
     client = main.app.test_client()
 
     assert client.post("/api/test").status_code == 404
     assert client.post("/api/probe").status_code == 404
     assert client.post("/api/preview/validate").status_code == 404
+    assert client.get("/api/live/0").status_code == 404
+    assert client.get("/api/live/ptz").status_code == 404
+    assert client.post("/api/live/stop").status_code == 404
     assert client.post("/api/lab/cgi/probe").status_code == 404
     assert client.post("/api/lab/onvif/ptz").status_code == 404
     assert client.post("/api/lab/diag/probe").status_code == 404
+
+
+def test_frontend_uses_one_hertz_ptz_snapshot_refresh():
+    client = main.app.test_client()
+    script = client.get("/static/app.js").get_data(as_text=True)
+
+    assert "PTZ_SNAPSHOT_INTERVAL_MS=1000" in script
+    assert "ptzSnapshotLoop" in script
+    assert "api/live/" not in script
