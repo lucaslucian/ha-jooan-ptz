@@ -212,6 +212,11 @@ LEGACY_VIDEO_ENUMS = {
     "flicker": {"50HZ", "60HZ"},
 }
 
+# A clean 404 is treated as definitive for the lifetime of the add-on process.
+# This avoids repeatedly hitting a missing CGI on the fragile embedded HTTP server.
+_LEGACY_ABSENT_SURFACES: set[tuple[str, str]] = set()
+
+
 LEGACY_NTP_TIMEZONES = {
     "UCT_-11",
     "UCT_-10",
@@ -321,6 +326,22 @@ def _legacy_surface_probe_one(camera, surface: str) -> dict[str, Any]:
     if not config:
         raise LabError("Unsupported legacy CGI surface")
 
+    cache_key = (str(getattr(camera, "ip", "")), str(surface))
+    if cache_key in _LEGACY_ABSENT_SURFACES:
+        return {
+            "surface": surface,
+            "read_path": config["read_path"],
+            "candidate_write_path": config["write_path"],
+            "http_status": 404,
+            "accepted": False,
+            "usable": False,
+            "endpoint_present": False,
+            "cached_absent": True,
+            "recognized_fields": 0,
+            "fields": {},
+            "attempts": [],
+        }
+
     read_fields = tuple(config["read_fields"])
     params = {key: "" for key in read_fields}
     attempts: list[dict[str, Any]] = []
@@ -377,6 +398,7 @@ def _legacy_surface_probe_one(camera, surface: str) -> dict[str, Any]:
         if status == 404:
             result["endpoint_present"] = False
             result["usable"] = False
+            _LEGACY_ABSENT_SURFACES.add(cache_key)
             return result
 
         if summary["recognized_fields"] > 0:
