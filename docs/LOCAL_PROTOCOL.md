@@ -138,7 +138,7 @@ zonemask     = campo presente em código relacionado, embora comentado na UI ana
 Também foi encontrado:
 
 ```text
-/goform/NTP
+POST /goform/NTP
 time_zone = valores legados como EBS_-03, AST_-04, PST_-08 ...
 ```
 
@@ -622,3 +622,15 @@ A auditoria posterior aos testes de hardware introduziu proteções adicionais p
 - RtspConf possui cache curto em memória para evitar uma consulta HTTP a cada snapshot;
 - o último snapshot válido tem TTL limitado, impedindo que uma imagem antiga seja servida indefinidamente;
 - erros de subprocessos RTSP recebem sanitização adicional para impedir vazamento de credenciais.
+
+
+## Referências públicas
+
+As referências abaixo servem para corroborar superfícies e arquitetura. Elas não transformam um endpoint em **CONFIRMADO-STOCK** até que a JA-A12 de referência o valide diretamente.
+
+- `peak3d/jooan-updater` — uso stock de `GetJsonConf` em câmera JOOAN;
+- `woofilian/sharedmemmory` — páginas GoAhead `camera.asp`, `Motion_detect.asp` e `adm/management.asp` que documentam os pares `get/updateVideoSettings`, `get/updatemotiondetectSettings` e o formulário `POST /goform/NTP`;
+- `ADCDS/jooan-w3u-local-firmware` — engenharia reversa de revisão W3-U/JA-A12 e comportamento local do `jooanipc`;
+- pesquisa pública de engenharia reversa do CAM720/JA-A12 — usada apenas para entender superfícies locais e `SetDiagMode`; o projeto não implementa execução de shell de diagnóstico.
+
+Sempre prevalece a evidência coletada na unidade stock usada pelo projeto.
