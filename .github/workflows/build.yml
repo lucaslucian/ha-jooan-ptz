@@ -70,6 +70,7 @@ jobs:
               base / "icon.png",
               base / "logo.png",
               Path("docs/images/dashboard-overview.svg"),
+              Path("docs/images/jooan-local-control-logo.svg"),
               Path("jooan_ptz/app/templates/index.html"),
               Path("jooan_ptz/app/static/app.css"),
               Path("jooan_ptz/app/static/app.js"),
