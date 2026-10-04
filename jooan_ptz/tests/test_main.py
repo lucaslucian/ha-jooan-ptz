@@ -332,7 +332,7 @@ def test_unavailable_icmp_preserves_last_known_online_state(monkeypatch):
         assert main._state["heartbeat_error"] is not None
 
 
-def test_snapshot_can_capture_while_ptz_is_moving(monkeypatch):
+def test_ptz_preview_snapshot_does_not_block_on_camera_io_lock(monkeypatch):
     key = ("10.0.0.10", 554, "ch00_0")
     monkeypatch.setattr(main, "_snapshot_cache_key", lambda stream: key)
 
@@ -344,7 +344,17 @@ def test_snapshot_can_capture_while_ptz_is_moving(monkeypatch):
     monkeypatch.setattr(main, "get_camera", lambda: FakeCamera())
     main.update_state(ptz_moving=True)
 
-    image, stale = main._capture_snapshot_with_fallback("ch00_0")
+    # Simulate another PTZ/ONVIF operation owning the control-plane lock.
+    # A PTZ preview frame must still be allowed so its FFmpeg process cannot
+    # become the reason a future STOP waits on that lock.
+    main._camera_io_lock.acquire()
+    try:
+        image, stale = main._capture_snapshot_with_fallback(
+            "ch00_0",
+            ptz_preview=True,
+        )
+    finally:
+        main._camera_io_lock.release()
 
     assert image == b"jpeg-while-ptz-moves"
     assert stale is False
