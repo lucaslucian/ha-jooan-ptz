@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.18.3
+
+- Removed the continuous MJPEG preview backend and all `/api/live/*` routes.
+- Simplified both camera panels to one-shot snapshots only.
+- While a PTZ direction is held, the UI refreshes the inferred PTZ lens with sequential snapshots at a maximum cadence of **1 frame per second**.
+- The PTZ command is sent before the snapshot loop starts, and one final frame is requested after STOP to show the resulting position.
+- Snapshots are now allowed while CGI PTZ is moving; camera operations remain serialized through the camera I/O lock.
+- If the camera is busy, the existing short-lived last-good snapshot may be returned instead of opening concurrent RTSP work.
+- Reduced Gunicorn from 6 to 4 threads because long-lived MJPEG requests no longer exist.
+- Updated documentation and dashboard artwork to reflect the snapshot-only model.
+
+
 ## 0.18.2
 
 - Promoted **Câmeras & PTZ** to the primary dashboard area immediately below camera health.
