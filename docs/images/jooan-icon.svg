@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256" role="img" aria-labelledby="title desc">
+<title id="title">JOOAN Local Control icon</title>
+<desc id="desc">Dual-lens camera with PTZ arc.</desc>
+<defs><linearGradient id="b" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#4da3ff"/><stop offset="1" stop-color="#2588ef"/></linearGradient></defs>
+<rect x="8" y="8" width="240" height="240" rx="44" fill="#12151b" stroke="#2b323d" stroke-width="6"/>
+<rect x="42" y="66" width="172" height="105" rx="24" fill="#171b22" stroke="#2b323d" stroke-width="5"/>
+<circle cx="96" cy="119" r="30" fill="#0b0d11" stroke="url(#b)" stroke-width="10"/><circle cx="96" cy="119" r="11" fill="#2588ef"/>
+<circle cx="164" cy="119" r="38" fill="#0b0d11" stroke="url(#b)" stroke-width="11"/><circle cx="164" cy="119" r="16" fill="#4da3ff"/>
+<circle cx="197" cy="88" r="6" fill="#4fd08b"/>
+<path d="M74 176 A78 55 0 0 0 190 176" fill="none" stroke="#4da3ff" stroke-width="9" stroke-linecap="round"/>
+<path d="M77 176l-17-7 7 17M187 176l17-7-7 17" fill="none" stroke="#4da3ff" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
