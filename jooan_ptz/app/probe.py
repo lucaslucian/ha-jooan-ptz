@@ -4,6 +4,7 @@ import http.client
 import json
 import logging
 import re
+import re
 import subprocess
 import time
 import xml.etree.ElementTree as ET
@@ -838,6 +839,101 @@ def onvif_probe(host: str, port: int = 8899, timeout: float = 3.0) -> dict[str, 
             result["ptz"] = ptz
 
     return result
+
+
+def _onvif_response_summary(response: dict[str, Any]) -> dict[str, Any]:
+    root = _parse_xml(response.get("body") or b"")
+    fault = _soap_fault(root)
+    return {
+        "http": response.get("status"),
+        "authentication_required": response.get("authentication_required"),
+        "accepted": response.get("status") == 200 and fault is None,
+        "fault": fault,
+        "error": response.get("error"),
+    }
+
+
+def onvif_continuous_move(
+    host: str,
+    port: int,
+    onvif_info: dict[str, Any],
+    *,
+    direction: str,
+    speed: float = 0.25,
+    duration_ms: int = 250,
+) -> dict[str, Any]:
+    """Run one bounded ONVIF PTZ pulse using previously discovered service data."""
+    if direction not in {"up", "down", "left", "right"}:
+        raise ValueError("Unsupported ONVIF PTZ direction")
+
+    speed = max(0.1, min(float(speed), 1.0))
+    duration_ms = max(80, min(int(duration_ms), 800))
+    ptz = onvif_info.get("ptz") or {}
+    path = _safe_service_path(
+        ptz.get("path")
+        or ((onvif_info.get("services") or {}).get("ptz") or {}).get("path")
+    )
+    token = str(ptz.get("profile_token") or "").strip()
+    if not path:
+        raise ValueError("ONVIF PTZ service was not discovered")
+    if not re.fullmatch(r"[A-Za-z0-9_.:\-]{1,128}", token):
+        raise ValueError("Invalid ONVIF PTZ profile token")
+
+    vectors = {
+        "up": (0.0, speed),
+        "down": (0.0, -speed),
+        "left": (-speed, 0.0),
+        "right": (speed, 0.0),
+    }
+    x, y = vectors[direction]
+
+    start_payload = (
+        "<tptz:ContinuousMove>"
+        f"<tptz:ProfileToken>{xml_escape(token)}</tptz:ProfileToken>"
+        "<tptz:Velocity>"
+        f'<tt:PanTilt x="{x:.3f}" y="{y:.3f}"/>'
+        "</tptz:Velocity>"
+        "</tptz:ContinuousMove>"
+    )
+    stop_payload = (
+        "<tptz:Stop>"
+        f"<tptz:ProfileToken>{xml_escape(token)}</tptz:ProfileToken>"
+        "<tptz:PanTilt>true</tptz:PanTilt>"
+        "<tptz:Zoom>true</tptz:Zoom>"
+        "</tptz:Stop>"
+    )
+
+    start_response: dict[str, Any] | None = None
+    stop_response: dict[str, Any] | None = None
+    try:
+        start_response = _soap_post(
+            host,
+            port,
+            path,
+            _soap_envelope(ONVIF_PTZ, "tptz", start_payload),
+            action=f"{ONVIF_PTZ}/ContinuousMove",
+            timeout=4.0,
+        )
+        if start_response.get("status") == 200:
+            time.sleep(duration_ms / 1000.0)
+    finally:
+        stop_response = _soap_post(
+            host,
+            port,
+            path,
+            _soap_envelope(ONVIF_PTZ, "tptz", stop_payload),
+            action=f"{ONVIF_PTZ}/Stop",
+            timeout=4.0,
+        )
+
+    return {
+        "operation": "onvif_continuous_move",
+        "direction": direction,
+        "speed": speed,
+        "duration_ms": duration_ms,
+        "start": _onvif_response_summary(start_response or {}),
+        "stop": _onvif_response_summary(stop_response or {}),
+    }
 
 
 def _run(command: list[str], timeout: float) -> subprocess.CompletedProcess[bytes]:
