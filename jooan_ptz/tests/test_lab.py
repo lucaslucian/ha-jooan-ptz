@@ -1103,25 +1103,21 @@ def test_legacy_video_write_requires_target_to_be_exposed_by_reader():
 
     assert all(call[0] != "/goform/updateVideoSettings" for call in camera.calls)
 
-def test_legacy_probe_falls_back_to_goahead_post_query_when_get_has_no_fields():
+def test_legacy_probe_prefers_goahead_post_query_without_touching_get():
+    lab._LEGACY_ABSENT_SURFACES.clear()
     camera = _LegacyCamera()
 
-    def get_without_fields(endpoint, params=None, authenticated=True, port=None):
-        camera.calls.append((endpoint, dict(params or {}), authenticated, port, "GET"))
-        return _LegacyResponse("result:success")
+    def get_should_not_run(*args, **kwargs):
+        raise AssertionError("GET must not run when POST_QUERY returns usable fields")
 
-    camera._get = get_without_fields
+    camera._get = get_should_not_run
     result = lab.legacy_cgi_probe(camera, surface="motion")
     motion = result["surfaces"]["motion"]
 
     assert motion["probe_method"] == "POST_QUERY"
     assert motion["recognized_fields"] >= 2
     assert motion["fields"]["motionEnable"] == "YES"
-    assert [attempt["method"] for attempt in motion["attempts"]] == [
-        "GET",
-        "POST_QUERY",
-    ]
-    assert motion["attempts"][0]["recognized_fields"] == 0
+    assert [attempt["method"] for attempt in motion["attempts"]] == ["POST_QUERY"]
 
 
 def test_legacy_motion_candidate_accepts_documented_zero_to_five_and_zonemask():
