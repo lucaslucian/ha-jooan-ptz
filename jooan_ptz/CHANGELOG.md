@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.17.0
+
+- Rebuilt the main **Câmeras & PTZ** workspace around the validated local-control use case instead of experimental camera configuration.
+- Added two simultaneous live panels for the dual-lens camera, preferring the low-resolution `ch00_1` and `ch01_1` RTSP substreams and falling back to the corresponding main stream when necessary.
+- Live previews now have independent per-channel FFmpeg processes and lifecycle state, so one feed can stop or fail without automatically terminating the other.
+- Increased the MJPEG startup preflight window from 4 to 10 seconds to tolerate embedded-camera keyframe/startup delay.
+- Promoted PTZ to an **ONVIF-first** control path with selectable normalized speed; if ONVIF `ContinuousMove` is rejected or fails, the backend automatically falls back to the already validated CGI PTZ commands.
+- Added a camera information panel beside PTZ with model, firmware, network/media status, channels, codec and timezone.
+- Added a large **Todas as configurações lidas** panel that aggregates only values actually reported by the camera through OEM state, safe properties, capabilities, platform/network data, RTSP and ONVIF.
+- Configuration writers remain experimental and are not promoted into the main dashboard.
+
+
 ## 0.16.2
 
 - Added an explicit **forced legacy CGI write** mode in the Laboratory for one final bounded hardware test when the paired read endpoint returns no usable values or is absent.
