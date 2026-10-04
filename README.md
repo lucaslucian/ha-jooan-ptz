@@ -54,7 +54,7 @@ Se o botão não preencher o repositório automaticamente:
 | Laboratório ONVIF PTZ / IR | ✅ PTZ validado; IR aceito pelo firmware |
 | ONVIF Events / PullPoint | ✅ movimento local confirmado; snapshots/transições separados v0.9 |
 | CGI/OEM write laboratory | 🧪 leitura, round-trip e setters candidatos estritamente allowlisted, sempre com readback |
-| SetDiagMode | 🧪 somente desligamento seguro no laboratório |
+| SetDiagMode | 🧪 callback seguro de curta duração + desligamento explícito |
 | Vídeo contínuo no navegador | 🧪 MJPEG local sob demanda v0.6 |
 | Playback do microSD | 🔬 ONVIF inventaria tracks, mas jobs/replay não funcionam; investigação OEM v0.13 |
 | Talk-back | 🔬 pesquisa |
@@ -117,7 +117,7 @@ Na v0.16 o painel possui Visão geral, Câmeras & PTZ, Detecção, Gravação, D
 | 80/TCP | HTTP | CGI, autenticação, PTZ e informações |
 | 554/TCP | RTSP | vídeo e áudio |
 | 9898/TCP | HTTP | capabilities e estado do dispositivo |
-| 8899/TCP | ONVIF | Device Service validado; media/PTZ read-only em descoberta |
+| 8899/TCP | ONVIF | Device/Media discovery, PTZ experimental validado e Events/PullPoint |
 | 7788/UDP | proprietário | descoberta em investigação |
 
 ## Pesquisa
