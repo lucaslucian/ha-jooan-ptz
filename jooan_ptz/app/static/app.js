@@ -6,9 +6,9 @@ let activeDirection=null;
 let statusTimer=null;
 let ptzSequence=0;
 let ptzHoldGeneration=0;
-const liveChannels=new Set();
 const snapshotUrls={0:null,1:null};
 const STATUS_REFRESH_MS=5000;
+const PTZ_SNAPSHOT_INTERVAL_MS=1000;
 
 const ingressBase=new URL(window.location.href);
 ingressBase.search='';
@@ -83,13 +83,10 @@ function setHealth(data){
     banner.textContent='A câmera responde na rede, mas a autenticação CGI não está validada.';
   }else if(data.probe_running){
     banner.className='status-banner';
-    banner.textContent='Descoberta manual em andamento. Aguarde antes de iniciar mídia ou PTZ.';
-  }else if(liveChannels.size){
-    banner.className='status-banner ok';
-    banner.textContent='Câmera acessível · '+liveChannels.size+' feed(s) ao vivo aberto(s) sob demanda.';
+    banner.textContent='Validação em andamento. Aguarde antes de usar mídia ou PTZ.';
   }else{
     banner.className='status-banner ok';
-    banner.textContent='Câmera autenticada e acessível. Nenhuma sessão RTSP contínua aberta.';
+    banner.textContent='Câmera autenticada e acessível. Imagens por snapshot; nenhum stream contínuo é aberto pelo add-on.';
   }
 
   const device=data.device_info||{};
@@ -128,7 +125,7 @@ function renderOverview(data){
     {
       label:'Mídia',
       value:rtspConfigured?'RTSP configurado':'RTSP não confirmado',
-      sub:'porta '+(services.rtsp?.port||554)+' · validação somente sob demanda'
+      sub:'porta '+(services.rtsp?.port||554)+' · snapshots sob demanda'
     }
   ].map(item=>
     '<div class="stat-card"><span class="label">'+esc(item.label)+'</span><div><div class="value">'+
@@ -155,8 +152,8 @@ function renderOverview(data){
   const serviceDefs=[
     ['HTTP',services.http,'80','CGI autenticado'],
     ['API local',services.features,'9898','Estado OEM'],
-    ['RTSP',services.rtsp,'554','Mídia sob demanda'],
-    ['ONVIF',services.onvif,'8899','Descoberta manual']
+    ['RTSP',services.rtsp,'554','Snapshots sob demanda'],
+    ['ONVIF',services.onvif,'8899','Usado pelo PTZ quando disponível']
   ];
   $('serviceList').innerHTML=serviceDefs.map(([label,item,fallback,desc])=>{
     let className='neutral';
@@ -259,37 +256,20 @@ function renderRecording(data){
   ).join('');
 }
 
-function bestPreviewDescriptor(data,channel){
-  const channelId='ch'+String(channel).padStart(2,'0');
-  const active=data.preview_streams?.[String(channel)];
-  const preview=(data.preview_probe?.streams||[]).find(item=>item.path===('/live/'+channelId+'_1'));
-  const profile=(data.onvif_info?.profiles||[]).find(item=>item.stream?.path===('/live/'+channelId+'_1'));
-  const main=(data.media_probe?.streams||[]).find(item=>item.path===('/live/'+channelId+'_0'));
-
-  const path=active?.path||preview?.path||profile?.stream?.path||main?.path||('/live/'+channelId+'_1');
-  let video={};
-  if(preview?.path===path)video=videoInfo(preview);
-  else if(profile?.stream?.path===path)video=profile.video||{};
-  else if(main?.path===path)video=videoInfo(main);
-
-  return {
-    path,
-    source:active?.source||(preview?.available?'Substream validado':profile?'Substream ONVIF':'Baixa resolução candidata'),
-    video
-  };
-}
-
 function renderFeedMeta(data,channel){
-  const descriptor=bestPreviewDescriptor(data,channel);
-  const video=descriptor.video||{};
+  const channelId='ch'+String(channel).padStart(2,'0');
+  const path='/live/'+channelId+'_0';
+  const isPtz=(Number(data?.ptz_channel)===channel)||(data?.ptz_channel==null&&channel===0);
   const meta=$('feedMeta'+channel);
   meta.innerHTML=[
-    descriptor.source,
-    descriptor.path,
-    video.width&&video.height?video.width+'×'+video.height:null,
-    video.frame_rate_limit?video.frame_rate_limit+' fps':null,
-    video.codec_name?String(video.codec_name).toUpperCase():video.encoding||null
+    'Snapshot RTSP',
+    path,
+    isPtz?'Preview PTZ · máx. 1 FPS':null
   ].filter(Boolean).map(value=>'<span class="meta-pill">'+esc(value)+'</span>').join('');
+}
+
+function ptzPreviewChannel(data=lastData){
+  return Number(data?.ptz_channel)===1?1:0;
 }
 
 function renderGeneralInfo(data){
@@ -336,8 +316,9 @@ function renderAllReadSettings(data){
     rtsp_port:data.services?.rtsp?.port||554,
     credentials_confirmed:data.stream_info?.credentials_confirmed??null,
     candidate_paths:data.stream_info?.candidate_paths||[],
-    preview_probe:data.preview_probe||null,
-    active_preview_channels:data.preview_channels||[]
+    continuous_preview:false,
+    ptz_snapshot_interval_ms:PTZ_SNAPSHOT_INTERVAL_MS,
+    ptz_snapshot_channel:ptzPreviewChannel(data)
   };
   const onvifState={
     reachable:onvif.reachable??null,
@@ -375,7 +356,7 @@ function renderRawDetails(data){
   root.innerHTML='';
   appendDetails(root,'Dispositivo',data.device_info);
   appendDetails(root,'ONVIF',data.onvif_info);
-  appendDetails(root,'RTSP',{stream_info:data.stream_info,preview_probe:data.preview_probe,preview_streams:data.preview_streams});
+  appendDetails(root,'RTSP',{stream_info:data.stream_info,continuous_preview:false,ptz_snapshot_interval_ms:PTZ_SNAPSHOT_INTERVAL_MS});
   appendDetails(root,'Rede',{online:data.online,last_seen:data.last_seen,last_heartbeat:data.last_heartbeat,heartbeat_error:data.heartbeat_error,network_state:data.network_state});
 }
 
@@ -426,6 +407,15 @@ function renderControl(data){
   $('ptzState').textContent=data.ptz_moving?'Em movimento':'Parado';
   $('ptzState').className='badge '+(data.ptz_moving?'warning':'neutral');
 
+  const frameChannel=ptzPreviewChannel(data);
+  const frameBadge=$('ptzFrameBadge');
+  if(frameBadge){
+    frameBadge.textContent=activeDirection
+      ?'Capturando · Lente '+(frameChannel+1)+' · 1 FPS'
+      :'Preview PTZ · Lente '+(frameChannel+1)+' · 1 FPS';
+    frameBadge.className='badge '+(activeDirection?'warning':'neutral');
+  }
+
   const transport=data.ptz_last_transport;
   const badge=$('ptzTransportBadge');
   if(transport==='onvif'){
@@ -449,23 +439,11 @@ function enableControls(data){
   $('stop').disabled=!ptzEnabled;
   $('ptzSpeed').disabled=!ptzEnabled;
 
-  const mediaEnabled=!!data.online&&!!data.authenticated&&!data.probe_running&&!data.preview_probe_running;
-  $('startLive').disabled=!mediaEnabled||liveChannels.size===2;
-  $('stopLive').disabled=liveChannels.size===0;
-  $('refreshSnapshots').disabled=!mediaEnabled||liveChannels.size>0;
-  document.querySelectorAll('[data-live-channel]').forEach(button=>{
-    const channel=Number(button.dataset.liveChannel);
-    button.disabled=!mediaEnabled||liveChannels.has(channel);
-  });
-  document.querySelectorAll('[data-stop-channel]').forEach(button=>{
-    const channel=Number(button.dataset.stopChannel);
-    button.disabled=!liveChannels.has(channel);
-  });
+  const mediaEnabled=!!data.online&&!!data.authenticated&&!data.probe_running;
+  $('refreshSnapshots').disabled=!mediaEnabled;
   document.querySelectorAll('[data-snapshot-channel]').forEach(button=>{
-    button.disabled=!mediaEnabled||liveChannels.size>0;
+    button.disabled=!mediaEnabled;
   });
-
-
 }
 
 function renderAll(data){
@@ -478,9 +456,6 @@ function renderAll(data){
   renderAllReadSettings(data);
   enableControls(data);
 
-  if(data.preview_last_error&&liveChannels.size===0){
-    $('previewMessage').textContent='Último erro de preview: '+data.preview_last_error;
-  }
   if(data.last_error&&!data.probe_running){
     $('command').textContent='Último erro: '+data.last_error;
   }
@@ -502,46 +477,29 @@ async function refreshStatus(){
 }
 
 function setFeedUi(channel,state,message){
-  const live=$('liveFeed'+channel);
   const snapshot=$('snapshotFeed'+channel);
   const empty=$('feedEmpty'+channel);
-  const indicator=$('feedLive'+channel);
   const badge=$('feedBadge'+channel);
   const text=$('feedMessage'+channel);
 
   if(state==='loading'){
-    live.hidden=false;
-    snapshot.hidden=true;
-    empty.hidden=true;
-    indicator.hidden=true;
-    badge.textContent='Abrindo';
+    empty.hidden=!!snapshotUrls[channel];
+    snapshot.hidden=!snapshotUrls[channel];
+    badge.textContent='Capturando';
     badge.className='badge warning';
-  }else if(state==='live'){
-    live.hidden=false;
-    snapshot.hidden=true;
-    empty.hidden=true;
-    indicator.hidden=false;
-    badge.textContent='Ao vivo';
-    badge.className='badge success';
   }else if(state==='snapshot'){
-    live.hidden=true;
     snapshot.hidden=false;
     empty.hidden=true;
-    indicator.hidden=true;
     badge.textContent='Snapshot';
     badge.className='badge neutral';
   }else if(state==='error'){
-    live.hidden=true;
     snapshot.hidden=!snapshotUrls[channel];
     empty.hidden=!!snapshotUrls[channel];
-    indicator.hidden=true;
     badge.textContent='Falha';
     badge.className='badge danger';
   }else{
-    live.hidden=true;
     snapshot.hidden=!snapshotUrls[channel];
     empty.hidden=!!snapshotUrls[channel];
-    indicator.hidden=true;
     badge.textContent=snapshotUrls[channel]?'Snapshot':'Parado';
     badge.className='badge neutral';
   }
@@ -550,10 +508,19 @@ function setFeedUi(channel,state,message){
   if(lastData)enableControls(lastData);
 }
 
-async function loadSnapshotChannel(channel){
-  if(liveChannels.size)return false;
+async function loadSnapshotChannel(channel,{ptzPreview=false,finalFrame=false}={}){
   const stream='ch'+String(channel).padStart(2,'0')+'_0';
-  setFeedUi(channel,'loading','Capturando um frame do stream principal...');
+  if(ptzPreview){
+    const badge=$('feedBadge'+channel);
+    badge.textContent='PTZ · capturando';
+    badge.className='badge warning';
+    $('feedMessage'+channel).textContent=finalFrame
+      ?'Capturando posição final do PTZ...'
+      :'Atualizando durante movimento PTZ · máximo 1 frame/s.';
+  }else{
+    setFeedUi(channel,'loading','Capturando um frame do stream principal...');
+  }
+
   try{
     const response=await fetch(api('api/snapshot/'+stream+'?t='+Date.now()),{cache:'no-store'});
     if(!response.ok)throw new Error('HTTP '+response.status);
@@ -564,86 +531,55 @@ async function loadSnapshotChannel(channel){
     const image=$('snapshotFeed'+channel);
     image.src=objectUrl;
     if(old)URL.revokeObjectURL(old);
-    setFeedUi(channel,'snapshot',response.headers.get('X-JOOAN-Snapshot')==='stale'?'Snapshot em cache temporário.':'Snapshot atualizado.');
-    return true;
+
+    const stale=response.headers.get('X-JOOAN-Snapshot')==='stale';
+    let message;
+    if(ptzPreview){
+      message=stale
+        ?'PTZ · câmera ocupada; exibindo último frame disponível.'
+        :(finalFrame?'PTZ · posição final atualizada.':'PTZ · frame atualizado.');
+    }else{
+      message=stale?'Snapshot em cache temporário.':'Snapshot atualizado.';
+    }
+    setFeedUi(channel,'snapshot',message);
+    return !stale;
   }catch(error){
-    setFeedUi(channel,'error','Falha no snapshot: '+error.message);
+    setFeedUi(channel,'error',(ptzPreview?'PTZ · ':'')+'Falha no snapshot: '+error.message);
     return false;
   }
 }
 
 async function refreshSnapshots(){
-  if(!lastData?.online||!lastData?.authenticated||liveChannels.size)return;
+  if(!lastData?.online||!lastData?.authenticated)return;
   $('previewMessage').textContent='Atualizando as duas imagens, uma de cada vez...';
   await loadSnapshotChannel(0);
-  await sleep(500);
+  await sleep(350);
   await loadSnapshotChannel(1);
-  $('previewMessage').textContent='Snapshots concluídos. Nenhuma sessão RTSP contínua permanece aberta.';
+  $('previewMessage').textContent='Snapshots concluídos. O add-on não mantém stream contínuo.';
 }
 
-function waitForImageOutcome(image,timeoutMs=12500){
-  return new Promise(resolve=>{
-    let done=false;
-    const finish=value=>{
-      if(done)return;
-      done=true;
-      clearTimeout(timer);
-      image.removeEventListener('load',onLoad);
-      image.removeEventListener('error',onError);
-      resolve(value);
-    };
-    const onLoad=()=>finish(true);
-    const onError=()=>finish(false);
-    image.addEventListener('load',onLoad,{once:true});
-    image.addEventListener('error',onError,{once:true});
-    const timer=setTimeout(()=>finish(false),timeoutMs);
-  });
-}
-
-async function startFeed(channel,{waitReady=false}={}){
-  if(!lastData?.online||!lastData?.authenticated||liveChannels.has(channel))return false;
-  const image=$('liveFeed'+channel);
-  setFeedUi(channel,'loading','Abrindo RTSP autenticado no backend...');
-  const outcome=waitReady?waitForImageOutcome(image):null;
-  image.src=api('api/live/'+channel+'?t='+Date.now());
-  if(!waitReady)return true;
-  return await outcome;
-}
-
-async function stopFeed(channel){
-  const image=$('liveFeed'+channel);
-  image.removeAttribute('src');
-  liveChannels.delete(channel);
-  try{
-    await fetch(api('api/live/stop?channel='+channel),{method:'POST',keepalive:true});
-  }catch(_){}
-  setFeedUi(channel,'stopped','Feed parado. Nenhuma sessão contínua deste canal permanece aberta.');
-  if(lastData)renderAll(lastData);
-}
-
-async function startAllFeeds(){
-  if(!lastData?.online||!lastData?.authenticated)return;
-  $('previewMessage').textContent='Abrindo primeiro a lente 1 para evitar duas negociações RTSP simultâneas...';
-  const first=await startFeed(0,{waitReady:true});
-  if(!first){
-    $('previewMessage').textContent='A lente 1 não abriu; a lente 2 não será iniciada automaticamente para poupar a câmera.';
-    return;
+async function ptzSnapshotLoop(direction,generation){
+  const channel=ptzPreviewChannel();
+  while(
+    activeDirection===direction
+    && generation===ptzHoldGeneration
+    && !document.hidden
+  ){
+    const started=Date.now();
+    await loadSnapshotChannel(channel,{ptzPreview:true});
+    const elapsed=Date.now()-started;
+    const wait=Math.max(0,PTZ_SNAPSHOT_INTERVAL_MS-elapsed);
+    if(wait)await sleep(wait);
   }
-  await sleep(500);
-  $('previewMessage').textContent='Lente 1 ativa. Abrindo lente 2...';
-  const second=await startFeed(1,{waitReady:true});
-  $('previewMessage').textContent=second?'Os dois feeds estão ativos.':'Lente 1 ativa; lente 2 falhou ao iniciar.';
 }
 
-async function stopAllFeeds(){
-  for(const channel of [0,1]){
-    $('liveFeed'+channel).removeAttribute('src');
+async function stopPtzAndCaptureFinal(){
+  await sendPtz('stop');
+  await sleep(180);
+  if(!document.hidden&&lastData?.online&&lastData?.authenticated){
+    await loadSnapshotChannel(ptzPreviewChannel(),{ptzPreview:true,finalFrame:true});
   }
-  liveChannels.clear();
-  try{await fetch(api('api/live/stop'),{method:'POST',keepalive:true})}catch(_){}
-  for(const channel of [0,1])setFeedUi(channel,'stopped','Feed parado.');
-  $('previewMessage').textContent='Todos os feeds foram encerrados.';
-  if(lastData)renderAll(lastData);
+  if(lastData)renderControl(lastData);
 }
 
 async function sendPtz(command,keepalive=false){
@@ -670,8 +606,15 @@ async function sendPtz(command,keepalive=false){
 
 async function holdPtz(direction,generation){
   let result=await sendPtz(direction);
+  if(
+    result
+    && activeDirection===direction
+    && generation===ptzHoldGeneration
+  ){
+    void ptzSnapshotLoop(direction,generation);
+  }
   while(activeDirection===direction&&generation===ptzHoldGeneration&&result?.transport==='onvif'){
-    await sleep(35);
+    await sleep(80);
     if(activeDirection!==direction||generation!==ptzHoldGeneration)break;
     result=await sendPtz(direction);
   }
@@ -684,28 +627,8 @@ function emergencyStop(){
   void sendPtz('stop',true);
 }
 
-for(const channel of [0,1]){
-  const live=$('liveFeed'+channel);
-  live.addEventListener('load',()=>{
-    liveChannels.add(channel);
-    setFeedUi(channel,'live','Feed contínuo recebido pelo navegador.');
-    if(lastData)renderAll(lastData);
-  });
-  live.addEventListener('error',()=>{
-    liveChannels.delete(channel);
-    setFeedUi(channel,'error','O backend não conseguiu manter este feed.');
-    if(lastData)renderAll(lastData);
-  });
-}
-
 document.querySelectorAll('[data-snapshot-channel]').forEach(button=>{
   button.addEventListener('click',()=>loadSnapshotChannel(Number(button.dataset.snapshotChannel)));
-});
-document.querySelectorAll('[data-live-channel]').forEach(button=>{
-  button.addEventListener('click',()=>startFeed(Number(button.dataset.liveChannel)));
-});
-document.querySelectorAll('[data-stop-channel]').forEach(button=>{
-  button.addEventListener('click',()=>stopFeed(Number(button.dataset.stopChannel)));
 });
 
 document.querySelectorAll('[data-dir]').forEach(button=>{
@@ -721,7 +644,7 @@ document.querySelectorAll('[data-dir]').forEach(button=>{
     if(activeDirection===direction){
       activeDirection=null;
       ptzHoldGeneration++;
-      void sendPtz('stop');
+      void stopPtzAndCaptureFinal();
     }
   };
   button.addEventListener('pointerup',stop);
@@ -732,22 +655,16 @@ document.querySelectorAll('[data-dir]').forEach(button=>{
 $('stop').addEventListener('click',()=>{
   activeDirection=null;
   ptzHoldGeneration++;
-  void sendPtz('stop');
+  void stopPtzAndCaptureFinal();
 });
 $('refreshSnapshots').addEventListener('click',refreshSnapshots);
-$('startLive').addEventListener('click',startAllFeeds);
-$('stopLive').addEventListener('click',stopAllFeeds);
 
 window.addEventListener('blur',emergencyStop);
 document.addEventListener('visibilitychange',()=>{
-  if(document.hidden){
-    emergencyStop();
-    if(liveChannels.size)void stopAllFeeds();
-  }
+  if(document.hidden)emergencyStop();
 });
 window.addEventListener('pagehide',()=>{
   emergencyStop();
-  if(liveChannels.size)void stopAllFeeds();
   for(const url of Object.values(snapshotUrls))if(url)URL.revokeObjectURL(url);
 });
 
