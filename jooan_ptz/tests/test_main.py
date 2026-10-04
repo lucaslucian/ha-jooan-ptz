@@ -208,6 +208,9 @@ def test_ptz_falls_back_to_cgi_when_onvif_is_rejected(monkeypatch):
     commands = []
 
     class FakeCamera:
+        ip = "10.0.0.10"
+        onvif_port = 8899
+
         def command(self, direction):
             commands.append(direction)
             return {"result": "success"}
