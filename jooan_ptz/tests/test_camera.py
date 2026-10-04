@@ -373,3 +373,73 @@ def test_post_query_keeps_fields_in_query_and_uses_fixed_body(monkeypatch):
     assert captured["data"] == "n/a"
     assert captured["trust_env_at_post"] is False
 
+def test_get_can_return_expected_http_error_to_guarded_lab(monkeypatch):
+    camera = JooanCamera("10.0.0.10", "admin", "secret")
+
+    class FakeResponse:
+        status_code = 404
+        content = b"not found"
+        text = "not found"
+        headers = {"Content-Type": "text/plain"}
+
+        def raise_for_status(self):
+            raise camera_module.requests.HTTPError("404")
+
+    class FakeSession:
+        trust_env = True
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def get(self, *args, **kwargs):
+            return FakeResponse()
+
+    monkeypatch.setattr(camera_module.requests, "Session", FakeSession)
+
+    response = camera._get(
+        "/goform/missing",
+        authenticated=True,
+        allow_http_error=True,
+    )
+    assert response.status_code == 404
+
+    with pytest.raises(camera_module.JooanNetworkError):
+        camera._get("/goform/missing", authenticated=True)
+
+
+def test_post_query_can_return_expected_http_error_to_guarded_lab(monkeypatch):
+    camera = JooanCamera("10.0.0.10", "admin", "secret")
+
+    class FakeResponse:
+        status_code = 405
+        content = b"method not allowed"
+        text = "method not allowed"
+        headers = {"Content-Type": "text/plain"}
+
+        def raise_for_status(self):
+            raise camera_module.requests.HTTPError("405")
+
+    class FakeSession:
+        trust_env = True
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def post(self, *args, **kwargs):
+            return FakeResponse()
+
+    monkeypatch.setattr(camera_module.requests, "Session", FakeSession)
+
+    response = camera._post_query(
+        "/goform/getVideoSettings",
+        {"rotation": ""},
+        allow_http_error=True,
+    )
+    assert response.status_code == 405
+

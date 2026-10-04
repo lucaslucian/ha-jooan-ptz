@@ -212,6 +212,11 @@ LEGACY_VIDEO_ENUMS = {
     "flicker": {"50HZ", "60HZ"},
 }
 
+# A clean 404 is treated as definitive for the lifetime of the add-on process.
+# This avoids repeatedly hitting a missing CGI on the fragile embedded HTTP server.
+_LEGACY_ABSENT_SURFACES: set[tuple[str, str]] = set()
+
+
 LEGACY_NTP_TIMEZONES = {
     "UCT_-11",
     "UCT_-10",
@@ -321,61 +326,106 @@ def _legacy_surface_probe_one(camera, surface: str) -> dict[str, Any]:
     if not config:
         raise LabError("Unsupported legacy CGI surface")
 
+    cache_key = (str(getattr(camera, "ip", "")), str(surface))
+    if cache_key in _LEGACY_ABSENT_SURFACES:
+        return {
+            "surface": surface,
+            "read_path": config["read_path"],
+            "candidate_write_path": config["write_path"],
+            "http_status": 404,
+            "accepted": False,
+            "usable": False,
+            "endpoint_present": False,
+            "cached_absent": True,
+            "recognized_fields": 0,
+            "fields": {},
+            "attempts": [],
+        }
+
     read_fields = tuple(config["read_fields"])
     params = {key: "" for key in read_fields}
     attempts: list[dict[str, Any]] = []
-    best: dict[str, Any] | None = None
 
-    # Public JOOAN observations commonly use GET, while the related GoAhead
-    # page issues POST with the fields in the query string and a harmless
-    # "n/a" body. Try both fixed forms, stopping as soon as actual fields are
-    # recognized.
-    for method in ("GET", "POST_QUERY"):
+    # On the reference JA-A12, getVideoSettings GET held an HTTP worker until
+    # timeout while POST-with-query returned HTTP 200. Prefer the related
+    # GoAhead page's POST-query form. Only try GET when the camera explicitly
+    # says POST is not supported (405/501); never retry a clean 404.
+    for method in ("POST_QUERY", "GET"):
         try:
-            if method == "GET":
-                response = camera._get(
-                    str(config["read_path"]),
-                    params,
-                    authenticated=True,
-                )
-            else:
+            if method == "POST_QUERY":
                 response = camera._post_query(
                     str(config["read_path"]),
                     params,
                     body="n/a",
                     authenticated=True,
+                    allow_http_error=True,
                 )
-            summary = _legacy_response_summary(response, read_fields)
-            attempts.append({
-                "method": method,
-                "http_status": summary["http_status"],
-                "accepted": summary["accepted"],
-                "recognized_fields": summary["recognized_fields"],
-            })
-            candidate = {
-                "surface": surface,
-                "read_path": config["read_path"],
-                "candidate_write_path": config["write_path"],
-                "probe_method": method,
-                "attempts": attempts,
-                **summary,
-            }
-            if best is None or summary["recognized_fields"] > best["recognized_fields"]:
-                best = candidate
-            if summary["recognized_fields"] > 0:
-                break
+            else:
+                response = camera._get(
+                    str(config["read_path"]),
+                    params,
+                    authenticated=True,
+                    allow_http_error=True,
+                )
         except Exception as exc:
             attempts.append({
                 "method": method,
                 "accepted": False,
                 "error_type": type(exc).__name__,
             })
+            # A timeout/network exception on these fragile CGI candidates can
+            # consume a camera worker. Do not immediately hit the same endpoint
+            # with another method.
+            break
 
-    if best is None:
-        raise LabError(f"Legacy {surface} read surface did not respond")
+        summary = _legacy_response_summary(response, read_fields)
+        status = int(summary["http_status"])
+        attempts.append({
+            "method": method,
+            "http_status": status,
+            "accepted": summary["accepted"],
+            "recognized_fields": summary["recognized_fields"],
+        })
+        result = {
+            "surface": surface,
+            "read_path": config["read_path"],
+            "candidate_write_path": config["write_path"],
+            "probe_method": method,
+            "attempts": attempts,
+            **summary,
+        }
 
-    best["attempts"] = attempts
-    return best
+        if status == 404:
+            result["endpoint_present"] = False
+            result["usable"] = False
+            _LEGACY_ABSENT_SURFACES.add(cache_key)
+            return result
+
+        if summary["recognized_fields"] > 0:
+            result["endpoint_present"] = True
+            result["usable"] = True
+            return result
+
+        if status in {405, 501} and method == "POST_QUERY":
+            # Explicit method rejection is the only case where a GET fallback
+            # is worth another request.
+            continue
+
+        # HTTP 2xx with no recognized fields is still useful evidence that the
+        # route exists, but not enough to write through its paired setter.
+        result["endpoint_present"] = 200 <= status < 500
+        result["usable"] = False
+        return result
+
+    return {
+        "surface": surface,
+        "read_path": config["read_path"],
+        "candidate_write_path": config["write_path"],
+        "accepted": False,
+        "usable": False,
+        "attempts": attempts,
+        "error": "Candidate read request did not complete safely",
+    }
 
 
 def _legacy_oem_readback(camera, keys: tuple[str, ...]) -> dict[str, Any]:

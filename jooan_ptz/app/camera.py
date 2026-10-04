@@ -326,7 +326,15 @@ class JooanCamera:
     def _safe_url(url: str) -> str:
         return redact_secrets(url)
 
-    def _get(self, endpoint: str, params=None, *, authenticated: bool = True, port: int | None = None):
+    def _get(
+        self,
+        endpoint: str,
+        params=None,
+        *,
+        authenticated: bool = True,
+        port: int | None = None,
+        allow_http_error: bool = False,
+    ):
         query = {}
         if authenticated:
             query.update({"userid": self.username, "userkey": self.userkey})
@@ -357,12 +365,13 @@ class JooanCamera:
             ) from None
 
         self._debug_log("RESPONSE: HTTP %s %s", response.status_code, endpoint)
-        try:
-            response.raise_for_status()
-        except requests.HTTPError as exc:
-            raise JooanNetworkError(
-                f"Camera returned HTTP {response.status_code} for {endpoint}"
-            ) from exc
+        if not allow_http_error:
+            try:
+                response.raise_for_status()
+            except requests.HTTPError as exc:
+                raise JooanNetworkError(
+                    f"Camera returned HTTP {response.status_code} for {endpoint}"
+                ) from exc
         return response
 
     def _post_query(
@@ -373,6 +382,7 @@ class JooanCamera:
         body: str = "n/a",
         authenticated: bool = True,
         port: int | None = None,
+        allow_http_error: bool = False,
     ):
         """POST to a fixed endpoint with parameters in the query string.
 
@@ -408,12 +418,13 @@ class JooanCamera:
             ) from None
 
         self._debug_log("RESPONSE: HTTP %s %s", response.status_code, endpoint)
-        try:
-            response.raise_for_status()
-        except requests.HTTPError as exc:
-            raise JooanNetworkError(
-                f"Camera returned HTTP {response.status_code} for {endpoint}"
-            ) from exc
+        if not allow_http_error:
+            try:
+                response.raise_for_status()
+            except requests.HTTPError as exc:
+                raise JooanNetworkError(
+                    f"Camera returned HTTP {response.status_code} for {endpoint}"
+                ) from exc
         return response
 
     def _post_form(

@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.16.1
+
+- Changed legacy CGI discovery to prefer the **POST-query** form used by the related GoAhead page and now observed working on the reference JA-A12.
+- A clean **HTTP 404** now terminates the probe immediately; the laboratory no longer tries the same missing endpoint with another HTTP method.
+- A timeout/network failure also terminates that surface probe instead of immediately consuming another embedded-camera HTTP worker.
+- Missing CGI surfaces are cached for the lifetime of the App process so repeated laboratory clicks do not keep hitting a known-absent route.
+- Added raw-status support to the fixed GET/POST-query backend helpers so the lab can distinguish 404/405/501 without converting every expected probe result into a generic network error.
+- Hardware result recorded: `getVideoSettings` POST-query returned HTTP 200; `getmotiondetectSettings` returned HTTP 404 on both tested methods.
+- Improved the laboratory summary so HTTP 404 is shown as an absent endpoint and HTTP 200 without recognized configuration fields does not falsely validate a writer.
+
 ## 0.16.0
 
 - Added an experimental **legacy GoAhead CGI** laboratory based on public related-camera firmware/API evidence.

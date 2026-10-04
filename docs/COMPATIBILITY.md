@@ -35,7 +35,8 @@ A família JOOAN/CAM720 contém várias revisões de hardware e firmware com nom
 | UDP 7788 | Observado, formato em pesquisa |
 | playback microSD | ONVIF Replay não suportado; metadados OEM/Recording continuam úteis para investigação |
 | OEM toggle mapper | Validado para baseline/diff; mappings de motion, floodlight, tracking, flip e timezone registrados |
-| GoAhead CGI candidates | Laboratório v0.16: `getVideoSettings` / `getmotiondetectSettings`, round-trip no-op e writers allowlisted; validação no hardware pendente |
+| `getVideoSettings` candidato GoAhead | JA-A12 validada: POST-query respondeu HTTP 200; GET anterior prendeu o worker até timeout. Campos úteis ainda precisam ser confirmados no corpo |
+| `getmotiondetectSettings` candidato GoAhead | Não disponível nesta JA-A12: GET e POST-query retornaram HTTP 404; v0.16.1 para após o primeiro 404 e memoriza ausência até reinício do App |
 | talk-back | Em pesquisa |
 
 ## Outros modelos
