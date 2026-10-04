@@ -906,6 +906,12 @@ def _preview_candidates(channel: int) -> list[tuple[str, str]]:
                 candidates.append((sub_path, "onvif_substream"))
                 break
 
+    # Both *_1 paths are evidenced on the validated dual-lens family. Try the
+    # low-resolution candidate before falling back to the main stream even when
+    # a fresh validation has not been run in this process.
+    if not any(path == sub_path for path, _ in candidates):
+        candidates.append((sub_path, "known_substream_candidate"))
+
     for item in media_probe.get("streams", []):
         if item.get("path") == main_path and _video_stream_available(item):
             candidates.append((main_path, "confirmed_main"))
@@ -1023,10 +1029,9 @@ def _preview_probe_worker() -> None:
                     (_state.get("device_info") or {}).get("channel_count", 1)
                 )
                 ptz_channel = _state.get("ptz_channel")
-            targets = [int(ptz_channel)] if ptz_channel in (0, 1) else None
             result = get_camera().probe_preview_substreams(
                 channel_count,
-                channels=targets,
+                channels=None,
             )
             update_state(preview_probe=result)
     except Exception as exc:
