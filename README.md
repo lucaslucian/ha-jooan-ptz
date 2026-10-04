@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="jooan_ptz/logo.png" alt="JOOAN Local Control" width="250">
+  <img src="docs/images/jooan-local-control-logo.svg" alt="JOOAN Local Control" width="250">
 </p>
 
 <h1 align="center">JOOAN Local Control</h1>
