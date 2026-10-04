@@ -115,7 +115,7 @@ OEM_WRITE_PROPERTY_KEYS = (
     "timezone",
 )
 OEM_MOTION_ALL_ZONES = (1 << 25) - 1
-OEM_TIMEZONE_RE = re.compile(r"^GMT[+-](?:0\\d|1[0-4]):(?:00|15|30|45)$")
+OEM_TIMEZONE_RE = re.compile(r"^GMT[+-](?:0\d|1[0-4]):(?:00|15|30|45)$")
 
 
 class LabError(RuntimeError):
