@@ -103,6 +103,49 @@ stop
 
 O backend usa allowlist fixa. O frontend nunca controla livremente o valor de `singleCMD`.
 
+### Candidatos GoAhead encontrados em firmware relacionado
+
+**CORROBORADO-EXTERNO / LABORATÓRIO v0.16.**
+
+Código público de uma interface GoAhead de câmera IP expõe um par leitura/escrita que coincide com um endpoint já observado em câmeras JOOAN:
+
+```text
+GET /goform/getVideoSettings
+GET /goform/updateVideoSettings
+```
+
+Na interface encontrada, `updateVideoSettings` recebe campos como:
+
+```text
+rotation = NORMAL | VFLIP | MIRROR | MIRROR-VFLIP
+ir       = AUTO | ON | OFF
+flicker  = 50HZ | 60HZ
+brightness / contrast / saturation
+nbrightness / ncontrast / nsaturation
+resolution / resolution2 / codec / quality / quality2 / fps
+```
+
+A mesma base expõe motion detection como:
+
+```text
+GET /goform/getmotiondetectSettings?motionEnable=&sensitivity=
+GET /goform/updatemotiondetectSettings
+motionEnable = YES | NO
+sensitivity  = 0..5
+zonemask     = campo presente em código relacionado, embora comentado na UI analisada
+```
+
+Também foi encontrado:
+
+```text
+/goform/NTP
+time_zone = valores legados como EBS_-03, AST_-04, PST_-08 ...
+```
+
+Esses writers **não são considerados confirmados na JA-A12** apenas pela semelhança. A v0.16 testa primeiro as leituras, depois permite um round-trip no-op que reaplica os valores recém-lidos e compara novamente o CGI e a porta 9898. Escritas candidatas são manuais e usam somente caminhos, nomes de parâmetros e enums allowlisted.
+
+O candidato `/goform/NTP` é tratado separadamente: a fonte pública usa ASP interno para leitura e não oferece um CGI de leitura equivalente. O laboratório envia somente `time_zone` e nunca envia servidor NTP ou intervalo de sincronização.
+
 ## Porta 9898 — `get_deviceFeatures`
 
 ### Endpoint
@@ -226,7 +269,24 @@ Sem escrever nada na câmera já podemos ler:
 - frequência elétrica;
 - várias agendas de gravação, luz, alarme e privacidade.
 
-Nesta fase esses itens são **read-only**.
+Na interface normal esses itens permanecem **read-only**. O Laboratório pode executar writers candidatos específicos e sempre os trata como experimentais até haver validação por readback.
+
+### Mapeamentos confirmados na JA-A12 de referência
+
+Os testes controlados já fecharam os seguintes pares de valor:
+
+| Propriedade | Valores observados | Interpretação |
+|---|---|---|
+| `autotrack` | `0 / 1` | rastreamento automático desligado / ligado |
+| `flipmirror` | `0 / 3` | opção Flip Mirror do CAM720 desligada / ligada |
+| `floodlight` | `0 / 1 / 2 / 3` | infravermelho normal / modo LED branco / luz inteligente por detecção / infravermelho desligado |
+| `mdsensitivity`, `sub_mdsensitivity` | `1 / 2 / 3` | baixa / média / alta |
+| `mdarea`, `sub_mdarea` | máscara de 25 bits | `33554431 = 0x1ffffff` representa as 25 zonas ativas |
+| `timezone` | `GMT±HH:MM` | formato OEM observado diretamente |
+
+Nos testes de zona, as duas máscaras sempre mudaram juntas. O teste isolado do canto superior esquerdo produziu `33554431 → 33554430`, limpando o bit 0; o canto superior direito isolado correspondeu ao bit 4. Somado aos testes anteriores dos cantos opostos, isso é consistente com uma grade 5×5 em ordem de linha, bits 0..24.
+
+A estratégia proposta para um futuro switch de detecção continua sendo explícita: usar todas as zonas (`0x1ffffff`) para habilitar e nenhuma zona (`0`) para desabilitar apenas se o writer correspondente for validado. Um `motionEnable` nativo, se confirmado pelo CGI legado, será preferível.
 
 ## RTSP local
 
