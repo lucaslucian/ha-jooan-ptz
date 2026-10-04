@@ -1,54 +1,53 @@
 # Compatibilidade
 
-A família JOOAN/CAM720 contém várias revisões de hardware e firmware com nomes comerciais semelhantes. Por isso, o projeto trabalha com descoberta de capacidades em vez de assumir suporte universal.
-
-## Níveis
-
-| Nível | Significado |
-|---|---|
-| **Validado** | recurso testado diretamente em hardware stock |
-| **Detectado** | serviço/capability reportado localmente pelo dispositivo |
-| **Corroborado** | há evidência pública forte para a mesma família, ainda sem teste no nosso hardware |
-| **Experimental** | implementado como probe seguro, precisa de mais amostras |
+A família JOOAN/CAM720 possui revisões de hardware e firmware diferentes. O App evita assumir que todos os modelos expõem os mesmos recursos.
 
 ## JA-A12 usada no desenvolvimento
 
 | Recurso | Estado |
 |---|---|
 | HTTP/CGI porta 80 | Validado |
-| PTZ up/down/left/right/stop | Validado |
-| Lente PTZ / canal `ch00` | Inferido com forte evidência: ONVIF PTZ usa `profile_0`, cujo StreamUri é `/live/ch00_0` |
-| RTSP 554 | Validado |
-| `ch00_0` | Validado |
-| `ch01_0` | Validado |
+| PTZ CGI up/down/left/right/stop | Validado |
 | porta 9898 / `get_deviceFeatures` | Validado |
 | dual-lens | Detectado |
-| SD / recording / motion / tracking / light state | Detectado |
-| `ch00_1` | Detectado via ONVIF `GetStreamUri` (640×360, 15 fps, 256 kbps); validação RTSP contínua pendente |
-| `ch01_1` | Validado via probe manual da v0.6 (640×360 H.264) |
-| ONVIF 8899 | Validado: `/onvif/device_service` respondeu `GetCapabilities` com HTTP 200 |
-| `GetProfiles` / `GetStreamUri` / `GetStatus` / `GetPresets` | Validado para leitura; presets retornam lista vazia nesta unidade |
-| ONVIF ContinuousMove/Stop | Validado no hardware stock, com velocidade/duração limitadas |
-| ONVIF auxiliary IR | Comando aceito pela câmera; efeito físico ainda não usado como fonte principal de estado |
-| ONVIF presets | GetPresets vazio; SetPreset não suportado na JA-A12 |
-| ONVIF Events PullPoint | Validado: MotionAlarm/CellMotionDetector entregues localmente |
-| UDP 7788 | Observado, formato em pesquisa |
-| playback microSD | ONVIF Replay não suportado; metadados OEM/Recording continuam úteis para investigação |
-| OEM toggle mapper | Validado para baseline/diff; mappings de motion, floodlight, tracking, flip e timezone registrados |
-| `getVideoSettings` candidato GoAhead | JA-A12 validada: POST-query respondeu HTTP 200; GET anterior prendeu o worker até timeout. Campos úteis ainda precisam ser confirmados no corpo |
-| `getmotiondetectSettings` candidato GoAhead | Não disponível nesta JA-A12: GET e POST-query retornaram HTTP 404; v0.16.1 para após o primeiro 404 e memoriza ausência até reinício do App |
-| talk-back | Em pesquisa |
+| SD / gravação / detecção / tracking / luzes | Detectado em leitura |
+| credenciais RTSP locais | Obtidas |
+| `ch00_0`, `ch01_0`, `ch00_1`, `ch01_1` | Paths conhecidos; disponibilidade pode variar conforme estado da câmera |
+| ONVIF 8899 | Validado |
+| ONVIF GetCapabilities/GetProfiles | Usados na descoberta mínima |
+| ONVIF ContinuousMove/Stop | Validado; usado com fallback CGI |
+| preview MJPEG | Experimental |
+| snapshots RTSP | Funcionam na unidade de referência |
+| escrita de configuração | Não suportada pelo App |
+| talk-back | Não implementado |
+
+## Observação RTSP importante
+
+Nesta JA-A12 já foi observado `ffprobe` retornar:
+
+```text
+Invalid data found when processing input
+```
+
+nos quatro paths conhecidos enquanto a porta 554 continuava acessível.
+
+Por isso:
+
+- o App não usa mais scan RTSP na inicialização;
+- teste de substream é manual;
+- falha RTSP não define sozinha o estado online/offline da câmera;
+- mídia contínua só é aberta quando o usuário solicita.
 
 ## Outros modelos
 
-O App pode funcionar parcialmente em outros JOOAN/CAM720 que compartilhem os mesmos endpoints. Se um modelo diferente funcionar, registre:
+Em outros modelos, registre:
 
 - modelo comercial;
 - `device_model`;
-- versão de firmware;
-- quais portas responderam;
-- caminhos RTSP encontrados;
-- resultado do probe ONVIF;
+- firmware;
+- portas locais;
+- paths RTSP;
+- resultado ONVIF;
 - recursos da porta 9898.
 
-Nunca publique senha, `userkey`, chave RTSP, `AuthKey` ou tokens de cloud.
+Nunca publique senha, `userkey`, chave RTSP ou credenciais de cloud.
