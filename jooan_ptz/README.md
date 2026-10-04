@@ -10,7 +10,8 @@ Controle e monitoramento **local** para câmeras JOOAN/CAM720 compatíveis no Ho
 - PTZ ONVIF com velocidade após descoberta manual, com fallback CGI;
 - duas lentes apresentadas lado a lado;
 - snapshots RTSP sob demanda;
-- preview MJPEG sob demanda, sem expor credenciais ao navegador;
+- atualização visual do PTZ por snapshots, limitada a aproximadamente 1 frame/s;
+- nenhum stream contínuo é mantido pelo App;
 - leitura de dispositivo, rede, SD, gravação, detecção, tracking, iluminação e agendas;
 - capabilities/estado OEM pela porta 9898;
 - descoberta ONVIF mínima, acionada somente pela primeira movimentação PTZ;
@@ -18,13 +19,13 @@ Controle e monitoramento **local** para câmeras JOOAN/CAM720 compatíveis no Ho
 
 ### Comportamento conservador de rede
 
-A JA-A12 de referência mostrou instabilidade quando várias sessões RTSP/ONVIF são abertas em sequência. A v0.18.1:
+A JA-A12 de referência mostrou instabilidade quando várias sessões RTSP/ONVIF são abertas em sequência. A v0.18.3:
 
 - não abre RTSP na inicialização;
-- não inicia vídeo automaticamente;
+- não possui preview MJPEG contínuo;
 - usa ICMP para heartbeat;
 - não expõe ações de diagnóstico; ONVIF é consultado somente pelo fluxo PTZ;
-- abre os dois feeds em sequência, e não ao mesmo tempo.
+- usa apenas capturas pontuais; durante PTZ captura somente a lente móvel, no máximo uma vez por segundo.
 
 ### Segurança e escopo
 
