@@ -2,23 +2,30 @@
 
 ![JOOAN Local Control](logo.png)
 
-Controle e diagnóstico **local** para câmeras JOOAN/CAM720 compatíveis no Home Assistant.
+Controle, mídia e diagnóstico **local** para câmeras JOOAN/CAM720 compatíveis no Home Assistant.
 
 ### Recursos atuais
 
-- PTZ local com stop automático ao soltar;
-- descoberta e validação de streams RTSP;
-- snapshots das lentes via FFmpeg;
-- diagnóstico HTTP, RTSP, porta 9898 e ONVIF;
-- informações de dispositivo, SD, gravação, detecção, tracking e iluminação;
-- suporte a câmera dual-lens quando reportado pelo firmware;
-- interface protegida pelo Home Assistant Ingress;
-- laboratório v0.7 para testes ONVIF PTZ, IR, presets, Imaging e Events sem expor comandos arbitrários.
+- PTZ local com `stop` automático ao soltar;
+- descoberta e validação sequencial de streams RTSP;
+- snapshots e preview MJPEG local sem expor credenciais RTSP ao navegador;
+- diagnóstico HTTP/CGI, RTSP, porta 9898 e ONVIF;
+- leitura de dispositivo, SD, gravação, detecção, tracking, iluminação e agendas;
+- suporte a dual-lens quando reportado pelo firmware;
+- ONVIF Events/PullPoint com separação de estados iniciais, duplicatas e transições;
+- laboratório OEM com baseline/diff, planos de escrita e readback;
+- laboratório v0.16 para candidatos GoAhead CGI encontrados em firmware relacionado:
+  - `getVideoSettings` / `updateVideoSettings`;
+  - `getmotiondetectSettings` / `updatemotiondetectSettings`;
+  - candidato de timezone em `/goform/NTP`;
+- `SetDiagMode` limitado ao callback seguro e ao desligamento explícito.
 
-### Local-first
+### Segurança e escopo
 
-O App recusa destinos públicos e mantém credenciais sensíveis apenas no backend. As funções implementadas não dependem da cloud JOOAN.
+O App recusa destinos públicos, serializa o I/O com a câmera e mantém credenciais sensíveis somente no backend. Não existe proxy genérico de URL, `singleCMD`, SOAP, DP/MQTT ou shell de diagnóstico.
 
-> **Status:** experimental. A referência principal de testes é a JOOAN JA-A12 dual-lens. Outros modelos e revisões podem ter diferenças de protocolo.
+Firmware, reset de fábrica e configuração de Wi-Fi permanecem deliberadamente fora de escopo.
 
-Consulte a aba **Documentação** antes do primeiro teste para configuração, diagnóstico e limitações atuais.
+> **Status:** experimental. A principal referência de testes é uma JOOAN JA-A12/CAM720 dual-lens stock. Outros modelos e revisões podem expor somente parte das superfícies documentadas.
+
+Consulte **Documentação** e a aba **Laboratório** antes dos testes de escrita.
