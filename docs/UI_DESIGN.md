@@ -2,9 +2,9 @@
 
 Este documento registra a referência visual escolhida para a evolução do painel completo do **JOOAN Local Control**.
 
-![Conceito visual do painel completo](images/dashboard-concept.jpg)
+![Visão vetorial do painel JOOAN Local Control](images/dashboard-overview.svg)
 
-> Esta imagem continua sendo a referência visual aprovada. A v0.6 já implementa a primeira versão do dashboard nessa direção, mantendo recursos ainda não confirmados como leitura/diagnóstico em vez de controles de escrita.
+> O diagrama vetorial substitui o antigo JPG 320×180 para manter nitidez em telas HiDPI. Ele representa a arquitetura visual da interface; não é uma captura da câmera.
 
 ## Estilo
 
@@ -126,10 +126,10 @@ Inicialmente read-only. Toggles só devem aparecer após validação de escrita 
 5. Diagnóstico avançado não deve dominar a tela principal.
 6. O painel deve continuar útil mesmo com a Internet da câmera bloqueada.
 
-## Implementado na v0.6
+## Implementado até a v0.16
 
 - frontend separado em template, CSS e JavaScript;
-- abas de Visão geral, Câmeras & PTZ, Detecção, Gravação e Diagnóstico;
+- abas de Visão geral, Câmeras & PTZ, Detecção, Gravação, Diagnóstico e Laboratório;
 - cards amigáveis para estado, serviços e capabilities;
 - JSON bruto recolhido em detalhes expansíveis;
 - duas lentes apresentadas como canais separados;
@@ -144,5 +144,6 @@ Inicialmente read-only. Toggles só devem aparecer após validação de escrita 
 - validar o substream da segunda lente;
 - medir CPU/latência do bridge MJPEG no Raspberry Pi;
 - decidir se MJPEG permanece como preview padrão ou se evolui para HLS/WebRTC/go2rtc;
-- adicionar controles de escrita apenas conforme os comandos locais forem validados;
-- adicionar presets somente após validação explícita de criação/chamada/remoção.
+- promover setters do Laboratório para controles normais somente após readback confiável no hardware;
+- manter presets fora da UI principal enquanto o firmware stock retornar `ActionNotSupported`/lista vazia;
+- evoluir o resultado técnico do laboratório para comparações mais visuais sem esconder o JSON original.
