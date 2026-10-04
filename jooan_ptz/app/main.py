@@ -76,8 +76,10 @@ MAX_PTZ_CLIENTS = 64
 PTZ_DIRECTIONS = {"up", "down", "left", "right", "stop"}
 PTZ_CLIENT_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 _ptz_sequences: dict[str, int] = {}
-_preview_process = None
-_preview_generation = 0
+_preview_processes: dict[int, object] = {}
+_preview_generations = {0: 0, 1: 0}
+_ptz_onvif_disabled_until = 0.0
+PREVIEW_START_TIMEOUT = 10.0
 _validation_started = False
 _state = {
     "configured": False,
@@ -104,10 +106,15 @@ _state = {
     "ptz_moving": False,
     "ptz_channel": None,
     "ptz_channel_source": None,
+    "ptz_onvif_available": False,
+    "ptz_last_transport": None,
+    "ptz_last_error": None,
     "preview_active": False,
     "preview_channel": None,
     "preview_stream": None,
     "preview_source": None,
+    "preview_channels": [],
+    "preview_streams": {},
     "preview_probe": None,
     "preview_probe_running": False,
     "preview_last_error": None,
@@ -249,6 +256,9 @@ def _validate_camera_locked(*, deep: bool = False) -> bool:
             if ptz_channel is not None:
                 values["ptz_channel"] = ptz_channel
                 values["ptz_channel_source"] = ptz_source
+            values["ptz_onvif_available"] = bool(
+                ((values.get("onvif_info") or {}).get("ptz") or {}).get("profile_token")
+            )
 
             try:
                 values["media_probe"] = camera.probe_rtsp_streams(
@@ -447,6 +457,8 @@ def _ptz_sequence_is_current(client_id: str | None, sequence: int | None) -> boo
 
 @app.post("/api/ptz/<direction>")
 def ptz(direction: str):
+    global _ptz_onvif_disabled_until
+
     if direction not in PTZ_DIRECTIONS:
         return jsonify({"error": "Unsupported PTZ command"}), 400
 
@@ -456,9 +468,18 @@ def ptz(direction: str):
             return jsonify({"ok": True, "ignored": True, "reason": "stale PTZ request"})
         return jsonify({"error": "Invalid PTZ sequence"}), 400
 
+    try:
+        speed = max(0.1, min(float(request.args.get("speed", 0.4)), 1.0))
+        duration_ms = max(120, min(int(request.args.get("duration_ms", 280)), 600))
+    except (TypeError, ValueError):
+        return jsonify({"error": "Invalid PTZ speed/duration"}), 400
+
     with _state_lock:
         if not _state["online"] or not _state["authenticated"]:
             return jsonify({"error": "Camera is not ready"}), 503
+        onvif_info = dict(_state.get("onvif_info") or {})
+        onvif_available = bool(_state.get("ptz_onvif_available"))
+        previous_transport = _state.get("ptz_last_transport")
 
     if not _camera_io_lock.acquire(timeout=CAMERA_IO_LOCK_TIMEOUT):
         return jsonify({"error": "Camera is busy with diagnostics or media"}), 503
@@ -467,9 +488,70 @@ def ptz(direction: str):
         # the camera lock. Never execute an older direction after a newer STOP.
         if not _ptz_sequence_is_current(client_id, sequence):
             return jsonify({"ok": True, "ignored": True, "reason": "superseded PTZ request"})
-        result = get_camera().command(direction)
-        update_state(ptz_moving=direction != "stop")
-        return jsonify(result)
+
+        camera = get_camera()
+        onvif_error = None
+
+        # Prefer ONVIF for directional movement because it exposes a real
+        # normalized speed control. Each request is a bounded pulse that always
+        # sends ONVIF Stop in a finally block. A failed ONVIF attempt is cooled
+        # down briefly and the proven CGI PTZ becomes the automatic fallback.
+        if (
+            direction != "stop"
+            and onvif_available
+            and time.monotonic() >= _ptz_onvif_disabled_until
+        ):
+            try:
+                onvif_result = onvif_continuous_move(
+                    camera,
+                    onvif_info,
+                    direction=direction,
+                    speed=speed,
+                    duration_ms=duration_ms,
+                )
+                if (onvif_result.get("start") or {}).get("accepted"):
+                    update_state(
+                        ptz_moving=False,
+                        ptz_last_transport="onvif",
+                        ptz_last_error=None,
+                    )
+                    return jsonify({
+                        "ok": True,
+                        "transport": "onvif",
+                        "speed": speed,
+                        "duration_ms": duration_ms,
+                        "result": onvif_result,
+                    })
+                onvif_error = (
+                    (onvif_result.get("start") or {}).get("fault")
+                    or (onvif_result.get("start") or {}).get("error")
+                    or "ONVIF ContinuousMove was not accepted"
+                )
+            except Exception as exc:
+                onvif_error = redact_secrets(exc)
+
+            _ptz_onvif_disabled_until = time.monotonic() + 60.0
+
+        result = camera.command(direction)
+        transport = (
+            "cgi-fallback"
+            if direction != "stop" and onvif_available
+            else "cgi"
+        )
+        if direction == "stop" and previous_transport == "onvif":
+            transport = "cgi-stop"
+        update_state(
+            ptz_moving=direction != "stop",
+            ptz_last_transport=transport,
+            ptz_last_error=str(onvif_error) if onvif_error else None,
+        )
+        return jsonify({
+            "ok": True,
+            "transport": transport,
+            "speed": None,
+            "result": result,
+            "onvif_error": str(onvif_error) if onvif_error else None,
+        })
     except JooanAuthError as exc:
         safe_error = redact_secrets(exc)
         update_state(authenticated=False, last_error=safe_error)
@@ -824,6 +906,12 @@ def _preview_candidates(channel: int) -> list[tuple[str, str]]:
                 candidates.append((sub_path, "onvif_substream"))
                 break
 
+    # Both *_1 paths are evidenced on the validated dual-lens family. Try the
+    # low-resolution candidate before falling back to the main stream even when
+    # a fresh validation has not been run in this process.
+    if not any(path == sub_path for path, _ in candidates):
+        candidates.append((sub_path, "known_substream_candidate"))
+
     for item in media_probe.get("streams", []):
         if item.get("path") == main_path and _video_stream_available(item):
             candidates.append((main_path, "confirmed_main"))
@@ -839,7 +927,7 @@ def _select_preview_stream(channel: int) -> tuple[str, str]:
     return _preview_candidates(channel)[0]
 
 
-def _wait_for_preview_header(process, timeout: float = 4.0) -> bytes | None:
+def _wait_for_preview_header(process, timeout: float = PREVIEW_START_TIMEOUT) -> bytes | None:
     """Confirm FFmpeg emitted a multipart MJPEG header before claiming live."""
     if process.stdout is None:
         return None
@@ -889,22 +977,49 @@ def _terminate_process(process) -> None:
         pass
 
 
-def _stop_live_preview() -> bool:
-    global _preview_process, _preview_generation
+def _preview_state_snapshot() -> tuple[list[int], dict[str, dict[str, str]]]:
     with _preview_state_lock:
-        process = _preview_process
-        had_preview = process is not None
-        _preview_process = None
-        _preview_generation += 1
-    _terminate_process(process)
+        channels = sorted(_preview_processes)
+    with _state_lock:
+        streams = dict(_state.get("preview_streams") or {})
+    return channels, streams
+
+
+def _stop_live_preview(channel: int | None = None) -> bool:
+    targets: list[tuple[int, object]] = []
+    with _preview_state_lock:
+        if channel is None:
+            for item in list(_preview_processes.items()):
+                targets.append(item)
+            _preview_processes.clear()
+            for current in (0, 1):
+                _preview_generations[current] = _preview_generations.get(current, 0) + 1
+        else:
+            process = _preview_processes.pop(channel, None)
+            if process is not None:
+                targets.append((channel, process))
+            _preview_generations[channel] = _preview_generations.get(channel, 0) + 1
+        remaining = sorted(_preview_processes)
+
+    for _channel, process in targets:
+        _terminate_process(process)
+
+    with _state_lock:
+        streams = dict(_state.get("preview_streams") or {})
+    if channel is None:
+        streams = {}
+    else:
+        streams.pop(str(channel), None)
+
     update_state(
-        preview_active=False,
-        preview_channel=None,
+        preview_active=bool(remaining),
+        preview_channel=remaining[0] if len(remaining) == 1 else None,
         preview_stream=None,
         preview_source=None,
+        preview_channels=remaining,
+        preview_streams=streams,
     )
-    return had_preview
-
+    return bool(targets)
 
 def _preview_probe_worker() -> None:
     try:
@@ -914,10 +1029,9 @@ def _preview_probe_worker() -> None:
                     (_state.get("device_info") or {}).get("channel_count", 1)
                 )
                 ptz_channel = _state.get("ptz_channel")
-            targets = [int(ptz_channel)] if ptz_channel in (0, 1) else None
             result = get_camera().probe_preview_substreams(
                 channel_count,
-                channels=targets,
+                channels=None,
             )
             update_state(preview_probe=result)
     except Exception as exc:
@@ -961,14 +1075,21 @@ def validate_preview_substreams():
 
 @app.post("/api/live/stop")
 def stop_live_preview():
+    raw_channel = request.args.get("channel")
+    channel = None
+    if raw_channel is not None:
+        try:
+            channel = int(raw_channel)
+        except ValueError:
+            return jsonify({"error": "Invalid preview channel"}), 400
+        if channel not in (0, 1):
+            return jsonify({"error": "Unsupported preview channel"}), 404
     with _preview_start_lock:
-        stopped = _stop_live_preview()
-    return jsonify({"ok": True, "stopped": stopped})
+        stopped = _stop_live_preview(channel)
+    return jsonify({"ok": True, "stopped": stopped, "channel": channel})
 
 
 def _live_preview_response(channel: int):
-    global _preview_process, _preview_generation
-
     if channel not in (0, 1):
         return jsonify({"error": "Unsupported preview channel"}), 404
 
@@ -979,7 +1100,7 @@ def _live_preview_response(channel: int):
             return jsonify({"error": "Camera diagnostics are running"}), 409
 
     with _preview_start_lock:
-        _stop_live_preview()
+        _stop_live_preview(channel)
 
         if not _camera_io_lock.acquire(timeout=CAMERA_IO_LOCK_TIMEOUT):
             return jsonify({"error": "Camera is busy"}), 409
@@ -987,26 +1108,31 @@ def _live_preview_response(channel: int):
             process, first_chunk, path, source = _start_preview_process(channel)
         except Exception as exc:
             safe_error = redact_secrets(exc)
-            update_state(preview_active=False, preview_last_error=safe_error)
+            update_state(preview_last_error=safe_error)
             return jsonify({"error": safe_error}), 502
         finally:
             _camera_io_lock.release()
 
         with _preview_state_lock:
-            _preview_generation += 1
-            generation = _preview_generation
-            _preview_process = process
+            _preview_generations[channel] = _preview_generations.get(channel, 0) + 1
+            generation = _preview_generations[channel]
+            _preview_processes[channel] = process
+            active_channels = sorted(_preview_processes)
 
+        with _state_lock:
+            streams = dict(_state.get("preview_streams") or {})
+        streams[str(channel)] = {"path": path, "source": source}
         update_state(
             preview_active=True,
-            preview_channel=channel,
+            preview_channel=channel if len(active_channels) == 1 else None,
             preview_stream=path,
             preview_source=source,
+            preview_channels=active_channels,
+            preview_streams=streams,
             preview_last_error=None,
         )
 
     def generate():
-        global _preview_process
         try:
             yield first_chunk
             if process.stdout is None:
@@ -1019,14 +1145,23 @@ def _live_preview_response(channel: int):
         finally:
             _terminate_process(process)
             with _preview_state_lock:
-                if generation == _preview_generation and _preview_process is process:
-                    _preview_process = None
-                    update_state(
-                        preview_active=False,
-                        preview_channel=None,
-                        preview_stream=None,
-                        preview_source=None,
-                    )
+                current = _preview_processes.get(channel)
+                current_generation = _preview_generations.get(channel, 0)
+                if current is process and current_generation == generation:
+                    _preview_processes.pop(channel, None)
+                remaining = sorted(_preview_processes)
+            with _state_lock:
+                current_streams = dict(_state.get("preview_streams") or {})
+            if current_streams.get(str(channel), {}).get("path") == path:
+                current_streams.pop(str(channel), None)
+            update_state(
+                preview_active=bool(remaining),
+                preview_channel=remaining[0] if len(remaining) == 1 else None,
+                preview_stream=None,
+                preview_source=None,
+                preview_channels=remaining,
+                preview_streams=current_streams,
+            )
 
     return Response(
         generate(),
@@ -1036,6 +1171,7 @@ def _live_preview_response(channel: int):
             "X-Accel-Buffering": "no",
             "X-JOOAN-Preview-Stream": path,
             "X-JOOAN-Preview-Source": source,
+            "X-JOOAN-Preview-Channel": str(channel),
         },
     )
 

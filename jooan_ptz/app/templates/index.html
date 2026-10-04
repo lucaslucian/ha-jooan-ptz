@@ -71,35 +71,60 @@
     </section>
 
     <section id="tab-camera" class="tab-panel">
-      <div class="camera-workspace">
-        <article class="card live-card">
+      <div class="control-dashboard">
+        <article class="card feeds-card">
           <div class="card-heading">
             <div>
               <span class="section-kicker">VÍDEO LOCAL</span>
-              <h2 id="liveTitle">Lente 1</h2>
+              <h2>Duas lentes ao vivo</h2>
             </div>
-            <span id="ptzLensBadge" class="badge neutral">Identificando lente PTZ...</span>
-          </div>
-
-          <div class="preview-stage">
-            <img id="liveImage" alt="Preview ao vivo" hidden>
-            <img id="singleSnapshot" alt="Snapshot da câmera" hidden>
-            <div id="previewEmpty" class="preview-empty">
-              <strong>Preview parado</strong>
-              <span>Inicie o vídeo ao vivo ou carregue um snapshot.</span>
+            <div class="toolbar compact">
+              <button id="startLive" class="button primary">Iniciar feeds</button>
+              <button id="stopLive" class="button secondary" disabled>Parar feeds</button>
+              <button id="validateSubstreams" class="button ghost">Validar baixa resolução</button>
             </div>
-            <div id="liveIndicator" class="live-indicator" hidden><span></span> AO VIVO</div>
           </div>
 
-          <div id="liveMeta" class="stream-meta"></div>
+          <div class="dual-feed-grid">
+            <article class="feed-tile">
+              <div class="feed-stage">
+                <img id="liveFeed0" alt="Feed ao vivo da lente 1" hidden>
+                <div id="feedEmpty0" class="preview-empty">
+                  <strong>Lente 1</strong>
+                  <span>Aguardando feed local.</span>
+                </div>
+                <div class="live-indicator" id="feedLive0" hidden><span></span> AO VIVO</div>
+              </div>
+              <div class="feed-body">
+                <div class="camera-title">
+                  <strong>Lente 1 · ch00</strong>
+                  <span id="feedBadge0" class="badge neutral">Parado</span>
+                </div>
+                <div id="feedMeta0" class="stream-meta"></div>
+                <p id="feedMessage0" class="helper">O backend prioriza o substream de baixa resolução.</p>
+              </div>
+            </article>
 
-          <div class="toolbar">
-            <button id="startLive" class="button primary">Iniciar vídeo</button>
-            <button id="stopLive" class="button secondary" disabled>Parar vídeo</button>
-            <button id="singleSnapshotButton" class="button secondary">Snapshot</button>
-            <button id="validateSubstreams" class="button ghost">Validar stream PTZ</button>
+            <article class="feed-tile">
+              <div class="feed-stage">
+                <img id="liveFeed1" alt="Feed ao vivo da lente 2" hidden>
+                <div id="feedEmpty1" class="preview-empty">
+                  <strong>Lente 2</strong>
+                  <span>Aguardando feed local.</span>
+                </div>
+                <div class="live-indicator" id="feedLive1" hidden><span></span> AO VIVO</div>
+              </div>
+              <div class="feed-body">
+                <div class="camera-title">
+                  <strong>Lente 2 · ch01</strong>
+                  <span id="feedBadge1" class="badge neutral">Parado</span>
+                </div>
+                <div id="feedMeta1" class="stream-meta"></div>
+                <p id="feedMessage1" class="helper">O backend prioriza o substream de baixa resolução.</p>
+              </div>
+            </article>
           </div>
-          <p id="previewMessage" class="helper"></p>
+          <p id="previewMessage" class="helper">Os feeds usam RTSP autenticado no backend; as credenciais nunca são enviadas ao navegador.</p>
         </article>
 
         <article class="card ptz-card">
@@ -110,7 +135,19 @@
             </div>
             <span id="ptzState" class="badge neutral">Parado</span>
           </div>
-          <p class="helper">Pressione e segure uma direção. O vídeo ao vivo pode permanecer aberto durante o movimento.</p>
+          <div class="ptz-mode-row">
+            <span id="ptzTransportBadge" class="badge neutral">Detectando transporte</span>
+            <label class="ptz-speed-label">Velocidade
+              <select id="ptzSpeed" class="lab-select">
+                <option value="0.2">1 · lenta</option>
+                <option value="0.4" selected>2 · normal</option>
+                <option value="0.6">3</option>
+                <option value="0.8">4</option>
+                <option value="1">5 · máxima</option>
+              </select>
+            </label>
+          </div>
+          <p class="helper">ONVIF é preferido para permitir velocidade variável. Se a câmera rejeitar o movimento ONVIF, o painel usa automaticamente o CGI PTZ já validado.</p>
           <div class="ptz-grid">
             <div></div><button class="ptz-button" data-dir="up" aria-label="Cima">↑</button><div></div>
             <button class="ptz-button" data-dir="left" aria-label="Esquerda">←</button>
@@ -120,17 +157,29 @@
           </div>
           <p id="command" class="command-state"></p>
         </article>
+
+        <article class="card camera-info-card">
+          <div class="card-heading">
+            <div>
+              <span class="section-kicker">CÂMERA</span>
+              <h2>Informações gerais</h2>
+            </div>
+            <span class="badge neutral">Leitura</span>
+          </div>
+          <div id="generalInfo" class="info-list"></div>
+        </article>
       </div>
 
-      <article class="card">
+      <article class="card read-settings-card">
         <div class="card-heading">
           <div>
-            <span class="section-kicker">STREAMS CONFIRMADOS</span>
-            <h2>Lentes e mídia</h2>
+            <span class="section-kicker">ESTADO REPORTADO</span>
+            <h2>Todas as configurações lidas</h2>
           </div>
-          <button id="cameraRefreshSnapshots" class="button secondary">Atualizar snapshots</button>
+          <span class="badge neutral">Somente leitura</span>
         </div>
-        <div id="cameraMedia" class="camera-grid"></div>
+        <p class="helper">Esta área reúne apenas dados realmente retornados pela câmera via API OEM, CGI, RTSP e ONVIF. Nenhum setter é inferido a partir destes valores.</p>
+        <div id="allReadSettings" class="read-settings-groups"></div>
       </article>
     </section>
 
