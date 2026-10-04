@@ -279,6 +279,9 @@ def test_dashboard_template_is_served():
     assert response.status_code == 200
     body = response.get_data(as_text=True)
     assert "Câmeras & PTZ" in body
+    assert "labCgiProbeAll" in body
+    assert "labCgiRoundtrip" in body
+    assert "labCgiWrite" in body
     assert "static/app.css" in body
     assert "static/app.js" in body
 
@@ -505,3 +508,50 @@ def test_oem_toggle_lab_endpoint_passes_selected_group(monkeypatch):
     assert response.status_code == 200
     assert seen["group"] == "tracking"
     assert response.get_json()["values"]["autotrack"] == 1
+
+def test_legacy_cgi_probe_route_passes_only_selected_surface(monkeypatch):
+    monkeypatch.setattr(
+        main,
+        "_lab_execute",
+        lambda callback: main.jsonify(callback(object(), {})),
+    )
+    monkeypatch.setattr(
+        main,
+        "legacy_cgi_probe",
+        lambda camera, *, surface: {"operation": "legacy_cgi_probe", "surface": surface},
+    )
+
+    client = main.app.test_client()
+    response = client.post("/api/lab/cgi/probe", json={"surface": "motion"})
+
+    assert response.status_code == 200
+    assert response.get_json() == {
+        "operation": "legacy_cgi_probe",
+        "surface": "motion",
+    }
+
+
+def test_legacy_ntp_route_passes_only_timezone_value(monkeypatch):
+    monkeypatch.setattr(
+        main,
+        "_lab_execute",
+        lambda callback: main.jsonify(callback(object(), {})),
+    )
+    monkeypatch.setattr(
+        main,
+        "legacy_ntp_timezone_candidate",
+        lambda camera, *, timezone: {
+            "operation": "legacy_ntp_timezone_candidate",
+            "requested": timezone,
+        },
+    )
+
+    client = main.app.test_client()
+    response = client.post(
+        "/api/lab/cgi/ntp-timezone",
+        json={"timezone": "AST_-04", "NTPServerIP": "should-be-ignored"},
+    )
+
+    assert response.status_code == 200
+    assert response.get_json()["requested"] == "AST_-04"
+
