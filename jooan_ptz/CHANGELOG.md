@@ -3,14 +3,14 @@
 ## 0.16.0
 
 - Added an experimental **legacy GoAhead CGI** laboratory based on public related-camera firmware/API evidence.
-- Added read-only probes for `/goform/getVideoSettings` and `/goform/getmotiondetectSettings`, returning only allowlisted parsed fields and never raw response bodies.
+- Added read-only probes for `/goform/getVideoSettings` and `/goform/getmotiondetectSettings`, trying GET first and the original GoAhead POST-query form when needed, returning only allowlisted parsed fields and never raw response bodies.
 - Added guarded no-op round trips for `/goform/updateVideoSettings` and `/goform/updatemotiondetectSettings`: the backend first reads current values, replays only those values, then compares both CGI and port-9898 OEM readback.
-- Added explicit candidate writers for motion enable, motion sensitivity, image rotation/Flip, IR mode and 50/60 Hz flicker. All paths, parameter names and enums are fixed allowlists.
+- Added explicit candidate writers for motion enable, 25-zone mask, legacy sensitivity 0..5, image rotation/Flip, IR mode, 50/60 Hz flicker and the documented 0..100 day/night brightness/contrast/saturation fields. All paths, parameter names, ranges and enums are fixed allowlists.
 - Added a separately guarded `/goform/NTP` timezone candidate with a closed list of legacy timezone values and port-9898 timezone readback.
 - Improved laboratory request locking so all controls are disabled immediately while one camera-I/O test is running.
 - Added regression coverage for safe legacy parsing, read probes, no-op round trips, state-preserving writes, arbitrary-parameter rejection and NTP allowlisting.
 - Updated documentation with confirmed JA-A12 mappings: `autotrack 0/1`, `flipmirror 0/3`, `floodlight 0/1/2/3`, motion sensitivity `1/2/3`, 25-bit motion zones and OEM `GMT±HH:MM` timezone format.
-- Replaced the low-resolution 320×180 dashboard concept JPEG with a 1600×900 vector SVG and updated CI to validate the vector asset.
+- Replaced the low-resolution 320×180 dashboard concept JPEG with a 1600×900 vector SVG, added a 1000×400 vector project wordmark, and updated CI to validate both vector assets.
 - Refreshed README, compatibility, UI-design and App documentation to match the current laboratory and hardware findings.
 - Firmware update, factory reset, Wi-Fi configuration, arbitrary CGI/singleCMD/SOAP/DP/MQTT proxies and diagnostic shell execution remain excluded.
 
