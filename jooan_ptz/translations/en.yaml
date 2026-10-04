@@ -20,9 +20,6 @@ configuration:
   onvif_port:
     name: ONVIF candidate port
     description: Local ONVIF port. The reference JA-A12 was validated on 8899; other revisions may differ.
-  diag_callback_ip:
-    name: Home Assistant LAN IP for diagnostics
-    description: Home Assistant host LAN IP on the same /24 as the camera, used only by the guarded SetDiagMode callback test. The browser cannot choose the destination or port.
   validation_interval:
     name: Heartbeat interval
     description: Seconds between ICMP liveness checks. The heartbeat does not open HTTP, ONVIF, port 9898 or RTSP connections.
