@@ -954,6 +954,9 @@ class _LegacyCamera:
             return _LegacyResponse("\r".join(f"{k}:{v}" for k, v in self.video.items()))
         raise AssertionError(endpoint)
 
+    def _post_query(self, endpoint, params=None, body="n/a", authenticated=True, port=None):
+        return self._get(endpoint, params=params, authenticated=authenticated, port=port)
+
     def _post_form(self, endpoint, data=None, authenticated=True, port=None):
         params = dict(data or {})
         self.calls.append((endpoint, params, authenticated, port))
