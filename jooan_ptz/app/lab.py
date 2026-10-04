@@ -595,8 +595,20 @@ def _legacy_candidate_value(target: str, value: Any) -> tuple[str, str, Any]:
     raise LabError("Unsupported legacy CGI write target")
 
 
-def legacy_cgi_write_candidate(camera, *, target: str, value: Any) -> dict[str, Any]:
-    """Execute one bounded legacy writer candidate and verify both readbacks."""
+def legacy_cgi_write_candidate(
+    camera,
+    *,
+    target: str,
+    value: Any,
+    force_without_readback: bool = False,
+) -> dict[str, Any]:
+    """Execute one bounded legacy writer candidate and verify available readbacks.
+
+    Normal mode requires the paired read endpoint to expose enough state to
+    preserve existing values. Forced mode is an explicit laboratory escape
+    hatch: when that prerequisite is unavailable, it sends only the selected
+    allowlisted field. It never accepts an arbitrary path, field name or value.
+    """
     surface, field, normalized = _legacy_candidate_value(target, value)
     config = LEGACY_CGI_SURFACES[surface]
     before_probe = _legacy_surface_probe_one(camera, surface)
@@ -607,30 +619,78 @@ def legacy_cgi_write_candidate(camera, *, target: str, value: Any) -> dict[str, 
         for key in config["write_fields"]
         if key in before_fields
     }
-    if not writer_params:
-        raise LabError("Candidate read endpoint returned no values to preserve; write blocked")
-    if field not in before_fields:
-        raise LabError(
-            "Candidate read endpoint did not expose the target field; write blocked"
-        )
 
-    if surface == "motion" and "sensitivity" not in writer_params:
-        raise LabError("Motion write requires current sensitivity so it can be preserved")
-    if surface == "motion" and "motionEnable" not in writer_params:
-        raise LabError("Motion write requires current motionEnable so it can be preserved")
+    missing_required_state = not writer_params or field not in before_fields
+    if surface == "motion":
+        missing_required_state = missing_required_state or not {
+            "sensitivity",
+            "motionEnable",
+        }.issubset(writer_params)
 
-    writer_params[field] = normalized
-    before_oem = _legacy_oem_readback(camera, tuple(config["oem_readback"]))
+    force_requested = bool(force_without_readback)
+    force_used = force_requested and missing_required_state
+
+    if not force_used:
+        if not writer_params:
+            raise LabError("Candidate read endpoint returned no values to preserve; write blocked")
+        if field not in before_fields:
+            raise LabError(
+                "Candidate read endpoint did not expose the target field; write blocked"
+            )
+        if surface == "motion" and "sensitivity" not in writer_params:
+            raise LabError("Motion write requires current sensitivity so it can be preserved")
+        if surface == "motion" and "motionEnable" not in writer_params:
+            raise LabError("Motion write requires current motionEnable so it can be preserved")
+        writer_params[field] = normalized
+    else:
+        # Deliberately do not synthesize or guess any sibling fields. When the
+        # reader is unavailable, the bounded forced test sends exactly one
+        # already-allowlisted setting/value pair.
+        writer_params = {field: normalized}
+
+    before_oem: dict[str, Any] = {}
+    before_oem_error: str | None = None
+    try:
+        before_oem = _legacy_oem_readback(camera, tuple(config["oem_readback"]))
+    except Exception as exc:
+        if not force_used:
+            raise
+        before_oem_error = type(exc).__name__
+
     response = camera._get(
         str(config["write_path"]),
         writer_params,
         authenticated=True,
+        allow_http_error=True,
     )
     writer_summary = _legacy_response_summary(response, tuple(config["read_fields"]))
-    time.sleep(0.15)
-    after_probe = _legacy_surface_probe_one(camera, surface)
-    after_fields = dict(after_probe.get("fields") or {})
-    after_oem = _legacy_oem_readback(camera, tuple(config["oem_readback"]))
+
+    after_fields: dict[str, Any] = {}
+    after_oem: dict[str, Any] = {}
+    after_probe_error: str | None = None
+    after_oem_error: str | None = None
+    verification_skipped: str | None = None
+
+    if writer_summary.get("accepted"):
+        time.sleep(0.15)
+        try:
+            after_probe = _legacy_surface_probe_one(camera, surface)
+            after_fields = dict(after_probe.get("fields") or {})
+        except Exception as exc:
+            if not force_used:
+                raise
+            after_probe_error = type(exc).__name__
+
+        try:
+            after_oem = _legacy_oem_readback(camera, tuple(config["oem_readback"]))
+        except Exception as exc:
+            if not force_used:
+                raise
+            after_oem_error = type(exc).__name__
+    else:
+        # A clean HTTP error already classifies the candidate writer. Avoid
+        # immediately hitting the fragile camera with another read request.
+        verification_skipped = "writer_http_error"
 
     return {
         "operation": "legacy_cgi_write_candidate",
@@ -640,20 +700,32 @@ def legacy_cgi_write_candidate(camera, *, target: str, value: Any) -> dict[str, 
         "requested": normalized,
         "write_path": config["write_path"],
         "preserved_fields": sorted(key for key in writer_params if key != field),
+        "force_without_readback_requested": force_requested,
+        "force_without_readback_used": force_used,
+        "rollback_available": field in before_fields,
         "writer_response": writer_summary,
         "candidate_readback": {
             "before": before_fields.get(field),
             "after": after_fields.get(field),
             "changes": _plain_diff(before_fields, after_fields),
+            "error": after_probe_error,
         },
         "oem_readback": {
             "before": before_oem,
             "after": after_oem,
             "changes": _plain_diff(before_oem, after_oem),
+            "before_error": before_oem_error,
+            "after_error": after_oem_error,
         },
+        "verification_skipped": verification_skipped,
         "writer_candidate_accepted": bool(writer_summary.get("accepted")),
+        "warning": (
+            "Forced single-field write was used because the paired reader could "
+            "not provide enough state. No automatic rollback can be guaranteed."
+            if force_used
+            else None
+        ),
     }
-
 
 def legacy_ntp_timezone_candidate(camera, *, timezone: str) -> dict[str, Any]:
     """Test the related-firmware /goform/NTP timezone writer candidate.

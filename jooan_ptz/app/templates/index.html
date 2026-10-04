@@ -396,7 +396,7 @@
         <p class="helper">
           Estes endpoints foram encontrados em firmware/web UI relacionado que compartilha
           <code>/goform/getVideoSettings</code> com câmeras JOOAN. O probe tenta a leitura por
-          GET e também pelo POST-query usado pela página GoAhead original. Primeiro teste as leituras.
+          POST-query usado pela página GoAhead original e só tenta GET quando o método é rejeitado.
           O round-trip envia de volta <strong>os mesmos valores acabados de ler</strong> e compara
           novamente o CGI e o estado OEM da porta 9898. Os setters abaixo são manuais, limitados
           por allowlist e nunca aceitam caminho ou nome de parâmetro arbitrário.
@@ -438,14 +438,20 @@
           <label>Valor
             <select id="labCgiWriteValue" class="lab-select"></select>
           </label>
+          <label>Modo de envio
+            <select id="labCgiWriteMode" class="lab-select">
+              <option value="safe">Seguro · exigir leitura para preservar estado</option>
+              <option value="force">Forçar · enviar só o campo se não houver readback</option>
+            </select>
+          </label>
         </div>
         <div class="toolbar">
           <button id="labCgiWrite" class="button danger">Executar setter candidato</button>
         </div>
         <div id="labCgiSummary" class="lab-summary">
-          Comece por “Testar leituras encontradas”. Motion e Video só escrevem após conseguirem
-          reler valores que serão preservados. O candidato NTP é separado porque a fonte pública
-          não expõe um CGI de leitura equivalente.
+          O modo seguro exige leitura para preservar o estado. O modo forçado permite uma única
+          tentativa com somente o campo allowlisted selecionado quando o readback estiver vazio ou
+          ausente; nesse caso não há rollback automático garantido. O candidato NTP continua separado.
         </div>
       </article>
 

@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.16.2
+
+- Added an explicit **forced legacy CGI write** mode in the Laboratory for one final bounded hardware test when the paired read endpoint returns no usable values or is absent.
+- Forced mode still uses the fixed allowlist: it never accepts an arbitrary CGI path, parameter name or value.
+- When readback is insufficient, forced mode sends **only the selected allowlisted field** instead of guessing sibling settings; automatic rollback is therefore not claimed.
+- Candidate writer HTTP errors such as 404 are now returned as structured results and stop verification immediately, avoiding extra requests to the fragile camera service.
+- Normal mode is unchanged and still requires enough reader state to preserve existing fields.
+- Firmware update, factory reset and Wi-Fi configuration remain excluded.
+
+
 ## 0.16.1
 
 - Changed legacy CGI discovery to prefer the **POST-query** form used by the related GoAhead page and now observed working on the reference JA-A12.
