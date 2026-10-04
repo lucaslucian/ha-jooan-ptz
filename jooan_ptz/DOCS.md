@@ -193,7 +193,7 @@ A v0.4 amplia a descoberta somente leitura para:
 - `GetStatus` PTZ;
 - `GetPresets`.
 
-Nenhuma dessas operações altera a câmera. PTZ de escrita continua usando apenas o CGI já validado; presets ainda não são criados, removidos ou chamados via ONVIF.
+Nenhuma dessas operações de descoberta altera a câmera. Na operação normal, o PTZ continua usando o CGI já validado; a aba Laboratório também oferece ContinuousMove/Stop ONVIF de curta duração, já validado na unidade de referência. Presets continuam fora do fluxo normal porque o firmware não os expõe de forma utilizável.
 
 ## Laboratório experimental
 
