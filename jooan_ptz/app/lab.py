@@ -139,6 +139,443 @@ OEM_FINGERPRINT_DENY_SUBSTRINGS = (
 )
 
 
+# Legacy GoAhead-style CGI surfaces found in public firmware/web UI code that
+# shares endpoint names already observed on JOOAN cameras. These remain
+# experimental candidates: every path and parameter is fixed here and the
+# browser cannot supply an arbitrary CGI path or parameter name.
+LEGACY_CGI_SURFACES: dict[str, dict[str, Any]] = {
+    "video": {
+        "read_path": "/goform/getVideoSettings",
+        "write_path": "/goform/updateVideoSettings",
+        "read_fields": (
+            "contrast",
+            "brightness",
+            "saturation",
+            "ncontrast",
+            "nbrightness",
+            "nsaturation",
+            "rotation",
+            "flicker",
+            "ir",
+            "resolution",
+            "resolution2",
+            "codec",
+            "quality",
+            "quality2",
+            "fps",
+        ),
+        "write_fields": (
+            "contrast",
+            "brightness",
+            "saturation",
+            "ncontrast",
+            "nbrightness",
+            "nsaturation",
+            "rotation",
+            "flicker",
+            "ir",
+            "resolution",
+            "resolution2",
+            "codec",
+            "quality",
+            "quality2",
+            "fps",
+        ),
+        "oem_readback": (
+            "flipmirror",
+            "floodlight",
+            "powerfrequency",
+            "qualitymode",
+            "definition",
+            "resolution",
+        ),
+    },
+    "motion": {
+        "read_path": "/goform/getmotiondetectSettings",
+        "write_path": "/goform/updatemotiondetectSettings",
+        "read_fields": ("motionEnable", "sensitivity", "zonemask"),
+        "write_fields": ("motionEnable", "sensitivity", "zonemask"),
+        "oem_readback": (
+            "md_enable",
+            "sub_md_enable",
+            "mdsensitivity",
+            "sub_mdsensitivity",
+            "mdarea",
+            "sub_mdarea",
+        ),
+    },
+}
+
+LEGACY_VIDEO_ENUMS = {
+    "rotation": {"NORMAL", "VFLIP", "MIRROR", "MIRROR-VFLIP"},
+    "ir": {"AUTO", "ON", "OFF"},
+    "flicker": {"50HZ", "60HZ"},
+}
+
+LEGACY_NTP_TIMEZONES = {
+    "UCT_-11",
+    "UCT_-10",
+    "NAS_-09",
+    "PST_-08",
+    "MST_-07",
+    "CST_-06",
+    "UCT_-06",
+    "UCT_-05",
+    "EST_-05",
+    "AST_-04",
+    "UCT_-04",
+    "UCT_-03",
+    "EBS_-03",
+    "NOR_-02",
+    "EUT_-01",
+    "UCT_000",
+    "GMT_000",
+    "MET_001",
+    "MEZ_001",
+    "UCT_001",
+    "EET_002",
+    "SAS_002",
+    "IST_003",
+    "MSK_003",
+    "UCT_004",
+    "UCT_005",
+    "UCT_006",
+    "UCT_007",
+    "CST_008",
+    "CCT_008",
+    "SST_008",
+    "AWS_008",
+    "JST_009",
+    "KST_009",
+    "UCT_010",
+    "AES_010",
+    "UCT_011",
+    "UCT_012",
+    "NZS_012",
+}
+
+LEGACY_WRITE_TARGETS = {
+    "motion_enable": ("motion", "motionEnable"),
+    "motion_sensitivity": ("motion", "sensitivity"),
+    "rotation": ("video", "rotation"),
+    "ir": ("video", "ir"),
+    "flicker": ("video", "flicker"),
+}
+
+
+def _legacy_parse_fields(text: str, allowed_fields: tuple[str, ...]) -> dict[str, Any]:
+    """Parse only allowlisted values from a legacy CGI response.
+
+    Known firmware variants return either JSON (sometimes wrapped in HTML) or
+    CR-separated key:value lines. Raw response text is deliberately never
+    returned to the browser.
+    """
+    raw = str(text or "").strip()
+    allowed = set(allowed_fields)
+    parsed: dict[str, Any] = {}
+
+    candidates: list[str] = [raw]
+    match = re.search(r"<h2>\s*(\{.*?\})\s*</h2>", raw, re.IGNORECASE | re.DOTALL)
+    if match:
+        candidates.append(match.group(1))
+    start = raw.find("{")
+    end = raw.rfind("}")
+    if start >= 0 and end > start:
+        candidates.append(raw[start : end + 1])
+
+    for candidate in candidates:
+        try:
+            data = json.loads(candidate)
+        except (TypeError, json.JSONDecodeError):
+            continue
+        if not isinstance(data, dict):
+            continue
+        for key in allowed:
+            value = data.get(key)
+            if isinstance(value, (str, int, float, bool)) or value is None:
+                if key in data:
+                    parsed[key] = value
+        if parsed:
+            return parsed
+
+    normalized = raw.replace("\r\n", "\n").replace("\r", "\n")
+    for line in normalized.split("\n"):
+        line = line.strip()
+        if not line or ":" not in line:
+            continue
+        key, value = line.split(":", 1)
+        key = key.strip()
+        if key in allowed:
+            parsed[key] = value.strip()
+    return parsed
+
+
+def _legacy_response_summary(response, allowed_fields: tuple[str, ...]) -> dict[str, Any]:
+    fields = _legacy_parse_fields(response.text, allowed_fields)
+    content_type = str(response.headers.get("Content-Type") or "").split(";", 1)[0].strip()
+    return {
+        "http_status": int(response.status_code),
+        "accepted": 200 <= int(response.status_code) < 300,
+        "content_type": content_type or None,
+        "body_bytes": len(response.content or b""),
+        "recognized_fields": len(fields),
+        "fields": fields,
+    }
+
+
+def _legacy_surface_probe_one(camera, surface: str) -> dict[str, Any]:
+    config = LEGACY_CGI_SURFACES.get(str(surface or "").strip())
+    if not config:
+        raise LabError("Unsupported legacy CGI surface")
+
+    read_fields = tuple(config["read_fields"])
+    response = camera._get(
+        str(config["read_path"]),
+        {key: "" for key in read_fields},
+        authenticated=True,
+    )
+    return {
+        "surface": surface,
+        "read_path": config["read_path"],
+        "candidate_write_path": config["write_path"],
+        **_legacy_response_summary(response, read_fields),
+    }
+
+
+def _legacy_oem_readback(camera, keys: tuple[str, ...]) -> dict[str, Any]:
+    info = camera.get_device_features().as_dict()
+    properties = info.get("properties") or {}
+    return {key: properties.get(key) for key in keys if key in properties}
+
+
+def _plain_diff(before: dict[str, Any], after: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    result: dict[str, dict[str, Any]] = {}
+    for key in sorted(set(before) | set(after)):
+        if before.get(key) != after.get(key):
+            result[key] = {"before": before.get(key), "after": after.get(key)}
+    return result
+
+
+def legacy_cgi_probe(camera, *, surface: str = "all") -> dict[str, Any]:
+    """Probe only the two evidenced legacy read endpoints.
+
+    A failure on one candidate does not abort the other candidate. Exception
+    messages are intentionally reduced to their type so request details never
+    leak credentials.
+    """
+    selected = str(surface or "all").strip().lower()
+    names = list(LEGACY_CGI_SURFACES) if selected == "all" else [selected]
+    if any(name not in LEGACY_CGI_SURFACES for name in names):
+        raise LabError("Unsupported legacy CGI surface")
+
+    results: dict[str, Any] = {}
+    for name in names:
+        try:
+            results[name] = _legacy_surface_probe_one(camera, name)
+        except Exception as exc:
+            config = LEGACY_CGI_SURFACES[name]
+            results[name] = {
+                "surface": name,
+                "read_path": config["read_path"],
+                "candidate_write_path": config["write_path"],
+                "accepted": False,
+                "error_type": type(exc).__name__,
+            }
+
+    return {
+        "operation": "legacy_cgi_probe",
+        "surfaces": results,
+        "writers_executed": False,
+        "notes": (
+            "These paths are candidates from related GoAhead camera firmware. "
+            "A successful read is evidence for this camera; a writer is not "
+            "considered validated until a bounded round-trip/readback succeeds."
+        ),
+    }
+
+
+def legacy_cgi_roundtrip(camera, *, surface: str) -> dict[str, Any]:
+    """Send a no-op writer request using values just read from the camera.
+
+    This is the safest active test for a candidate writer: no desired setting
+    is changed, every parameter name is allowlisted, and the same read endpoint
+    plus port-9898 OEM state are checked immediately afterwards.
+    """
+    name = str(surface or "").strip().lower()
+    config = LEGACY_CGI_SURFACES.get(name)
+    if not config:
+        raise LabError("Unsupported legacy CGI surface")
+
+    before_probe = _legacy_surface_probe_one(camera, name)
+    before_fields = dict(before_probe.get("fields") or {})
+    writer_params = {
+        key: before_fields[key]
+        for key in config["write_fields"]
+        if key in before_fields
+    }
+    if not writer_params:
+        raise LabError("Candidate read endpoint returned no writable fields; round-trip blocked")
+
+    if name == "motion" and not {"motionEnable", "sensitivity"}.issubset(writer_params):
+        raise LabError(
+            "Motion round-trip requires both motionEnable and sensitivity from the read endpoint"
+        )
+
+    before_oem = _legacy_oem_readback(camera, tuple(config["oem_readback"]))
+    response = camera._get(
+        str(config["write_path"]),
+        writer_params,
+        authenticated=True,
+    )
+    writer_summary = _legacy_response_summary(response, tuple(config["read_fields"]))
+    after_probe = _legacy_surface_probe_one(camera, name)
+    after_fields = dict(after_probe.get("fields") or {})
+    after_oem = _legacy_oem_readback(camera, tuple(config["oem_readback"]))
+
+    readback_changes = _plain_diff(before_fields, after_fields)
+    oem_changes = _plain_diff(before_oem, after_oem)
+    return {
+        "operation": "legacy_cgi_roundtrip",
+        "surface": name,
+        "read_path": config["read_path"],
+        "write_path": config["write_path"],
+        "writer_params": sorted(writer_params),
+        "writer_response": writer_summary,
+        "readback_changes": readback_changes,
+        "oem_readback_changes": oem_changes,
+        "state_changed": bool(readback_changes or oem_changes),
+        "writer_candidate_accepted": bool(writer_summary.get("accepted")),
+        "warning": (
+            "A no-op writer should not alter state. Any reported change means "
+            "this candidate must not be promoted to normal controls yet."
+            if readback_changes or oem_changes
+            else None
+        ),
+    }
+
+
+def _legacy_candidate_value(target: str, value: Any) -> tuple[str, str, Any]:
+    target = str(target or "").strip()
+    if target == "motion_enable":
+        normalized = str(value or "").strip().lower()
+        if normalized in {"on", "yes", "1", "true"}:
+            return "motion", "motionEnable", "YES"
+        if normalized in {"off", "no", "0", "false"}:
+            return "motion", "motionEnable", "NO"
+        raise LabError("motion_enable must be on/off")
+
+    if target == "motion_sensitivity":
+        try:
+            level = int(value)
+        except (TypeError, ValueError) as exc:
+            raise LabError("motion_sensitivity must be 1, 2 or 3") from exc
+        if level not in {1, 2, 3}:
+            raise LabError("motion_sensitivity must be 1, 2 or 3")
+        return "motion", "sensitivity", str(level)
+
+    if target in LEGACY_VIDEO_ENUMS:
+        normalized = str(value or "").strip().upper()
+        if normalized not in LEGACY_VIDEO_ENUMS[target]:
+            raise LabError(f"Unsupported {target} candidate value")
+        return "video", target, normalized
+
+    raise LabError("Unsupported legacy CGI write target")
+
+
+def legacy_cgi_write_candidate(camera, *, target: str, value: Any) -> dict[str, Any]:
+    """Execute one bounded legacy writer candidate and verify both readbacks."""
+    surface, field, normalized = _legacy_candidate_value(target, value)
+    config = LEGACY_CGI_SURFACES[surface]
+    before_probe = _legacy_surface_probe_one(camera, surface)
+    before_fields = dict(before_probe.get("fields") or {})
+
+    writer_params = {
+        key: before_fields[key]
+        for key in config["write_fields"]
+        if key in before_fields
+    }
+    if not writer_params:
+        raise LabError("Candidate read endpoint returned no values to preserve; write blocked")
+
+    if surface == "motion" and "sensitivity" not in writer_params:
+        raise LabError("Motion write requires current sensitivity so it can be preserved")
+    if surface == "motion" and "motionEnable" not in writer_params:
+        raise LabError("Motion write requires current motionEnable so it can be preserved")
+
+    writer_params[field] = normalized
+    before_oem = _legacy_oem_readback(camera, tuple(config["oem_readback"]))
+    response = camera._get(
+        str(config["write_path"]),
+        writer_params,
+        authenticated=True,
+    )
+    writer_summary = _legacy_response_summary(response, tuple(config["read_fields"]))
+    time.sleep(0.15)
+    after_probe = _legacy_surface_probe_one(camera, surface)
+    after_fields = dict(after_probe.get("fields") or {})
+    after_oem = _legacy_oem_readback(camera, tuple(config["oem_readback"]))
+
+    return {
+        "operation": "legacy_cgi_write_candidate",
+        "target": target,
+        "surface": surface,
+        "field": field,
+        "requested": normalized,
+        "write_path": config["write_path"],
+        "preserved_fields": sorted(key for key in writer_params if key != field),
+        "writer_response": writer_summary,
+        "candidate_readback": {
+            "before": before_fields.get(field),
+            "after": after_fields.get(field),
+            "changes": _plain_diff(before_fields, after_fields),
+        },
+        "oem_readback": {
+            "before": before_oem,
+            "after": after_oem,
+            "changes": _plain_diff(before_oem, after_oem),
+        },
+        "writer_candidate_accepted": bool(writer_summary.get("accepted")),
+    }
+
+
+def legacy_ntp_timezone_candidate(camera, *, timezone: str) -> dict[str, Any]:
+    """Test the related-firmware /goform/NTP timezone writer candidate.
+
+    Unlike video/motion, the public page does not expose a paired safe read CGI;
+    therefore this action is kept separate and verifies only the known 9898
+    timezone before/after. It never sends NTP server or synchronization fields.
+    """
+    candidate = str(timezone or "").strip().upper()
+    if candidate not in LEGACY_NTP_TIMEZONES:
+        raise LabError("Unsupported legacy NTP timezone value")
+
+    before = _legacy_oem_readback(camera, ("timezone",))
+    response = camera._get(
+        "/goform/NTP",
+        {"time_zone": candidate},
+        authenticated=True,
+    )
+    summary = _legacy_response_summary(response, ())
+    time.sleep(0.15)
+    after = _legacy_oem_readback(camera, ("timezone",))
+    return {
+        "operation": "legacy_ntp_timezone_candidate",
+        "write_path": "/goform/NTP",
+        "requested": candidate,
+        "writer_response": summary,
+        "oem_readback": {
+            "before": before,
+            "after": after,
+            "changes": _plain_diff(before, after),
+        },
+        "writer_candidate_accepted": bool(summary.get("accepted")),
+        "warning": (
+            "This legacy handler has no paired read CGI in the public source. "
+            "Only time_zone is sent; NTP server/sync fields are never supplied."
+        ),
+    }
+
+
 def _oem_property_fingerprints(properties: dict[str, Any]) -> dict[str, dict[str, str]]:
     """Fingerprint non-sensitive OEM properties without returning their values.
 
