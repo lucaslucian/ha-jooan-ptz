@@ -321,17 +321,60 @@ def _legacy_surface_probe_one(camera, surface: str) -> dict[str, Any]:
         raise LabError("Unsupported legacy CGI surface")
 
     read_fields = tuple(config["read_fields"])
-    response = camera._get(
-        str(config["read_path"]),
-        {key: "" for key in read_fields},
-        authenticated=True,
-    )
-    return {
-        "surface": surface,
-        "read_path": config["read_path"],
-        "candidate_write_path": config["write_path"],
-        **_legacy_response_summary(response, read_fields),
-    }
+    params = {key: "" for key in read_fields}
+    attempts: list[dict[str, Any]] = []
+    best: dict[str, Any] | None = None
+
+    # Public JOOAN observations commonly use GET, while the related GoAhead
+    # page issues POST with the fields in the query string and a harmless
+    # "n/a" body. Try both fixed forms, stopping as soon as actual fields are
+    # recognized.
+    for method in ("GET", "POST_QUERY"):
+        try:
+            if method == "GET":
+                response = camera._get(
+                    str(config["read_path"]),
+                    params,
+                    authenticated=True,
+                )
+            else:
+                response = camera._post_query(
+                    str(config["read_path"]),
+                    params,
+                    body="n/a",
+                    authenticated=True,
+                )
+            summary = _legacy_response_summary(response, read_fields)
+            attempts.append({
+                "method": method,
+                "http_status": summary["http_status"],
+                "accepted": summary["accepted"],
+                "recognized_fields": summary["recognized_fields"],
+            })
+            candidate = {
+                "surface": surface,
+                "read_path": config["read_path"],
+                "candidate_write_path": config["write_path"],
+                "probe_method": method,
+                "attempts": attempts,
+                **summary,
+            }
+            if best is None or summary["recognized_fields"] > best["recognized_fields"]:
+                best = candidate
+            if summary["recognized_fields"] > 0:
+                break
+        except Exception as exc:
+            attempts.append({
+                "method": method,
+                "accepted": False,
+                "error_type": type(exc).__name__,
+            })
+
+    if best is None:
+        raise LabError(f"Legacy {surface} read surface did not respond")
+
+    best["attempts"] = attempts
+    return best
 
 
 def _legacy_oem_readback(camera, keys: tuple[str, ...]) -> dict[str, Any]:
@@ -460,10 +503,37 @@ def _legacy_candidate_value(target: str, value: Any) -> tuple[str, str, Any]:
         try:
             level = int(value)
         except (TypeError, ValueError) as exc:
-            raise LabError("motion_sensitivity must be 1, 2 or 3") from exc
-        if level not in {1, 2, 3}:
-            raise LabError("motion_sensitivity must be 1, 2 or 3")
+            raise LabError("legacy motion_sensitivity must be between 0 and 5") from exc
+        if not 0 <= level <= 5:
+            raise LabError("legacy motion_sensitivity must be between 0 and 5")
         return "motion", "sensitivity", str(level)
+
+    if target == "motion_zonemask":
+        normalized = str(value or "").strip().lower()
+        if normalized in {"on", "all", "1", "true"}:
+            return "motion", "zonemask", str(OEM_MOTION_ALL_ZONES)
+        if normalized in {"off", "none", "0", "false"}:
+            return "motion", "zonemask", "0"
+        raise LabError("motion_zonemask must be on/off")
+
+    if target.startswith("video_"):
+        field = target.removeprefix("video_")
+        if field not in {
+            "brightness",
+            "contrast",
+            "saturation",
+            "nbrightness",
+            "ncontrast",
+            "nsaturation",
+        }:
+            raise LabError("Unsupported legacy CGI write target")
+        try:
+            level = int(value)
+        except (TypeError, ValueError) as exc:
+            raise LabError(f"{field} must be between 0 and 100") from exc
+        if not 0 <= level <= 100:
+            raise LabError(f"{field} must be between 0 and 100")
+        return "video", field, str(level)
 
     if target in LEGACY_VIDEO_ENUMS:
         normalized = str(value or "").strip().upper()
