@@ -306,13 +306,16 @@ def _legacy_response_summary(response, allowed_fields: tuple[str, ...]) -> dict[
     fields = _legacy_parse_fields(response.text, safe_fields)
     content_type = str(response.headers.get("Content-Type") or "").split(";", 1)[0].strip()
     recognized_fields = sum(1 for key in allowed_fields if key in fields)
+    body = bytes(response.content or b"")
     return {
         "http_status": int(response.status_code),
         "accepted": 200 <= int(response.status_code) < 300,
         "content_type": content_type or None,
-        "body_bytes": len(response.content or b""),
+        "body_bytes": len(body),
+        "body_fingerprint": hashlib.sha256(body).hexdigest()[:16] if body else None,
         "recognized_fields": recognized_fields,
         "fields": fields,
+        "usable": bool(recognized_fields),
     }
 
 
@@ -326,11 +329,12 @@ def _legacy_surface_probe_one(camera, surface: str) -> dict[str, Any]:
     attempts: list[dict[str, Any]] = []
     best: dict[str, Any] | None = None
 
-    # Public JOOAN observations commonly use GET, while the related GoAhead
-    # page issues POST with the fields in the query string and a harmless
-    # "n/a" body. Try both fixed forms, stopping as soon as actual fields are
-    # recognized.
-    for method in ("GET", "POST_QUERY"):
+    # The related GoAhead page issues POST with the fields in the query string
+    # and a harmless "n/a" body. On the validated JA-A12, getVideoSettings
+    # behaved the same way: GET stalled until timeout while POST_QUERY returned
+    # HTTP 200. Prefer POST_QUERY to avoid an unnecessary delay, then keep GET
+    # as a compatibility fallback for other JOOAN revisions.
+    for method in ("POST_QUERY", "GET"):
         try:
             if method == "GET":
                 response = camera._get(
