@@ -5,6 +5,7 @@
 - Rebuilt the main **Câmeras & PTZ** workspace around the validated local-control use case instead of experimental camera configuration.
 - Added two simultaneous live panels for the dual-lens camera, preferring the low-resolution `ch00_1` and `ch01_1` RTSP substreams and falling back to the corresponding main stream when necessary.
 - Live previews now have independent per-channel FFmpeg processes and lifecycle state, so one feed can stop or fail without automatically terminating the other.
+- Increased Gunicorn from 4 to 6 threads so two long-lived MJPEG responses still leave capacity for status polling and PTZ requests.
 - Increased the MJPEG startup preflight window from 4 to 10 seconds to tolerate embedded-camera keyframe/startup delay.
 - Promoted PTZ to an **ONVIF-first** control path with selectable normalized speed; if ONVIF `ContinuousMove` is rejected or fails, the backend automatically falls back to the already validated CGI PTZ commands.
 - Added a camera information panel beside PTZ with model, firmware, network/media status, channels, codec and timezone.
