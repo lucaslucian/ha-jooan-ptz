@@ -925,7 +925,14 @@ class _LegacyCamera:
             "timezone": "GMT-03:00",
         }
 
-    def _get(self, endpoint, params=None, authenticated=True, port=None):
+    def _get(
+        self,
+        endpoint,
+        params=None,
+        authenticated=True,
+        port=None,
+        allow_http_error=False,
+    ):
         params = dict(params or {})
         self.calls.append((endpoint, params, authenticated, port))
         if endpoint == "/goform/getmotiondetectSettings":
@@ -1102,6 +1109,58 @@ def test_legacy_video_write_requires_target_to_be_exposed_by_reader():
         raise AssertionError("writer must not add a field absent from camera readback")
 
     assert all(call[0] != "/goform/updateVideoSettings" for call in camera.calls)
+
+def test_legacy_force_write_can_send_allowlisted_field_without_readback(monkeypatch):
+    lab._LEGACY_ABSENT_SURFACES.clear()
+    camera = _LegacyCamera()
+    calls = []
+
+    def post_missing(
+        endpoint,
+        params=None,
+        body="n/a",
+        authenticated=True,
+        port=None,
+        allow_http_error=False,
+    ):
+        calls.append((endpoint, dict(params or {}), "POST_QUERY"))
+        return _LegacyResponse("not found", status_code=404)
+
+    def get_writer(
+        endpoint,
+        params=None,
+        authenticated=True,
+        port=None,
+        allow_http_error=False,
+    ):
+        calls.append((endpoint, dict(params or {}), "GET"))
+        assert allow_http_error is True
+        return _LegacyResponse("not found", status_code=404)
+
+    camera._post_query = post_missing
+    camera._get = get_writer
+    monkeypatch.setattr(lab, "_legacy_oem_readback", lambda *args, **kwargs: {})
+
+    result = lab.legacy_cgi_write_candidate(
+        camera,
+        target="motion_enable",
+        value="off",
+        force_without_readback=True,
+    )
+
+    assert result["force_without_readback_requested"] is True
+    assert result["force_without_readback_used"] is True
+    assert result["rollback_available"] is False
+    assert result["preserved_fields"] == []
+    assert result["writer_response"]["http_status"] == 404
+    assert result["writer_candidate_accepted"] is False
+    assert result["verification_skipped"] == "writer_http_error"
+    assert (
+        "/goform/updatemotiondetectSettings",
+        {"motionEnable": "NO"},
+        "GET",
+    ) in calls
+
 
 def test_legacy_probe_prefers_goahead_post_query_without_touching_get():
     lab._LEGACY_ABSENT_SURFACES.clear()
