@@ -522,7 +522,8 @@ async function loadSnapshotChannel(channel,{ptzPreview=false,finalFrame=false}={
   }
 
   try{
-    const response=await fetch(api('api/snapshot/'+stream+'?t='+Date.now()),{cache:'no-store'});
+    const query='?t='+Date.now()+(ptzPreview?'&ptz=1':'');
+    const response=await fetch(api('api/snapshot/'+stream+query),{cache:'no-store'});
     if(!response.ok)throw new Error('HTTP '+response.status);
     const blob=await response.blob();
     const objectUrl=URL.createObjectURL(blob);
