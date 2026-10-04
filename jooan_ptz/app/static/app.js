@@ -505,6 +505,7 @@ function showLabResult(value){
 async function labRequest(path,body=null){
   if(labRequestRunning)throw new Error('Outro teste do laboratório está em andamento');
   labRequestRunning=true;
+  if(lastData)updateLabAvailability(lastData);
   try{
     const options={method:'POST',headers:{}};
     if(body!==null){
@@ -519,6 +520,7 @@ async function labRequest(path,body=null){
     return payload;
   }finally{
     labRequestRunning=false;
+    if(lastData)updateLabAvailability(lastData);
   }
 }
 
@@ -899,6 +901,117 @@ async function labOemToggle(action){
   }
 }
 
+const LEGACY_CGI_WRITE_VALUES={
+  motion_enable:[
+    ['off','Desligado · motionEnable=NO'],
+    ['on','Ligado · motionEnable=YES']
+  ],
+  motion_sensitivity:[
+    ['1','Baixa (1)'],
+    ['2','Média (2)'],
+    ['3','Alta (3)']
+  ],
+  rotation:[
+    ['NORMAL','Normal'],
+    ['MIRROR-VFLIP','Flip Mirror combinado']
+  ],
+  ir:[
+    ['AUTO','Automático'],
+    ['ON','Ligado'],
+    ['OFF','Desligado']
+  ],
+  flicker:[
+    ['50HZ','50 Hz'],
+    ['60HZ','60 Hz']
+  ],
+  timezone_legacy:[
+    ['EBS_-03','GMT-03 · Brazil East (EBS_-03)'],
+    ['UCT_-03','GMT-03 · UCT_-03'],
+    ['AST_-04','GMT-04 · Atlantic/Brazil West (AST_-04)'],
+    ['UCT_-04','GMT-04 · UCT_-04'],
+    ['EST_-05','GMT-05 · Eastern (EST_-05)'],
+    ['PST_-08','GMT-08 · Pacific (PST_-08)'],
+    ['UCT_000','GMT+00 · UCT_000'],
+    ['GMT_000','GMT+00 · GMT_000'],
+    ['CST_008','GMT+08 · China Coast (CST_008)']
+  ]
+};
+
+function renderLegacyCgiWriteValues(){
+  const target=$('labCgiWriteTarget')?.value;
+  const select=$('labCgiWriteValue');
+  if(!target||!select)return;
+  const previous=select.value;
+  const values=LEGACY_CGI_WRITE_VALUES[target]||[];
+  select.innerHTML=values.map(([value,label])=>
+    '<option value="'+esc(value)+'">'+esc(label)+'</option>'
+  ).join('');
+  if(values.some(([value])=>String(value)===previous))select.value=previous;
+  const summary=$('labCgiSummary');
+  if(summary){
+    summary.textContent=target==='timezone_legacy'
+      ?'Timezone usa o candidato /goform/NTP. Não existe um CGI de leitura pareado na fonte encontrada; a validação será feita pelo timezone OEM da porta 9898.'
+      :'O writer preservará todos os campos que o endpoint de leitura candidato devolver antes de alterar somente o campo selecionado.';
+  }
+}
+
+function summarizeLegacyProbe(payload){
+  const surfaces=payload?.surfaces||{};
+  const labels=[];
+  for(const [name,item] of Object.entries(surfaces)){
+    if(item?.accepted){
+      labels.push(name+': HTTP aceito, '+Number(item.recognized_fields||0)+' campo(s) reconhecido(s)');
+    }else{
+      labels.push(name+': não confirmado'+(item?.error_type?' ('+item.error_type+')':''));
+    }
+  }
+  return labels.join(' · ')||'Nenhuma superfície retornada.';
+}
+
+async function labLegacyCgiProbe(surface='all'){
+  try{
+    const payload=await labRequest('api/lab/cgi/probe',{surface});
+    $('labCgiSummary').textContent=summarizeLegacyProbe(payload);
+  }catch(error){
+    $('labCgiSummary').textContent='Probe CGI: '+error.message;
+  }
+}
+
+async function labLegacyCgiRoundtrip(){
+  const surface=$('labCgiSurface').value;
+  if(!confirm('O round-trip enviará ao writer candidato exatamente os valores lidos agora da câmera. Continuar?'))return;
+  try{
+    const payload=await labRequest('api/lab/cgi/roundtrip',{surface});
+    $('labCgiSummary').textContent=payload?.state_changed
+      ?'ATENÇÃO: o round-trip alterou algum estado. Não promover este writer antes de revisar o resultado.'
+      :'Round-trip concluído sem mudança detectada no CGI ou no readback OEM.';
+  }catch(error){
+    $('labCgiSummary').textContent='Round-trip CGI: '+error.message;
+  }
+}
+
+async function labLegacyCgiWrite(){
+  const target=$('labCgiWriteTarget').value;
+  const value=$('labCgiWriteValue').value;
+  const isNtp=target==='timezone_legacy';
+  const message=isNtp
+    ?'Este teste enviará somente time_zone para /goform/NTP. A fonte relacionada não oferece leitura pareada de NTP. Executar mesmo assim?'
+    :'Este teste altera uma configuração real da câmera usando um writer candidato ainda experimental. Os demais campos lidos serão preservados. Executar?';
+  if(!confirm(message))return;
+  try{
+    const payload=isNtp
+      ?await labRequest('api/lab/cgi/ntp-timezone',{timezone:value})
+      :await labRequest('api/lab/cgi/write',{target,value});
+    const changes=payload?.oem_readback?.changes||{};
+    const count=Object.keys(changes).length;
+    $('labCgiSummary').textContent=count
+      ?'Setter candidato executado; '+count+' campo(s) OEM mudaram. Revise o JSON abaixo.'
+      :'Setter candidato respondeu, mas nenhum campo OEM monitorado mudou.';
+  }catch(error){
+    $('labCgiSummary').textContent='Setter CGI candidato: '+error.message;
+  }
+}
+
 const OEM_WRITE_VALUES={
   floodlight:[
     ['0','Infravermelho (0)'],
@@ -1149,6 +1262,12 @@ $('labOemToggleRead').addEventListener('click',()=>labOemToggle('read'));
 $('labOemToggleBaseline').addEventListener('click',()=>labOemToggle('baseline'));
 $('labOemToggleCompare').addEventListener('click',()=>labOemToggle('compare'));
 $('labOemToggleGroup').addEventListener('change',resetOemToggleBaseline);
+$('labCgiSurface').addEventListener('change',()=>{$('labCgiSummary').textContent='Superfície alterada. Teste a leitura antes do round-trip.'});
+$('labCgiProbeAll').addEventListener('click',()=>labLegacyCgiProbe('all'));
+$('labCgiProbeSelected').addEventListener('click',()=>labLegacyCgiProbe($('labCgiSurface').value));
+$('labCgiRoundtrip').addEventListener('click',labLegacyCgiRoundtrip);
+$('labCgiWriteTarget').addEventListener('change',renderLegacyCgiWriteValues);
+$('labCgiWrite').addEventListener('click',labLegacyCgiWrite);
 $('labOemWriteTarget').addEventListener('change',renderOemWriteValues);
 $('labOemWriteSurface').addEventListener('click',labOemWriteSurface);
 $('labOemWritePlan').addEventListener('click',labOemWritePlan);
@@ -1169,6 +1288,7 @@ document.addEventListener('visibilitychange',()=>{
 window.addEventListener('pagehide',()=>{emergencyStop();void stopLivePreview();stopPolling()});
 window.addEventListener('pageshow',()=>{if(!document.hidden)startPolling()});
 
+renderLegacyCgiWriteValues();
 renderOemWriteValues();
 enablePtz(false);
 startPolling();
