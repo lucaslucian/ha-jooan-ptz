@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.18.2
+
+- Promoted **Câmeras & PTZ** to the primary dashboard area immediately below camera health.
+- Kept the dual feeds, PTZ controls and general camera information always visible as the main workspace.
+- Moved all secondary read-only information below the controls into five compact expandable sections: summary/services, detection/alerts, recording/storage, technical diagnostics and all read settings.
+- No camera-control, PTZ, media or backend behavior changed in this release.
+
+
 ## 0.18.1
 
 - Finalized the operational scope: the only user actions are **PTZ** and **camera image/video viewing**.
