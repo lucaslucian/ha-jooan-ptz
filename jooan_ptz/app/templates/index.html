@@ -29,7 +29,7 @@
           <span class="section-kicker">VISÃO GERAL</span>
           <h2>Estado da câmera</h2>
         </div>
-        <button id="lightTest" class="button secondary">Atualizar informações</button>
+        <span class="badge neutral">Somente leitura</span>
       </div>
 
       <div id="overviewCards" class="stat-grid"></div>
@@ -158,8 +158,8 @@
             </label>
           </div>
           <p class="helper">
-            Quando ONVIF tiver sido descoberto manualmente, ele é preferido e usa a velocidade acima.
-            Caso contrário ou em caso de falha, o controle CGI validado é usado automaticamente.
+            Na primeira movimentação, o backend tenta uma descoberta ONVIF mínima para habilitar velocidade variável.
+            Se não houver PTZ ONVIF utilizável ou ocorrer falha, o CGI validado é usado automaticamente.
           </p>
           <div class="ptz-grid">
             <div></div><button class="ptz-button" data-dir="up" aria-label="Cima">↑</button><div></div>
@@ -259,18 +259,15 @@
       <div class="section-heading">
         <div>
           <span class="section-kicker">DIAGNÓSTICO</span>
-          <h2>Serviços e descoberta manual</h2>
+          <h2>Serviços e dados técnicos</h2>
         </div>
-        <div class="toolbar compact">
-          <button id="probe" class="button secondary">Descobrir ONVIF</button>
-          <button id="validateSubstreams" class="button secondary">Testar substreams RTSP</button>
-        </div>
+        <span class="badge neutral">Somente leitura</span>
       </div>
 
       <article class="card">
         <div id="diagnosticSummary" class="diagnostic-grid"></div>
         <p class="helper">
-          O teste RTSP é manual porque esta câmera mostrou instabilidade quando várias sessões de mídia são abertas em sequência.
+          Esta seção apenas mostra o estado conhecido. Nenhum teste adicional de RTSP ou ONVIF é iniciado daqui.
         </p>
       </article>
 
@@ -281,7 +278,7 @@
               <span class="section-kicker">ONVIF</span>
               <h2>Resumo técnico</h2>
             </div>
-            <span class="badge neutral">Sob demanda</span>
+            <span class="badge neutral">Leitura</span>
           </div>
           <div id="onvifSummary"></div>
         </article>
