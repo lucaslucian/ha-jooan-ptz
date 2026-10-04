@@ -901,19 +901,36 @@ async function labOemToggle(action){
   }
 }
 
+const LEGACY_VIDEO_LEVEL_VALUES=[
+  ['0','0 · mínimo'],
+  ['25','25'],
+  ['50','50 · médio'],
+  ['75','75'],
+  ['100','100 · máximo']
+];
+
 const LEGACY_CGI_WRITE_VALUES={
   motion_enable:[
     ['off','Desligado · motionEnable=NO'],
     ['on','Ligado · motionEnable=YES']
   ],
   motion_sensitivity:[
-    ['1','Baixa (1)'],
-    ['2','Média (2)'],
-    ['3','Alta (3)']
+    ['0','0 · mínimo legado'],
+    ['1','1 · baixa no OEM atual'],
+    ['2','2 · média no OEM atual'],
+    ['3','3 · alta no OEM atual'],
+    ['4','4 · nível legado'],
+    ['5','5 · máximo legado']
+  ],
+  motion_zonemask:[
+    ['on','Todas as 25 zonas · 33554431'],
+    ['off','Nenhuma zona · 0']
   ],
   rotation:[
-    ['NORMAL','Normal'],
-    ['MIRROR-VFLIP','Flip Mirror combinado']
+    ['NORMAL','NORMAL'],
+    ['VFLIP','VFLIP'],
+    ['MIRROR','MIRROR'],
+    ['MIRROR-VFLIP','MIRROR-VFLIP']
   ],
   ir:[
     ['AUTO','Automático'],
@@ -924,16 +941,52 @@ const LEGACY_CGI_WRITE_VALUES={
     ['50HZ','50 Hz'],
     ['60HZ','60 Hz']
   ],
+  video_brightness:LEGACY_VIDEO_LEVEL_VALUES,
+  video_contrast:LEGACY_VIDEO_LEVEL_VALUES,
+  video_saturation:LEGACY_VIDEO_LEVEL_VALUES,
+  video_nbrightness:LEGACY_VIDEO_LEVEL_VALUES,
+  video_ncontrast:LEGACY_VIDEO_LEVEL_VALUES,
+  video_nsaturation:LEGACY_VIDEO_LEVEL_VALUES,
   timezone_legacy:[
-    ['EBS_-03','GMT-03 · Brazil East (EBS_-03)'],
-    ['UCT_-03','GMT-03 · UCT_-03'],
+    ['UCT_-11','GMT-11 · UCT_-11'],
+    ['UCT_-10','GMT-10 · UCT_-10'],
+    ['NAS_-09','GMT-09 · Alaska (NAS_-09)'],
+    ['PST_-08','GMT-08 · Pacific (PST_-08)'],
+    ['MST_-07','GMT-07 · Mountain/Arizona (MST_-07)'],
+    ['CST_-06','GMT-06 · Central (CST_-06)'],
+    ['UCT_-06','GMT-06 · UCT_-06'],
+    ['UCT_-05','GMT-05 · UCT_-05'],
+    ['EST_-05','GMT-05 · Eastern (EST_-05)'],
     ['AST_-04','GMT-04 · Atlantic/Brazil West (AST_-04)'],
     ['UCT_-04','GMT-04 · UCT_-04'],
-    ['EST_-05','GMT-05 · Eastern (EST_-05)'],
-    ['PST_-08','GMT-08 · Pacific (PST_-08)'],
+    ['UCT_-03','GMT-03 · UCT_-03'],
+    ['EBS_-03','GMT-03 · Brazil East (EBS_-03)'],
+    ['NOR_-02','GMT-02 · NOR_-02'],
+    ['EUT_-01','GMT-01 · EUT_-01'],
     ['UCT_000','GMT+00 · UCT_000'],
     ['GMT_000','GMT+00 · GMT_000'],
-    ['CST_008','GMT+08 · China Coast (CST_008)']
+    ['MET_001','GMT+01 · MET_001'],
+    ['MEZ_001','GMT+01 · MEZ_001'],
+    ['UCT_001','GMT+01 · UCT_001'],
+    ['EET_002','GMT+02 · EET_002'],
+    ['SAS_002','GMT+02 · SAS_002'],
+    ['IST_003','GMT+03 · IST_003'],
+    ['MSK_003','GMT+03 · MSK_003'],
+    ['UCT_004','GMT+04 · UCT_004'],
+    ['UCT_005','GMT+05 · UCT_005'],
+    ['UCT_006','GMT+06 · UCT_006'],
+    ['UCT_007','GMT+07 · UCT_007'],
+    ['CST_008','GMT+08 · China Coast (CST_008)'],
+    ['CCT_008','GMT+08 · Taipei (CCT_008)'],
+    ['SST_008','GMT+08 · Singapore (SST_008)'],
+    ['AWS_008','GMT+08 · Australia WA (AWS_008)'],
+    ['JST_009','GMT+09 · Japan (JST_009)'],
+    ['KST_009','GMT+09 · Korea (KST_009)'],
+    ['UCT_010','GMT+10 · UCT_010'],
+    ['AES_010','GMT+10 · Australia (AES_010)'],
+    ['UCT_011','GMT+11 · UCT_011'],
+    ['UCT_012','GMT+12 · UCT_012'],
+    ['NZS_012','GMT+12 · New Zealand (NZS_012)']
   ]
 };
 
@@ -960,7 +1013,7 @@ function summarizeLegacyProbe(payload){
   const labels=[];
   for(const [name,item] of Object.entries(surfaces)){
     if(item?.accepted){
-      labels.push(name+': HTTP aceito, '+Number(item.recognized_fields||0)+' campo(s) reconhecido(s)');
+      labels.push(name+': '+(item.probe_method||'HTTP')+' aceito, '+Number(item.recognized_fields||0)+' campo(s) reconhecido(s)');
     }else{
       labels.push(name+': não confirmado'+(item?.error_type?' ('+item.error_type+')':''));
     }
