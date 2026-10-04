@@ -1005,6 +1005,7 @@ def test_legacy_parser_accepts_json_html_and_colon_lines_without_raw_body():
 
 
 def test_legacy_cgi_probe_checks_only_fixed_read_surfaces():
+    lab._LEGACY_ABSENT_SURFACES.clear()
     camera = _LegacyCamera()
     result = lab.legacy_cgi_probe(camera, surface="all")
 
@@ -1019,6 +1020,7 @@ def test_legacy_cgi_probe_checks_only_fixed_read_surfaces():
 
 
 def test_legacy_video_roundtrip_replays_only_values_just_read():
+    lab._LEGACY_ABSENT_SURFACES.clear()
     camera = _LegacyCamera()
     result = lab.legacy_cgi_roundtrip(camera, surface="video")
 
@@ -1032,6 +1034,7 @@ def test_legacy_video_roundtrip_replays_only_values_just_read():
 
 
 def test_legacy_motion_write_preserves_current_fields_and_verifies_oem_readback():
+    lab._LEGACY_ABSENT_SURFACES.clear()
     camera = _LegacyCamera()
     result = lab.legacy_cgi_write_candidate(
         camera,
@@ -1170,6 +1173,7 @@ def test_legacy_video_numeric_candidates_are_bounded_to_public_zero_to_100_range
             raise AssertionError(f"out-of-range video value accepted: {value}")
 
 def test_legacy_probe_stops_after_404_without_retrying_get():
+    lab._LEGACY_ABSENT_SURFACES.clear()
     camera = _LegacyCamera()
     calls = []
 
@@ -1199,6 +1203,7 @@ def test_legacy_probe_stops_after_404_without_retrying_get():
 
 
 def test_legacy_probe_does_not_retry_after_transport_timeout():
+    lab._LEGACY_ABSENT_SURFACES.clear()
     camera = _LegacyCamera()
     calls = []
 
@@ -1219,4 +1224,30 @@ def test_legacy_probe_does_not_retry_after_transport_timeout():
     assert surface["usable"] is False
     assert surface["attempts"][0]["error_type"] == "TimeoutError"
     assert calls == ["POST_QUERY"]
+
+def test_legacy_probe_caches_clean_404_for_process_lifetime():
+    lab._LEGACY_ABSENT_SURFACES.clear()
+    camera = _LegacyCamera()
+    camera.ip = "10.0.0.10"
+    calls = []
+
+    def post_query(endpoint, params=None, body="n/a", authenticated=True, port=None, allow_http_error=False):
+        calls.append(endpoint)
+
+        class Response:
+            status_code = 404
+            text = "Not Found"
+            content = b"Not Found"
+            headers = {"Content-Type": "text/plain"}
+
+        return Response()
+
+    camera._post_query = post_query
+
+    first = lab.legacy_cgi_probe(camera, surface="motion")
+    second = lab.legacy_cgi_probe(camera, surface="motion")
+
+    assert first["surfaces"]["motion"]["cached_absent"] if "cached_absent" in first["surfaces"]["motion"] else True
+    assert second["surfaces"]["motion"]["cached_absent"] is True
+    assert calls == ["/goform/getmotiondetectSettings"]
 
