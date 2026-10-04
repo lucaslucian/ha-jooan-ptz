@@ -254,15 +254,6 @@ LEGACY_NTP_TIMEZONES = {
     "NZS_012",
 }
 
-LEGACY_WRITE_TARGETS = {
-    "motion_enable": ("motion", "motionEnable"),
-    "motion_sensitivity": ("motion", "sensitivity"),
-    "rotation": ("video", "rotation"),
-    "ir": ("video", "ir"),
-    "flicker": ("video", "flicker"),
-}
-
-
 def _legacy_parse_fields(text: str, allowed_fields: tuple[str, ...]) -> dict[str, Any]:
     """Parse only allowlisted values from a legacy CGI response.
 
@@ -497,6 +488,10 @@ def legacy_cgi_write_candidate(camera, *, target: str, value: Any) -> dict[str, 
     }
     if not writer_params:
         raise LabError("Candidate read endpoint returned no values to preserve; write blocked")
+    if field not in before_fields:
+        raise LabError(
+            "Candidate read endpoint did not expose the target field; write blocked"
+        )
 
     if surface == "motion" and "sensitivity" not in writer_params:
         raise LabError("Motion write requires current sensitivity so it can be preserved")
