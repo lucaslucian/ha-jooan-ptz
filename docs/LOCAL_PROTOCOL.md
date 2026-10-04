@@ -110,8 +110,8 @@ O backend usa allowlist fixa. O frontend nunca controla livremente o valor de `s
 Código público de uma interface GoAhead de câmera IP expõe um par leitura/escrita que coincide com um endpoint já observado em câmeras JOOAN:
 
 ```text
-GET /goform/getVideoSettings
-GET /goform/updateVideoSettings
+GET ou POST-query /goform/getVideoSettings
+GET               /goform/updateVideoSettings
 ```
 
 Na interface encontrada, `updateVideoSettings` recebe campos como:
@@ -120,16 +120,16 @@ Na interface encontrada, `updateVideoSettings` recebe campos como:
 rotation = NORMAL | VFLIP | MIRROR | MIRROR-VFLIP
 ir       = AUTO | ON | OFF
 flicker  = 50HZ | 60HZ
-brightness / contrast / saturation
-nbrightness / ncontrast / nsaturation
+brightness / contrast / saturation = 0..100
+nbrightness / ncontrast / nsaturation = 0..100
 resolution / resolution2 / codec / quality / quality2 / fps
 ```
 
 A mesma base expõe motion detection como:
 
 ```text
-GET /goform/getmotiondetectSettings?motionEnable=&sensitivity=
-GET /goform/updatemotiondetectSettings
+GET ou POST-query /goform/getmotiondetectSettings?motionEnable=&sensitivity=
+GET               /goform/updatemotiondetectSettings
 motionEnable = YES | NO
 sensitivity  = 0..5
 zonemask     = campo presente em código relacionado, embora comentado na UI analisada
@@ -142,7 +142,7 @@ POST /goform/NTP
 time_zone = valores legados como EBS_-03, AST_-04, PST_-08 ...
 ```
 
-Esses writers **não são considerados confirmados na JA-A12** apenas pela semelhança. A v0.16 testa primeiro as leituras, depois permite um round-trip no-op que reaplica os valores recém-lidos e compara novamente o CGI e a porta 9898. Escritas candidatas são manuais e usam somente caminhos, nomes de parâmetros e enums allowlisted.
+Esses writers **não são considerados confirmados na JA-A12** apenas pela semelhança. A v0.16 testa a leitura por GET e, se nenhum campo de configuração for reconhecido, repete pelo formato POST-query (`body=n/a`) usado pela página GoAhead original. Depois permite um round-trip no-op que reaplica os valores recém-lidos e compara novamente o CGI e a porta 9898. Escritas candidatas são manuais e usam somente caminhos, nomes de parâmetros e enums allowlisted.
 
 O candidato `/goform/NTP` é tratado separadamente: a fonte pública usa ASP interno para leitura e não oferece um CGI de leitura equivalente. O laboratório envia somente `time_zone` e nunca envia servidor NTP ou intervalo de sincronização.
 
