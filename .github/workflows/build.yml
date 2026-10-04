@@ -69,7 +69,7 @@ jobs:
               base / "CHANGELOG.md",
               base / "icon.png",
               base / "logo.png",
-              Path("docs/images/dashboard-concept.jpg"),
+              Path("docs/images/dashboard-overview.svg"),
               Path("jooan_ptz/app/templates/index.html"),
               Path("jooan_ptz/app/static/app.css"),
               Path("jooan_ptz/app/static/app.js"),
@@ -126,7 +126,7 @@ jobs:
           platforms: ${{ matrix.platform }}
           push: false
           build-args: |
-            BUILD_VERSION=0.15.0
+            BUILD_VERSION=0.16.0
             BUILD_ARCH=${{ matrix.arch }}
           tags: local/jooan-local-control:${{ matrix.arch }}
           cache-from: type=gha,scope=jooan-${{ matrix.arch }}
