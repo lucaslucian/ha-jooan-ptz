@@ -4,7 +4,6 @@ let lastData=null;
 let online=false;
 let authenticated=false;
 let activeDirection=null;
-let selectedChannel=0;
 let liveActive=false;
 let ptzHoldGeneration=0;
 let currentTab='overview';
@@ -190,10 +189,7 @@ function renderSnapshotTiles(rootId,data,withTechnical){
       '</div><div data-snapshot-state class="helper">Aguardando snapshot</div></div>';
     root.appendChild(tile);
   }
-  if(
-    (rootId==='overviewMedia'&&currentTab==='overview')||
-    (rootId==='cameraMedia'&&currentTab==='camera')
-  )void refreshSnapshots(root);
+  if(rootId==='overviewMedia'&&currentTab==='overview')void refreshSnapshots(root);
 }
 
 async function loadSnapshot(img){
@@ -1440,7 +1436,7 @@ function startPolling(){
   void refreshStatus();
   statusTimer=setInterval(()=>{if(!document.hidden)void refreshStatus()},STATUS_REFRESH_MS);
   snapshotTimer=setInterval(()=>{
-    if(!document.hidden&&!liveActive&&(currentTab==='overview'||currentTab==='camera'))void refreshSnapshots(currentTab==='overview'?$('overviewMedia'):$('cameraMedia'));
+    if(!document.hidden&&!liveActive&&currentTab==='overview')void refreshSnapshots($('overviewMedia'));
   },SNAPSHOT_REFRESH_MS);
 }
 
