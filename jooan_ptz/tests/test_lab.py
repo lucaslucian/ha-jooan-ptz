@@ -1247,7 +1247,7 @@ def test_legacy_probe_caches_clean_404_for_process_lifetime():
     first = lab.legacy_cgi_probe(camera, surface="motion")
     second = lab.legacy_cgi_probe(camera, surface="motion")
 
-    assert first["surfaces"]["motion"]["cached_absent"] if "cached_absent" in first["surfaces"]["motion"] else True
+    assert first["surfaces"]["motion"].get("cached_absent") is not True
     assert second["surfaces"]["motion"]["cached_absent"] is True
     assert calls == ["/goform/getmotiondetectSettings"]
 
