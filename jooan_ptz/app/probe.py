@@ -841,6 +841,121 @@ def onvif_probe(host: str, port: int = 8899, timeout: float = 3.0) -> dict[str, 
     return result
 
 
+def onvif_ptz_discovery(
+    host: str,
+    port: int = 8899,
+    timeout: float = 3.0,
+) -> dict[str, Any]:
+    """Discover only the ONVIF pieces required by the production PTZ control.
+
+    The full diagnostic probe is intentionally avoided here. This performs at
+    most GetCapabilities + GetProfiles and does not open RTSP, query presets,
+    enumerate nodes/configurations, or fan out into device diagnostics.
+    """
+    result: dict[str, Any] = {
+        "port": int(port),
+        "reachable": False,
+        "http_detected": False,
+        "path": None,
+        "status": None,
+        "authentication_required": None,
+        "services": {},
+        "profiles": [],
+        "ptz": {},
+        "error": None,
+        "probe_mode": "ptz-minimal",
+    }
+
+    device_request = _soap_envelope(
+        ONVIF_DEVICE,
+        "tds",
+        "<tds:GetCapabilities><tds:Category>All</tds:Category></tds:GetCapabilities>",
+    )
+
+    device_response = None
+    for path in ("/onvif/device_service", "/onvif/Device", "/onvif/device"):
+        response = _soap_post(
+            host,
+            port,
+            path,
+            device_request,
+            action=f"{ONVIF_DEVICE}/GetCapabilities",
+            timeout=timeout,
+        )
+        if response["status"] is None:
+            result["error"] = response["error"]
+            return result
+
+        result.update({
+            "http_detected": True,
+            "path": path,
+            "status": response["status"],
+            "authentication_required": response["authentication_required"],
+            "error": response["error"],
+        })
+        device_response = response
+        result["reachable"] = True
+        if response["status"] in {200, 401}:
+            break
+        if response["status"] != 404:
+            break
+
+    if not device_response or device_response["status"] != 200:
+        return result
+
+    root = _parse_xml(device_response["body"])
+    if root is None:
+        result["error"] = "ONVIF GetCapabilities returned non-XML data"
+        return result
+    fault = _soap_fault(root)
+    if fault:
+        result["error"] = f"ONVIF fault: {fault}"
+        return result
+
+    services = _extract_capability_services(root)
+    result["services"] = services
+    media_path = (services.get("media") or {}).get("path")
+    ptz_path = (services.get("ptz") or {}).get("path")
+
+    if not media_path:
+        result["error"] = "ONVIF media service was not advertised"
+        return result
+
+    profiles_response = _soap_post(
+        host,
+        port,
+        media_path,
+        _soap_envelope(ONVIF_MEDIA, "trt", "<trt:GetProfiles/>"),
+        action=f"{ONVIF_MEDIA}/GetProfiles",
+        timeout=timeout,
+    )
+    result["media_status"] = profiles_response["status"]
+    result["media_authentication_required"] = profiles_response["authentication_required"]
+    if profiles_response["status"] != 200:
+        result["error"] = (
+            profiles_response["error"]
+            or (
+                "ONVIF media authentication required"
+                if profiles_response["status"] == 401
+                else f"ONVIF GetProfiles returned HTTP {profiles_response['status']}"
+            )
+        )
+        return result
+
+    profiles_root = _parse_xml(profiles_response["body"])
+    profiles = _extract_profiles(profiles_root)
+    result["profiles"] = profiles
+
+    token = profiles[0].get("token") if profiles else None
+    if ptz_path and token:
+        result["ptz"] = {
+            "path": ptz_path,
+            "profile_token": token,
+        }
+
+    return result
+
+
 def _onvif_response_summary(response: dict[str, Any]) -> dict[str, Any]:
     root = _parse_xml(response.get("body") or b"")
     fault = _soap_fault(root)
