@@ -113,9 +113,11 @@ A v0.16 acrescenta uma trilha experimental baseada em endpoints encontrados em i
 Leituras allowlisted:
 
 ```text
-/goform/getVideoSettings
-/goform/getmotiondetectSettings
+GET ou POST-query /goform/getVideoSettings
+GET ou POST-query /goform/getmotiondetectSettings
 ```
+
+Se GET responder sem nenhum campo conhecido, o laboratório tenta o formato da página GoAhead original: POST para o mesmo caminho, parâmetros na query e corpo fixo `n/a`.
 
 Writers candidatos correspondentes:
 
@@ -132,7 +134,7 @@ O fluxo recomendado é:
 3. verificar o readback do CGI e da porta 9898;
 4. somente então testar um setter candidato específico.
 
-Os alvos de escrita expostos são fixos: motion on/off, sensibilidade 1/2/3, rotation, IR, flicker e o conjunto fechado de timezones legado. Para Motion/Video, o campo-alvo precisa ter aparecido primeiro na própria leitura da câmera. Caminho CGI e nome de parâmetro nunca vêm livres do navegador.
+Os alvos de escrita expostos são fixos: motion on/off, zonemask todas/nenhuma, sensibilidade legada 0..5, rotation, IR, flicker, brilho/contraste/saturação diurno/noturno 0..100 e o conjunto fechado de timezones legado. Para Motion/Video, o campo-alvo precisa ter aparecido primeiro na própria leitura da câmera. Caminho CGI e nome de parâmetro nunca vêm livres do navegador.
 
 O candidato `/goform/NTP` fica separado porque a fonte pública não oferece um CGI de leitura equivalente. O App envia somente `time_zone`; não envia servidor NTP nem intervalo de sincronização.
 
