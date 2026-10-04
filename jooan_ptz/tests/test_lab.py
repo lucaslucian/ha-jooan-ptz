@@ -945,6 +945,15 @@ class _LegacyCamera:
             return _LegacyResponse("result:success")
         raise AssertionError(endpoint)
 
+    def _post_query(self, endpoint, params=None, body="n/a", authenticated=True, port=None):
+        params = dict(params or {})
+        self.calls.append((endpoint, params, authenticated, port, "POST_QUERY"))
+        if endpoint == "/goform/getmotiondetectSettings":
+            return _LegacyResponse("\r".join(f"{k}:{v}" for k, v in self.motion.items()))
+        if endpoint == "/goform/getVideoSettings":
+            return _LegacyResponse("\r".join(f"{k}:{v}" for k, v in self.video.items()))
+        raise AssertionError(endpoint)
+
     def _post_form(self, endpoint, data=None, authenticated=True, port=None):
         params = dict(data or {})
         self.calls.append((endpoint, params, authenticated, port))
@@ -1081,4 +1090,73 @@ def test_legacy_video_write_requires_target_to_be_exposed_by_reader():
         raise AssertionError("writer must not add a field absent from camera readback")
 
     assert all(call[0] != "/goform/updateVideoSettings" for call in camera.calls)
+
+def test_legacy_probe_falls_back_to_goahead_post_query_when_get_has_no_fields():
+    camera = _LegacyCamera()
+
+    def get_without_fields(endpoint, params=None, authenticated=True, port=None):
+        camera.calls.append((endpoint, dict(params or {}), authenticated, port, "GET"))
+        return _LegacyResponse("result:success")
+
+    camera._get = get_without_fields
+    result = lab.legacy_cgi_probe(camera, surface="motion")
+    motion = result["surfaces"]["motion"]
+
+    assert motion["probe_method"] == "POST_QUERY"
+    assert motion["recognized_fields"] >= 2
+    assert motion["fields"]["motionEnable"] == "YES"
+    assert [attempt["method"] for attempt in motion["attempts"]] == [
+        "GET",
+        "POST_QUERY",
+    ]
+    assert motion["attempts"][0]["recognized_fields"] == 0
+
+
+def test_legacy_motion_candidate_accepts_documented_zero_to_five_and_zonemask():
+    for level in range(6):
+        assert lab._legacy_candidate_value("motion_sensitivity", str(level)) == (
+            "motion",
+            "sensitivity",
+            str(level),
+        )
+
+    assert lab._legacy_candidate_value("motion_zonemask", "on") == (
+        "motion",
+        "zonemask",
+        "33554431",
+    )
+    assert lab._legacy_candidate_value("motion_zonemask", "off") == (
+        "motion",
+        "zonemask",
+        "0",
+    )
+
+    for bad in (-1, 6):
+        try:
+            lab._legacy_candidate_value("motion_sensitivity", bad)
+        except lab.LabError:
+            pass
+        else:
+            raise AssertionError(f"out-of-range legacy sensitivity accepted: {bad}")
+
+
+def test_legacy_video_numeric_candidates_are_bounded_to_public_zero_to_100_range():
+    assert lab._legacy_candidate_value("video_brightness", "0") == (
+        "video",
+        "brightness",
+        "0",
+    )
+    assert lab._legacy_candidate_value("video_nsaturation", "100") == (
+        "video",
+        "nsaturation",
+        "100",
+    )
+
+    for value in (-1, 101):
+        try:
+            lab._legacy_candidate_value("video_contrast", value)
+        except lab.LabError:
+            pass
+        else:
+            raise AssertionError(f"out-of-range video value accepted: {value}")
 
