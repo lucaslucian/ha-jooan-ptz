@@ -41,6 +41,8 @@ CAMERA_IO_LOCK_TIMEOUT = 2.0
 DISCOVERY_GAP = 0.15
 RECOVERY_GRACE = 10.0
 RECOVERY_VALIDATION_INTERVAL = 300.0
+HEARTBEAT_FAILURE_THRESHOLD = 3
+AUTH_FAILURE_THRESHOLD = 3
 MAX_PTZ_CLIENTS = 64
 PTZ_DIRECTIONS = {"up", "down", "left", "right", "stop"}
 PTZ_CLIENT_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
@@ -65,8 +67,12 @@ _state = {
     "last_seen": None,
     "last_heartbeat": None,
     "heartbeat_error": None,
-    "probe_running": False,
+    "heartbeat_failures": 0,
+    "auth_failures": 0,
+    "validation_running": False,
     "last_recovery_validation": None,
+    "last_auth_success": None,
+    "service_degraded": False,
     "ptz_moving": False,
     "ptz_channel": None,
     "ptz_channel_source": None,
@@ -103,6 +109,34 @@ def get_camera() -> JooanCamera:
 def update_state(**values) -> None:
     with _state_lock:
         _state.update(values)
+
+
+def _record_auth_rejection(error: str) -> bool:
+    """Record one explicit CGI credential rejection.
+
+    Once credentials were successfully validated, require consecutive explicit
+    rejections before downgrading the session. The reference camera can return
+    transient CGI failures while its embedded services are overloaded.
+    """
+    now = time.time()
+    with _state_lock:
+        previously_authenticated = bool(_state.get("authenticated"))
+        previous_success = _state.get("last_auth_success")
+        failures = int(_state.get("auth_failures") or 0) + 1
+        previous_recovery = _state.get("last_recovery_validation")
+
+    preserve = bool(previous_success) and previously_authenticated and failures < AUTH_FAILURE_THRESHOLD
+    update_state(
+        online=True,
+        authenticated=preserve,
+        auth_failures=failures,
+        service_degraded=preserve,
+        last_error=error,
+        last_check=now,
+        last_seen=now,
+        last_recovery_validation=previous_recovery,
+    )
+    return preserve
 
 
 def _infer_ptz_channel(onvif_info: dict | None) -> tuple[int | None, str | None]:
@@ -199,6 +233,10 @@ def _validate_camera_locked() -> bool:
             "last_error": None,
             "last_check": now,
             "last_seen": now,
+            "last_auth_success": now,
+            "service_degraded": False,
+            "heartbeat_failures": 0,
+            "auth_failures": 0,
         }
 
         with _state_lock:
@@ -236,28 +274,41 @@ def _validate_camera_locked() -> bool:
         values["initial_scan_complete"] = True
         update_state(**values)
         return True
+    except JooanAuthError as exc:
+        safe_error = redact_secrets(exc)
+        _LOGGER.warning("JOOAN camera rejected configured credentials: %s", safe_error)
+        _record_auth_rejection(safe_error)
+        return False
     except Exception as exc:
         safe_error = redact_secrets(exc)
-        _LOGGER.warning("JOOAN camera validation failed: %s", safe_error)
-        online = False
+        _LOGGER.warning("JOOAN camera validation had a transient failure: %s", safe_error)
+
+        heartbeat_online = False
         try:
             heartbeat = get_camera().heartbeat()
-            online = bool(heartbeat.get("online"))
+            heartbeat_online = bool(heartbeat.get("online"))
         except Exception:
             pass
+
         now = time.time()
         with _state_lock:
+            previous_authenticated = bool(_state.get("authenticated"))
             previous_last_seen = _state.get("last_seen")
+
+        # A busy embedded CGI/RTSP stack can temporarily reject or time out
+        # while the camera itself remains online. Once credentials have been
+        # validated, do not reinterpret a transport hiccup as an auth failure.
+        preserve_auth = heartbeat_online and previous_authenticated
         update_state(
-            online=online,
-            authenticated=False,
+            online=heartbeat_online,
+            authenticated=preserve_auth,
+            service_degraded=preserve_auth,
             initial_scan_complete=True,
             last_error=safe_error,
             last_check=now,
-            last_seen=now if online else previous_last_seen,
+            last_seen=now if heartbeat_online else previous_last_seen,
         )
         return False
-
 
 def _validation_interval() -> int:
     try:
@@ -267,11 +318,16 @@ def _validation_interval() -> int:
 
 
 def heartbeat_camera() -> bool:
-    """Update liveness between authenticated validations."""
+    """Update liveness without turning one missed ping into an auth failure."""
     try:
         heartbeat = get_camera().heartbeat()
         now = time.time()
         heartbeat_online = heartbeat.get("online")
+
+        with _state_lock:
+            previous_online = bool(_state.get("online"))
+            previous_failures = int(_state.get("heartbeat_failures") or 0)
+
         values = {
             "configured": True,
             "last_heartbeat": now,
@@ -279,41 +335,65 @@ def heartbeat_camera() -> bool:
         }
 
         if heartbeat_online is None:
-            # ICMP is not available in this container. Preserve the last known
-            # camera state rather than falsely marking the camera offline or
-            # falling back to a connect-only TCP heartbeat.
+            # If ICMP is unavailable in the container, preserve the last known
+            # camera/auth state instead of fabricating an outage.
             update_state(**values)
-            with _state_lock:
-                return bool(_state.get("online"))
+            return previous_online
 
-        online = bool(heartbeat_online)
-        values["online"] = online
-        if online:
-            values["last_seen"] = now
-            values["heartbeat_error"] = None
-        else:
-            values["authenticated"] = False
-            values["last_error"] = heartbeat.get("error") or "Camera is offline"
-        update_state(**values)
-        return online
-    except Exception as exc:
-        update_state(
+        if bool(heartbeat_online):
+            values.update(
+                online=True,
+                last_seen=now,
+                heartbeat_error=None,
+                heartbeat_failures=0,
+            )
+            # If the camera has just returned after a confirmed outage, allow
+            # the recovery validator to run regardless of the previous cooldown.
+            if not previous_online:
+                values["last_recovery_validation"] = None
+            update_state(**values)
+            return True
+
+        failures = previous_failures + 1
+        values["heartbeat_failures"] = failures
+        if failures < HEARTBEAT_FAILURE_THRESHOLD:
+            values["heartbeat_error"] = (
+                f"ICMP ping failed ({failures}/{HEARTBEAT_FAILURE_THRESHOLD})"
+            )
+            # Preserve a previously healthy/authenticated session until the
+            # outage is confirmed by consecutive failures.
+            values["online"] = previous_online
+            update_state(**values)
+            return previous_online
+
+        values.update(
             online=False,
             authenticated=False,
-            last_heartbeat=time.time(),
-            last_error=redact_secrets(exc),
+            service_degraded=False,
+            last_recovery_validation=None,
+            last_error=heartbeat.get("error") or "Camera is offline",
         )
+        update_state(**values)
         return False
-
+    except Exception as exc:
+        # An exception in the heartbeat implementation itself is not evidence
+        # that credentials became invalid.
+        with _state_lock:
+            previous_online = bool(_state.get("online"))
+        update_state(
+            last_heartbeat=time.time(),
+            heartbeat_error=redact_secrets(exc),
+        )
+        return previous_online
 
 def validation_loop() -> None:
     # Startup reads only the proven CGI/OEM state. ONVIF is discovered lazily
     # by the first PTZ movement and RTSP opens only for requested snapshots.
-    update_state(probe_running=True)
+    update_state(validation_running=True)
     try:
         validate_camera()
     finally:
-        update_state(probe_running=False)
+        update_state(validation_running=False)
     while True:
         time.sleep(_validation_interval())
         heartbeat_camera()
@@ -321,8 +401,11 @@ def validation_loop() -> None:
         with _state_lock:
             should_recover = (
                 bool(_state.get("online"))
-                and not bool(_state.get("authenticated"))
-                and not bool(_state.get("probe_running"))
+                and (
+                    not bool(_state.get("authenticated"))
+                    or bool(_state.get("service_degraded"))
+                )
+                and not bool(_state.get("validation_running"))
                 and (
                     _state.get("last_recovery_validation") is None
                     or now - float(_state["last_recovery_validation"]) >= RECOVERY_VALIDATION_INTERVAL
@@ -536,8 +619,13 @@ def ptz(direction: str):
         })
     except JooanAuthError as exc:
         safe_error = redact_secrets(exc)
-        update_state(authenticated=False, last_error=safe_error)
-        return jsonify({"error": safe_error}), 401
+        preserved = _record_auth_rejection(safe_error)
+        if preserved:
+            return jsonify({
+                "error": "Camera CGI temporarily rejected the request",
+                "authentication_preserved": True,
+            }), 503
+        return jsonify({"error": safe_error, "authentication_preserved": False}), 401
     except Exception as exc:
         safe_error = redact_secrets(exc)
         update_state(last_error=safe_error)

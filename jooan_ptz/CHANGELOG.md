@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.18.9
+
+- Made authentication state resilient to transient camera stalls after a known-good login.
+- Require three consecutive ICMP heartbeat failures before declaring the camera offline.
+- Preserve a previously validated CGI session across isolated explicit credential rejections; repeated confirmed rejections are required before clearing authentication.
+- Added distinct UI states for first authentication, session revalidation and degraded camera services.
+- Added an in-panel explanation of the snapshot-only media strategy.
+- Documented why continuous RTSP is intentionally avoided when another NVR/software already consumes the camera stream.
+
 ## 0.18.8
 
 - Finalized the public README and Home Assistant documentation around the production feature set.

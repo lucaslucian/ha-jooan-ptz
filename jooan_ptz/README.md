@@ -16,6 +16,8 @@ Controle local de câmeras JOOAN/CAM720 compatíveis pelo Home Assistant.
 - heartbeat por ICMP;
 - credenciais mantidas somente no backend.
 
+O App usa snapshots em vez de manter vídeo contínuo porque a câmera de referência pode ficar instável com várias conexões simultâneas, principalmente quando um NVR ou outro software já consome o RTSP. Cada captura abre o stream apenas pelo tempo necessário para obter um frame e fecha a sessão em seguida.
+
 ## Uso
 
 Configure o IP local, usuário e senha da câmera, inicie o App e abra **JOOAN Local Control** pelo painel do Home Assistant.

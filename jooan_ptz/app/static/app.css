@@ -152,6 +152,11 @@ button:focus-visible,select:focus-visible,summary:focus-visible{outline:2px soli
 .meta-row{display:flex;gap:6px;flex-wrap:wrap}
 .meta-pill{font-size:11px;color:var(--muted);background:rgba(155,167,181,.07);border:1px solid var(--border-soft);border-radius:999px;padding:5px 8px}
 .helper{color:var(--muted);font-size:12px;line-height:1.55}
+.media-rationale{
+  margin-top:8px;border-top:1px solid var(--border-soft);padding-top:8px;color:var(--muted);font-size:11px
+}
+.media-rationale summary{cursor:pointer;color:var(--text);font-weight:700;user-select:none}
+.media-rationale p{margin:8px 0 0;line-height:1.55;max-width:1100px}
 .ptz-mode-row{display:flex;align-items:end;justify-content:space-between;gap:12px;flex-wrap:wrap}
 .control-label{display:grid;gap:6px;color:var(--muted);font-size:11px;font-weight:750}
 .control-select{

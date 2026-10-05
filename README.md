@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <img alt="Version" src="https://img.shields.io/badge/version-0.18.8-blue">
+  <img alt="Version" src="https://img.shields.io/badge/version-0.18.9-blue">
   <img alt="Stage" src="https://img.shields.io/badge/stage-stable-success">
   <img alt="aarch64" src="https://img.shields.io/badge/aarch64-yes-success">
   <img alt="amd64" src="https://img.shields.io/badge/amd64-yes-success">
@@ -84,6 +84,14 @@ Os streams principais conhecidos são:
 ```
 
 A URL autenticada é montada exclusivamente no backend. Usuário, senha e URL RTSP completa não são devolvidos ao navegador.
+
+### Por que não mantemos um stream de vídeo contínuo
+
+A JA-A12 usada como referência mostrou uma limitação importante: o firmware embarcado possui poucos recursos para manter várias conexões locais simultâneas. Quando outro software, NVR ou integração já está consumindo o RTSP continuamente, novas conexões RTSP/HTTP/ONVIF podem deixar os serviços da câmera lentos, travados ou temporariamente inacessíveis, mesmo enquanto ela continua respondendo na rede.
+
+Por isso o App **não mantém uma sessão RTSP aberta**. Para mostrar imagem, ele abre o stream apenas pelo tempo necessário para capturar um único frame JPEG e fecha a conexão em seguida. Durante o movimento PTZ, essa mesma estratégia é repetida com baixa frequência e somente na lente PTZ.
+
+Esse comportamento reduz a disputa com NVRs e outros consumidores do vídeo e foi a forma mais estável encontrada para usar a câmera localmente sem provocar perda de acesso aos serviços dela.
 
 ## Segurança
 

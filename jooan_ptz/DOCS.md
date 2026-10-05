@@ -82,6 +82,12 @@ Paths usados para snapshots:
 
 A URL RTSP autenticada existe somente no backend.
 
+### Estratégia de mídia
+
+O App não mantém vídeo contínuo por uma limitação observada na JA-A12 de referência. A câmera pode se tornar instável quando vários clientes mantêm conexões RTSP/HTTP/ONVIF ao mesmo tempo, especialmente quando um NVR ou outro software já está consumindo o stream.
+
+O comportamento observado inclui serviços locais parando de responder temporariamente enquanto a câmera ainda responde ICMP. Por isso a estratégia escolhida é abrir o RTSP somente para capturar um frame e fechar imediatamente a sessão. Durante PTZ, os snapshots continuam deliberadamente limitados e sequenciais.
+
 ## Segurança
 
 - apenas IPs locais são aceitos;
