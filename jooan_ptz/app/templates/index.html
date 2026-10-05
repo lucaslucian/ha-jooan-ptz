@@ -10,29 +10,30 @@
 <body>
   <main class="shell">
     <header class="app-header">
-      <div>
+      <div class="header-primary">
         <div class="eyebrow">JOOAN · CONTROLE LOCAL</div>
-        <h1>JA-A12</h1>
-        <p id="headerSubtitle">Carregando informações da câmera...</p>
+        <div class="header-title-row">
+          <h1 id="headerTitle">JA-A12</h1>
+          <div id="headerStatus" class="health-badge health-offline">
+            <span class="health-dot"></span>
+            <span>Verificando</span>
+          </div>
+        </div>
+        <div id="headerSubtitle" class="header-meta">Carregando informações da câmera...</div>
       </div>
-      <div id="headerStatus" class="health-badge health-offline">
-        <span class="health-dot"></span>
-        <span>Verificando</span>
-      </div>
+      <div id="statusBanner" class="status-banner" role="status" aria-live="polite">Iniciando painel...</div>
     </header>
 
-    <div id="statusBanner" class="status-banner">Iniciando painel...</div>
-
-    <nav class="tabs" aria-label="Seções do painel">
-      <button class="tab active" data-tab="overview">Visão geral</button>
-      <button class="tab" data-tab="camera">Câmeras & PTZ</button>
-      <button class="tab" data-tab="detection">Detecção</button>
-      <button class="tab" data-tab="recording">Gravação</button>
-      <button class="tab" data-tab="diagnostics">Diagnóstico</button>
-      <button class="tab" data-tab="lab">Laboratório</button>
+    <nav class="tabs" aria-label="Seções do painel" role="tablist">
+      <button id="tabButton-overview" class="tab active" data-tab="overview" role="tab" aria-controls="tab-overview" aria-selected="true">Visão geral</button>
+      <button id="tabButton-camera" class="tab" data-tab="camera" role="tab" aria-controls="tab-camera" aria-selected="false" tabindex="-1">Câmeras & PTZ</button>
+      <button id="tabButton-detection" class="tab" data-tab="detection" role="tab" aria-controls="tab-detection" aria-selected="false" tabindex="-1">Detecção</button>
+      <button id="tabButton-recording" class="tab" data-tab="recording" role="tab" aria-controls="tab-recording" aria-selected="false" tabindex="-1">Gravação</button>
+      <button id="tabButton-diagnostics" class="tab" data-tab="diagnostics" role="tab" aria-controls="tab-diagnostics" aria-selected="false" tabindex="-1">Diagnóstico</button>
+      <button id="tabButton-lab" class="tab" data-tab="lab" role="tab" aria-controls="tab-lab" aria-selected="false" tabindex="-1">Laboratório</button>
     </nav>
 
-    <section id="tab-overview" class="tab-panel active">
+    <section id="tab-overview" class="tab-panel active" role="tabpanel" aria-labelledby="tabButton-overview">
       <div id="overviewCards" class="stat-grid"></div>
 
       <div class="content-grid two">
@@ -70,7 +71,7 @@
       </article>
     </section>
 
-    <section id="tab-camera" class="tab-panel">
+    <section id="tab-camera" class="tab-panel" role="tabpanel" aria-labelledby="tabButton-camera">
       <div class="camera-workspace">
         <article class="card live-card">
           <div class="card-heading">
@@ -99,7 +100,7 @@
             <button id="singleSnapshotButton" class="button secondary">Snapshot</button>
             <button id="validateSubstreams" class="button ghost">Validar stream PTZ</button>
           </div>
-          <p id="previewMessage" class="helper"></p>
+          <p id="previewMessage" class="helper" aria-live="polite"></p>
         </article>
 
         <article class="card ptz-card">
@@ -118,7 +119,7 @@
             <button class="ptz-button" data-dir="right" aria-label="Direita">→</button>
             <div></div><button class="ptz-button" data-dir="down" aria-label="Baixo">↓</button><div></div>
           </div>
-          <p id="command" class="command-state"></p>
+          <p id="command" class="command-state" aria-live="polite"></p>
         </article>
       </div>
 
@@ -134,30 +135,32 @@
       </article>
     </section>
 
-    <section id="tab-detection" class="tab-panel">
-      <article class="card">
-        <div class="card-heading">
-          <div>
-            <span class="section-kicker">ANÁLISE LOCAL</span>
-            <h2>Detecção & rastreamento</h2>
+    <section id="tab-detection" class="tab-panel" role="tabpanel" aria-labelledby="tabButton-detection">
+      <div class="content-grid two detection-layout">
+        <article class="card">
+          <div class="card-heading">
+            <div>
+              <span class="section-kicker">ANÁLISE LOCAL</span>
+              <h2>Detecção & rastreamento</h2>
+            </div>
+            <span class="badge neutral">Leitura atual</span>
           </div>
-          <span class="badge neutral">Leitura atual</span>
-        </div>
-        <div id="detectionGrid" class="setting-grid"></div>
-      </article>
+          <div id="detectionGrid" class="setting-grid"></div>
+        </article>
 
-      <article class="card">
-        <div class="card-heading">
-          <div>
-            <span class="section-kicker">ILUMINAÇÃO & ALERTAS</span>
-            <h2>Luzes, buzzer e notificações</h2>
+        <article class="card">
+          <div class="card-heading">
+            <div>
+              <span class="section-kicker">ILUMINAÇÃO & ALERTAS</span>
+              <h2>Luzes, buzzer e notificações</h2>
+            </div>
           </div>
-        </div>
-        <div id="lightingGrid" class="setting-grid"></div>
-      </article>
+          <div id="lightingGrid" class="setting-grid"></div>
+        </article>
+      </div>
     </section>
 
-    <section id="tab-recording" class="tab-panel">
+    <section id="tab-recording" class="tab-panel" role="tabpanel" aria-labelledby="tabButton-recording">
       <div class="content-grid two">
         <article class="card">
           <div class="card-heading">
@@ -191,7 +194,7 @@
       </article>
     </section>
 
-    <section id="tab-diagnostics" class="tab-panel">
+    <section id="tab-diagnostics" class="tab-panel" role="tabpanel" aria-labelledby="tabButton-diagnostics">
       <article class="card">
         <div class="card-heading">
           <div>
@@ -227,7 +230,7 @@
         <div id="rawDetails" class="details-stack"></div>
       </article>
     </section>
-    <section id="tab-lab" class="tab-panel">
+    <section id="tab-lab" class="tab-panel" role="tabpanel" aria-labelledby="tabButton-lab">
       <article class="card lab-warning">
         <div class="card-heading">
           <div>
