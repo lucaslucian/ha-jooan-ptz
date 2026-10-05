@@ -60,15 +60,12 @@ _state = {
     "stream_info": None,
     "services": None,
     "onvif_info": None,
-    "media_probe": None,
     "last_error": None,
     "last_check": None,
     "last_seen": None,
     "last_heartbeat": None,
     "heartbeat_error": None,
-    "last_deep_probe": None,
     "probe_running": False,
-    "probe_started_at": None,
     "last_recovery_validation": None,
     "ptz_moving": False,
     "ptz_channel": None,
@@ -129,16 +126,16 @@ def _infer_ptz_channel(onvif_info: dict | None) -> tuple[int | None, str | None]
     return None, None
 
 
-def validate_camera(*, deep: bool = False) -> bool:
+def validate_camera() -> bool:
     # All camera service traffic is serialized. The stock JA-A12 has very
     # limited HTTP/RTSP/ONVIF workers and concurrent protocol operations can
     # make otherwise valid requests time out.
     with _camera_io_lock:
-        return _validate_camera_locked(deep=deep)
+        return _validate_camera_locked()
 
 
-def _validate_camera_locked(*, deep: bool = False) -> bool:
-    _LOGGER.info("Validating JOOAN camera over the local network%s", " (deep probe)" if deep else "")
+def _validate_camera_locked() -> bool:
+    _LOGGER.info("Validating JOOAN camera over the local network")
     try:
         camera = get_camera()
         update_state(configured=True, last_error=None, last_check=time.time())
@@ -234,31 +231,6 @@ def _validate_camera_locked(*, deep: bool = False) -> bool:
             ),
         }
 
-        if deep:
-            # Manual deep diagnostics deliberately stop at ONVIF discovery.
-            # Do not fan out into ffprobe sessions here: repeated RTSP probes
-            # have been observed to coincide with camera instability.
-            try:
-                values["onvif_info"] = camera.probe_onvif()
-            except Exception as exc:
-                _LOGGER.warning("Could not probe ONVIF: %s", redact_secrets(exc))
-                values["onvif_info"] = {"reachable": False, "error": redact_secrets(exc)}
-
-            ptz_channel, ptz_source = _infer_ptz_channel(values.get("onvif_info"))
-            if ptz_channel is not None:
-                values["ptz_channel"] = ptz_channel
-                values["ptz_channel_source"] = ptz_source
-
-            values["ptz_onvif_available"] = bool(
-                ((values.get("onvif_info") or {}).get("ptz") or {}).get("profile_token")
-            )
-            services["onvif"] = {
-                "port": camera.onvif_port,
-                "reachable": bool((values.get("onvif_info") or {}).get("reachable")),
-                "source": "soap",
-            }
-            values["last_deep_probe"] = time.time()
-
         values["services"] = services
 
         values["initial_scan_complete"] = True
@@ -335,12 +307,11 @@ def heartbeat_camera() -> bool:
 
 
 def validation_loop() -> None:
-    # Keep startup intentionally light. This camera is sensitive to bursts of
-    # HTTP/ONVIF/RTSP work; startup only reads the already proven CGI/OEM state.
-    # ONVIF discovery and RTSP validation are manual actions from the dashboard.
-    update_state(probe_running=True, probe_started_at=time.time())
+    # Startup reads only the proven CGI/OEM state. ONVIF is discovered lazily
+    # by the first PTZ movement and RTSP opens only for requested snapshots.
+    update_state(probe_running=True)
     try:
-        validate_camera(deep=False)
+        validate_camera()
     finally:
         update_state(probe_running=False)
     while True:
@@ -360,7 +331,7 @@ def validation_loop() -> None:
         if should_recover:
             update_state(last_recovery_validation=now)
             time.sleep(RECOVERY_GRACE)
-            validate_camera(deep=False)
+            validate_camera()
 
 
 def start_validation() -> None:
@@ -449,7 +420,7 @@ def ptz(direction: str):
         previous_transport = _state.get("ptz_last_transport")
 
     if not _camera_io_lock.acquire(timeout=CAMERA_IO_LOCK_TIMEOUT):
-        return jsonify({"error": "Camera is busy with diagnostics or media"}), 503
+        return jsonify({"error": "Camera is busy with another operation"}), 503
     try:
         # A newer STOP/direction may have arrived while this request waited for
         # the camera lock. Never execute an older direction after a newer STOP.
@@ -489,7 +460,6 @@ def ptz(direction: str):
                     onvif_info=discovered,
                     ptz_onvif_available=onvif_available,
                     services=services,
-                    last_deep_probe=time.time(),
                 )
             except Exception as exc:
                 onvif_error = redact_secrets(exc)
@@ -616,7 +586,7 @@ def _capture_snapshot_with_fallback(
             if not camera_lock_acquired:
                 if cached is not None:
                     return cached, True
-                raise RuntimeError("Camera is busy with diagnostics or another media operation")
+                raise RuntimeError("Camera is busy with another operation")
 
         try:
             image = get_camera().snapshot(stream)
