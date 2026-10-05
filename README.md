@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <img alt="Version" src="https://img.shields.io/badge/version-0.18.2-blue">
+  <img alt="Version" src="https://img.shields.io/badge/version-0.18.3-blue">
   <img alt="Stage" src="https://img.shields.io/badge/stage-experimental-orange">
   <img alt="aarch64" src="https://img.shields.io/badge/aarch64-yes-success">
   <img alt="amd64" src="https://img.shields.io/badge/amd64-yes-success">
@@ -34,14 +34,15 @@ Se o botão não preencher o repositório automaticamente:
 |---|---|
 | Validação local CGI | ✅ |
 | PTZ cima/baixo/esquerda/direita/stop | ✅ |
-| PTZ ONVIF com velocidade | ✅ após descoberta manual, com fallback CGI |
+| PTZ ONVIF com velocidade | ✅ descoberta mínima na primeira movimentação, com fallback CGI |
 | Informações do dispositivo e rede | ✅ |
 | Leitura de capabilities/estado OEM na porta 9898 | ✅ |
 | Estado de SD, gravação, detecção, tracking e luzes | ✅ leitura |
 | Detecção de lente dupla | ✅ |
 | Credenciais RTSP locais | ✅ backend-only |
 | Snapshots JPEG | ✅ sob demanda |
-| Preview MJPEG | 🧪 sob demanda |
+| Preview PTZ por snapshots | ✅ até 1 frame/s durante movimento |
+| Stream contínuo no add-on | ❌ removido |
 | ONVIF 8899 | ✅ descoberta mínima sob demanda do PTZ |
 | Escrita de configurações da câmera | ❌ removida |
 
@@ -50,7 +51,7 @@ Se o botão não preencher o repositório automaticamente:
 A v0.18.2 usa **Câmeras & PTZ como área principal no topo**. Abaixo dela, as informações somente leitura ficam agrupadas em seções expansíveis para reduzir a poluição visual:
 
 - visão geral e saúde;
-- duas lentes com Snapshot / Ao vivo / Parar;
+- duas lentes com captura de Snapshot;
 - PTZ com velocidade ONVIF e fallback CGI;
 - informações gerais;
 - detecção, tracking, iluminação e alertas;
@@ -71,9 +72,10 @@ A JA-A12 de referência mostrou comportamento sensível a várias conexões de m
 - ONVIF só é descoberto uma vez quando o usuário realmente movimenta o PTZ;
 - não existe mais botão de `ffprobe`/teste RTSP no painel;
 - snapshots só abrem RTSP quando solicitados;
-- preview ao vivo só abre RTSP quando solicitado;
-- nenhum feed é iniciado automaticamente ao abrir o painel;
-- ao iniciar os dois feeds, o primeiro é negociado antes do segundo.
+- o add-on não mantém mais bridge MJPEG nem rotas `/api/live/*`;
+- durante movimento PTZ, somente a lente PTZ é atualizada por snapshots, com limite de aproximadamente 1 frame/s;
+- ao soltar o PTZ, um último frame é capturado para mostrar a posição final;
+- o stream contínuo pode permanecer em outra integração, como MotionEye.
 
 ## PTZ
 
@@ -97,7 +99,7 @@ O backend:
 | Porta | Protocolo | Uso |
 |---|---|---|
 | 80/TCP | HTTP | CGI, autenticação, PTZ e informações |
-| 554/TCP | RTSP | vídeo e áudio sob demanda |
+| 554/TCP | RTSP | snapshots sob demanda |
 | 9898/TCP | HTTP | capabilities e estado OEM |
 | 8899/TCP | ONVIF | descoberta e PTZ |
 | 7788/UDP | proprietário | observado em pesquisa |

@@ -18,7 +18,7 @@ O **JOOAN Local Control** fornece monitoramento e controle local para câmeras J
 
 ## Painel
 
-A v0.18 usa uma única página organizada em seções.
+A v0.18.3 usa uma única página organizada em seções.
 
 ### Visão geral
 
@@ -33,15 +33,19 @@ Mostra:
 
 ### Câmeras & PTZ
 
-Cada lente possui:
+Cada lente possui **Capturar frame**, que faz uma captura RTSP única.
 
-- **Snapshot** — captura um único frame;
-- **Ao vivo** — abre o bridge RTSP → MJPEG;
-- **Parar** — encerra somente o feed daquela lente.
+Não existe mais bridge RTSP → MJPEG nem preview contínuo dentro do App. O stream contínuo pode ser tratado por outra integração do Home Assistant, como MotionEye.
 
-Também existe um botão para iniciar os dois feeds. Para reduzir carga na câmera, o App aguarda a negociação da primeira lente antes de abrir a segunda.
+Durante uma movimentação PTZ:
 
-Nenhum vídeo ou snapshot é aberto automaticamente ao carregar a página.
+1. o comando PTZ é enviado primeiro;
+2. a lente PTZ é atualizada por snapshots com intervalo mínimo de 1 segundo;
+3. as capturas são sequenciais e nunca se sobrepõem;
+4. a captura de imagem não segura o lock de controle PTZ, então um FFmpeg lento não pode atrasar o comando `stop`;
+5. ao soltar o comando, o App envia `stop` e tenta capturar mais um frame mostrando a posição final.
+
+Se a câmera demorar mais de um segundo para gerar uma imagem, a taxa real fica abaixo de 1 FPS; o App nunca abre várias capturas em paralelo.
 
 ### PTZ
 
@@ -121,7 +125,7 @@ Paths conhecidos:
 /live/ch01_1
 ```
 
-O App prefere `*_1` para preview de baixa resolução e cai para `*_0` se necessário.
+O App usa os streams principais `ch00_0` e `ch01_0` para snapshots, porque foram os caminhos mais confiáveis para captura de frame na unidade de referência. Os paths `*_1` permanecem apenas como informação conhecida da câmera.
 
 A URL autenticada é construída somente no backend:
 

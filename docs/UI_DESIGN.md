@@ -1,6 +1,6 @@
 # Direção visual do painel
 
-A v0.18.2 consolida o **JOOAN Local Control** em uma única página com **Câmeras & PTZ como área principal**. Todo o restante fica abaixo em painéis expansíveis somente leitura.
+A v0.18.3 consolida o **JOOAN Local Control** em uma única página com **Câmeras & PTZ como área principal**. Todo o restante fica abaixo em painéis expansíveis somente leitura.
 
 ## Identidade visual
 
@@ -58,13 +58,11 @@ Assets principais:
 
 ## Mídia
 
-Cada lente oferece:
+Cada lente oferece captura manual de **Snapshot**.
 
-- Snapshot;
-- Ao vivo;
-- Parar.
+O painel não possui mais vídeo MJPEG contínuo. Enquanto o usuário mantém um comando PTZ, a lente PTZ recebe novas imagens em cadência de no máximo **1 FPS**; ao soltar, uma captura final atualiza a posição resultante.
 
-Nada é aberto automaticamente. Ao iniciar os dois feeds, o primeiro precisa concluir a negociação antes do segundo ser solicitado.
+Isso mantém a UI útil para enquadramento sem duplicar o stream contínuo já servido por integrações especializadas.
 
 ## PTZ
 

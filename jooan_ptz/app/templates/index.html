@@ -30,9 +30,7 @@
           <h2>Vídeo e controle</h2>
         </div>
         <div class="toolbar compact primary-actions">
-          <button id="refreshSnapshots" class="button secondary">Atualizar imagens</button>
-          <button id="startLive" class="button primary">Iniciar os dois feeds</button>
-          <button id="stopLive" class="button secondary" disabled>Parar feeds</button>
+          <button id="refreshSnapshots" class="button primary">Atualizar imagens</button>
         </div>
       </div>
 
@@ -43,19 +41,17 @@
               <span class="section-kicker">VÍDEO LOCAL</span>
               <h2>Duas lentes</h2>
             </div>
-            <span class="badge neutral">RTSP sob demanda</span>
+            <span class="badge neutral">Snapshots sob demanda</span>
           </div>
 
           <div class="dual-feed-grid">
             <article class="feed-tile">
               <div class="feed-stage">
                 <img id="snapshotFeed0" alt="Snapshot da lente 1" hidden>
-                <img id="liveFeed0" alt="Feed ao vivo da lente 1" hidden>
                 <div id="feedEmpty0" class="preview-empty">
                   <strong>Lente 1</strong>
-                  <span>Atualize a imagem ou inicie o feed.</span>
+                  <span>Atualize a imagem para capturar um frame.</span>
                 </div>
-                <div class="live-indicator" id="feedLive0" hidden><span></span> AO VIVO</div>
               </div>
               <div class="feed-body">
                 <div class="camera-title">
@@ -64,23 +60,19 @@
                 </div>
                 <div id="feedMeta0" class="stream-meta"></div>
                 <div class="toolbar compact">
-                  <button class="button secondary" data-snapshot-channel="0">Snapshot</button>
-                  <button class="button primary" data-live-channel="0">Ao vivo</button>
-                  <button class="button ghost" data-stop-channel="0" disabled>Parar</button>
+                  <button class="button secondary" data-snapshot-channel="0">Capturar frame</button>
                 </div>
-                <p id="feedMessage0" class="helper">Nenhuma sessão RTSP aberta.</p>
+                <p id="feedMessage0" class="helper">Nenhuma captura recente.</p>
               </div>
             </article>
 
             <article class="feed-tile">
               <div class="feed-stage">
                 <img id="snapshotFeed1" alt="Snapshot da lente 2" hidden>
-                <img id="liveFeed1" alt="Feed ao vivo da lente 2" hidden>
                 <div id="feedEmpty1" class="preview-empty">
                   <strong>Lente 2</strong>
-                  <span>Atualize a imagem ou inicie o feed.</span>
+                  <span>Atualize a imagem para capturar um frame.</span>
                 </div>
-                <div class="live-indicator" id="feedLive1" hidden><span></span> AO VIVO</div>
               </div>
               <div class="feed-body">
                 <div class="camera-title">
@@ -89,17 +81,15 @@
                 </div>
                 <div id="feedMeta1" class="stream-meta"></div>
                 <div class="toolbar compact">
-                  <button class="button secondary" data-snapshot-channel="1">Snapshot</button>
-                  <button class="button primary" data-live-channel="1">Ao vivo</button>
-                  <button class="button ghost" data-stop-channel="1" disabled>Parar</button>
+                  <button class="button secondary" data-snapshot-channel="1">Capturar frame</button>
                 </div>
-                <p id="feedMessage1" class="helper">Nenhuma sessão RTSP aberta.</p>
+                <p id="feedMessage1" class="helper">Nenhuma captura recente.</p>
               </div>
             </article>
           </div>
 
           <p id="previewMessage" class="helper">
-            Vídeo e snapshots só abrem RTSP quando solicitados. O painel não inicia mídia automaticamente.
+            Não há stream contínuo neste painel. Durante o movimento PTZ, a lente PTZ captura no máximo um frame por segundo; o stream contínuo pode permanecer no MotionEye.
           </p>
         </article>
 
@@ -113,7 +103,10 @@
           </div>
 
           <div class="ptz-mode-row">
-            <span id="ptzTransportBadge" class="badge neutral">CGI PTZ</span>
+            <div class="toolbar compact">
+              <span id="ptzTransportBadge" class="badge neutral">CGI PTZ</span>
+              <span id="ptzFrameBadge" class="badge neutral">Preview PTZ · 1 FPS</span>
+            </div>
             <label class="control-label">Velocidade ONVIF
               <select id="ptzSpeed" class="control-select">
                 <option value="0.2">1 · lenta</option>
