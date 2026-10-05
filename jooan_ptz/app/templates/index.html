@@ -10,18 +10,19 @@
 <body>
   <main class="shell">
     <header class="app-header">
-      <div>
+      <div class="header-primary">
         <div class="eyebrow">JOOAN · CONTROLE LOCAL</div>
-        <h1>JA-A12</h1>
-        <p id="headerSubtitle">Carregando informações da câmera...</p>
+        <div class="header-title-row">
+          <h1 id="headerTitle">JA-A12</h1>
+          <div id="headerStatus" class="health-badge health-offline">
+            <span class="health-dot"></span>
+            <span>Verificando</span>
+          </div>
+        </div>
+        <div id="headerSubtitle" class="header-meta">Carregando informações da câmera...</div>
       </div>
-      <div id="headerStatus" class="health-badge health-offline">
-        <span class="health-dot"></span>
-        <span>Verificando</span>
-      </div>
+      <div id="statusBanner" class="status-banner" role="status" aria-live="polite">Iniciando painel...</div>
     </header>
-
-    <div id="statusBanner" class="status-banner">Iniciando painel...</div>
 
     <section class="dashboard-section primary-control-section" id="section-control">
       <div class="section-heading primary-heading">
@@ -68,7 +69,7 @@
                   <button class="button primary" data-live-channel="0">Ao vivo</button>
                   <button class="button ghost" data-stop-channel="0" disabled>Parar</button>
                 </div>
-                <p id="feedMessage0" class="helper">Nenhuma sessão RTSP aberta.</p>
+                <p id="feedMessage0" class="helper" aria-live="polite">Nenhuma sessão RTSP aberta.</p>
               </div>
             </article>
 
@@ -93,16 +94,17 @@
                   <button class="button primary" data-live-channel="1">Ao vivo</button>
                   <button class="button ghost" data-stop-channel="1" disabled>Parar</button>
                 </div>
-                <p id="feedMessage1" class="helper">Nenhuma sessão RTSP aberta.</p>
+                <p id="feedMessage1" class="helper" aria-live="polite">Nenhuma sessão RTSP aberta.</p>
               </div>
             </article>
           </div>
 
-          <p id="previewMessage" class="helper">
+          <p id="previewMessage" class="helper" aria-live="polite">
             Vídeo e snapshots só abrem RTSP quando solicitados. O painel não inicia mídia automaticamente.
           </p>
         </article>
 
+        <div class="control-side">
         <article class="card ptz-card">
           <div class="card-heading">
             <div>
@@ -138,7 +140,7 @@
             <div></div><button class="ptz-button" data-dir="down" aria-label="Baixo">↓</button><div></div>
           </div>
 
-          <p id="command" class="command-state"></p>
+          <p id="command" class="command-state" aria-live="polite"></p>
         </article>
 
         <article class="card camera-info-card">
@@ -151,6 +153,7 @@
           </div>
           <div id="generalInfo" class="info-list"></div>
         </article>
+        </div>
       </div>
     </section>
 
