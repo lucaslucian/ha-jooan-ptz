@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.18.8
+
+- Finalized the public README and Home Assistant documentation around the production feature set.
+- Promoted the App metadata from experimental to stable.
+- Removed retired RTSP scan, MJPEG preview, full ONVIF diagnostic and legacy HTTP writer helpers from the runtime.
+- Reduced the ONVIF helper module to the minimal PTZ discovery/movement flow actually used by the App.
+- Removed obsolete design/research assets and documentation that no longer describe the current interface.
+- Kept the supported scope focused on dual-lens snapshots, read-only state, CGI/ONVIF PTZ and ICMP heartbeat.
+
 ## 0.18.7
 
 - Detectable Home Assistant update release for the camera/PTZ layout fixes.
