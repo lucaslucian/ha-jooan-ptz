@@ -7,6 +7,7 @@ let statusTimer=null;
 let ptzSequence=0;
 let ptzHoldGeneration=0;
 const liveChannels=new Set();
+const pendingChannels=new Set();
 const snapshotUrls={0:null,1:null};
 const STATUS_REFRESH_MS=5000;
 
