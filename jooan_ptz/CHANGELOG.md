@@ -8,6 +8,11 @@
 - Candidate writer HTTP errors such as 404 are now returned as structured results and stop verification immediately, avoiding extra requests to the fragile camera service.
 - Normal mode is unchanged and still requires enough reader state to preserve existing fields.
 - Firmware update, factory reset and Wi-Fi configuration remain excluded.
+- Compacted the dashboard header and overall spacing to show more useful camera state above the fold, especially inside Home Assistant Ingress.
+- Added responsive two-column detection layout, denser cards/controls and improved small-screen behavior.
+- Added proper tab ARIA state/keyboard navigation and live status announcements for PTZ/preview messages.
+- Fixed error banners that could retain a success color after diagnostics/CGI failures.
+- Fixed browser preview state after an MJPEG error so Start/Stop controls no longer remain stuck in the wrong state.
 
 
 ## 0.16.1
