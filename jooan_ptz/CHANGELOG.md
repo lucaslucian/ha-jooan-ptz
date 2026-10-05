@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.18.5
+
+- Restored the original JOOAN Local Control visual identity after the v0.18.2 branding refresh replaced it unintentionally.
+- Home Assistant `icon.png` is again the original **camera inside the blue house**.
+- App Store `logo.png` is restored to the original matching JOOAN Local / LAN camera control artwork.
+- The GitHub vector logo is restored to the earlier camera/house identity so the project no longer mixes two different brands.
+- No PTZ, snapshot, network, backend or dashboard-control behavior changed from v0.18.4.
+
+
 ## 0.18.4
 
 - Reapplied the compact dashboard work on top of the final v0.18.3 snapshot-only PTZ implementation instead of the earlier continuous-preview base.
