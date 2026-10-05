@@ -72,66 +72,56 @@
     </section>
 
     <section id="tab-camera" class="tab-panel" role="tabpanel" aria-labelledby="tabButton-camera">
-      <div class="camera-workspace">
-        <article class="card live-card">
-          <div class="card-heading">
-            <div>
-              <span class="section-kicker">VÍDEO LOCAL</span>
-              <h2 id="liveTitle">Lente 1</h2>
-            </div>
-            <span id="ptzLensBadge" class="badge neutral">Identificando lente PTZ...</span>
-          </div>
-
-          <div class="preview-stage">
-            <img id="liveImage" alt="Preview ao vivo" hidden>
-            <img id="singleSnapshot" alt="Snapshot da câmera" hidden>
-            <div id="previewEmpty" class="preview-empty">
-              <strong>Preview parado</strong>
-              <span>Inicie o vídeo ao vivo ou carregue um snapshot.</span>
-            </div>
-            <div id="liveIndicator" class="live-indicator" hidden><span></span> AO VIVO</div>
-          </div>
-
-          <div id="liveMeta" class="stream-meta"></div>
-
-          <div class="toolbar">
-            <button id="startLive" class="button primary">Iniciar vídeo</button>
-            <button id="stopLive" class="button secondary" disabled>Parar vídeo</button>
-            <button id="singleSnapshotButton" class="button secondary">Snapshot</button>
-            <button id="validateSubstreams" class="button ghost">Validar stream PTZ</button>
-          </div>
-          <p id="previewMessage" class="helper" aria-live="polite"></p>
-        </article>
-
-        <article class="card ptz-card">
-          <div class="card-heading">
-            <div>
-              <span class="section-kicker">MOVIMENTO</span>
-              <h2>PTZ</h2>
-            </div>
-            <span id="ptzState" class="badge neutral">Parado</span>
-          </div>
-          <p class="helper">Pressione e segure uma direção. O vídeo ao vivo pode permanecer aberto durante o movimento.</p>
-          <div class="ptz-grid">
-            <div></div><button class="ptz-button" data-dir="up" aria-label="Cima">↑</button><div></div>
-            <button class="ptz-button" data-dir="left" aria-label="Esquerda">←</button>
-            <button id="stop" class="ptz-button stop">STOP</button>
-            <button class="ptz-button" data-dir="right" aria-label="Direita">→</button>
-            <div></div><button class="ptz-button" data-dir="down" aria-label="Baixo">↓</button><div></div>
-          </div>
-          <p id="command" class="command-state" aria-live="polite"></p>
-        </article>
-      </div>
-
-      <article class="card">
-        <div class="card-heading">
+      <article class="card camera-console-card">
+        <div class="card-heading camera-console-heading">
           <div>
-            <span class="section-kicker">STREAMS CONFIRMADOS</span>
-            <h2>Lentes e mídia</h2>
+            <span class="section-kicker">OPERAÇÃO LOCAL</span>
+            <h2>Câmeras & PTZ</h2>
           </div>
-          <button id="cameraRefreshSnapshots" class="button secondary">Atualizar snapshots</button>
+          <div class="camera-heading-actions">
+            <span id="ptzLensBadge" class="badge neutral">Identificando lente PTZ...</span>
+            <button id="cameraRefreshSnapshots" class="button secondary">Atualizar imagens</button>
+          </div>
         </div>
-        <div id="cameraMedia" class="camera-grid"></div>
+
+        <div id="cameraMedia" class="camera-grid camera-grid-operational"></div>
+
+        <div class="camera-control-deck">
+          <section class="camera-control-panel">
+            <div class="camera-control-heading">
+              <div>
+                <span class="section-kicker">LENTE PTZ</span>
+                <strong id="liveTitle">Identificando...</strong>
+              </div>
+              <span id="ptzState" class="badge neutral">Parado</span>
+            </div>
+            <div id="liveMeta" class="stream-meta"></div>
+            <div class="toolbar">
+              <button id="startLive" class="button primary">Vídeo PTZ</button>
+              <button id="stopLive" class="button secondary" disabled>Parar vídeo</button>
+              <button id="singleSnapshotButton" class="button secondary">Snapshot PTZ</button>
+              <button id="validateSubstreams" class="button ghost">Validar stream PTZ</button>
+            </div>
+            <p id="previewMessage" class="helper" aria-live="polite">Snapshots sob demanda. O vídeo PTZ é opcional.</p>
+          </section>
+
+          <section class="ptz-inline-panel">
+            <div class="camera-control-heading">
+              <div>
+                <span class="section-kicker">MOVIMENTO</span>
+                <strong>Controle PTZ</strong>
+              </div>
+            </div>
+            <div class="ptz-grid">
+              <div></div><button class="ptz-button" data-dir="up" aria-label="Cima">↑</button><div></div>
+              <button class="ptz-button" data-dir="left" aria-label="Esquerda">←</button>
+              <button id="stop" class="ptz-button stop">STOP</button>
+              <button class="ptz-button" data-dir="right" aria-label="Direita">→</button>
+              <div></div><button class="ptz-button" data-dir="down" aria-label="Baixo">↓</button><div></div>
+            </div>
+            <p id="command" class="command-state" aria-live="polite"></p>
+          </section>
+        </div>
       </article>
     </section>
 
