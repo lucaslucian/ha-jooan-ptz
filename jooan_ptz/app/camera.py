@@ -26,7 +26,7 @@ _rtsp_credential_lock = threading.Lock()
 _rtsp_credential_cache: dict[tuple[str, int, str, str], tuple[float, str, str]] = {}
 
 # Only fields observed in local get_deviceFeatures captures and considered safe
-# to expose in diagnostics. Unknown properties are deliberately not returned.
+# to expose in the read-only UI. Unknown properties are deliberately not returned.
 SAFE_PROPERTY_KEYS = {
     "SupportFormatProg",
     "alarm_light_mode",
@@ -371,7 +371,7 @@ class JooanCamera:
         return response
 
 
-
+    @staticmethod
     def _parse_camera_response(text: str) -> dict:
         raw = text.strip()
         try:
@@ -539,9 +539,6 @@ class JooanCamera:
             "candidate_paths": list(RTSP_PATH_CANDIDATES),
             "reported_channel_count": max(1, int(channel_count)),
         }
-
-
-
 
 
     def heartbeat(self) -> dict:
