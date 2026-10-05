@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.18.3
+
+- Compacted the camera header into a single status surface: model, online/authentication state, firmware, timezone and RTSP state now consume substantially less vertical space.
+- Reworked the primary workspace into a large camera area plus a stacked PTZ/information sidebar, giving both lenses more useful screen area on desktop while preserving a single-column mobile layout.
+- Reduced card, section and accordion spacing so camera controls and relevant state stay above the fold more often in Home Assistant Ingress.
+- Added explicit warning styling for an online camera whose CGI authentication is still pending and improved live status announcements for media/PTZ feedback.
+- Added browser-side RTSP negotiation tracking. While a feed is still opening, duplicate Live/Snapshot actions are blocked instead of allowing overlapping negotiations against the fragile embedded RTSP service.
+- A feed that fails to produce an image within the startup window now closes its backend channel and restores the controls instead of leaving an orphaned/pending media session.
+- Pending RTSP negotiations are also closed when the page is hidden/unloaded.
+- Kept the operational scope unchanged: only PTZ and on-demand camera image/video controls are writable; all secondary camera information remains read-only.
+
+
 ## 0.18.2
 
 - Promoted **Câmeras & PTZ** to the primary dashboard area immediately below camera health.
