@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <img alt="Version" src="https://img.shields.io/badge/version-0.18.8-blue">
+  <img alt="Version" src="https://img.shields.io/badge/version-0.18.9-blue">
   <img alt="Stage" src="https://img.shields.io/badge/stage-stable-success">
   <img alt="aarch64" src="https://img.shields.io/badge/aarch64-yes-success">
   <img alt="amd64" src="https://img.shields.io/badge/amd64-yes-success">
