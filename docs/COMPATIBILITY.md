@@ -20,15 +20,19 @@ A família JOOAN/CAM720 possui revisões diferentes de hardware e firmware. O Ap
 
 ## Comportamento de mídia
 
-A unidade de referência é sensível à abertura de várias sessões de mídia em sequência. Por isso o App:
+A unidade de referência é sensível à abertura de várias sessões de mídia em sequência. Quando outro software ou NVR já mantém um stream aberto, conexões adicionais podem coincidir com travamentos temporários dos serviços HTTP/RTSP/ONVIF, mesmo sem perda de ping.
+
+Por isso o App:
 
 - não abre RTSP na inicialização;
-- usa snapshots individuais;
+- não mantém stream contínuo;
+- abre o RTSP apenas o suficiente para obter um snapshot;
+- usa snapshots individuais e sequenciais;
 - não executa varredura de streams;
 - atualiza automaticamente apenas a lente PTZ durante movimento;
 - usa ICMP para heartbeat.
 
-Uma falha RTSP isolada não é usada para declarar a câmera inteira offline.
+Uma falha RTSP ou CGI isolada não é usada para declarar a câmera inteira offline nem, depois de uma autenticação válida, para concluir imediatamente que as credenciais deixaram de funcionar.
 
 ## Outras revisões
 
