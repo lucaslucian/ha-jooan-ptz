@@ -267,7 +267,7 @@ def _validation_interval() -> int:
 
 
 def heartbeat_camera() -> bool:
-    """Update only liveness between full/manual diagnostics."""
+    """Update liveness between authenticated validations."""
     try:
         heartbeat = get_camera().heartbeat()
         now = time.time()
@@ -430,10 +430,9 @@ def ptz(direction: str):
         camera = get_camera()
         onvif_error = None
 
-        # ONVIF is not exposed as a separate diagnostic action anymore. The
-        # first real PTZ movement performs one minimal capabilities/profiles
-        # discovery. If the camera does not provide usable ONVIF PTZ, all
-        # subsequent movement stays on the already-proven CGI transport.
+        # The first real PTZ movement performs one minimal capabilities/profiles
+        # discovery. If the camera does not provide usable ONVIF PTZ, subsequent
+        # movement stays on the already-proven CGI transport.
         if (
             direction != "stop"
             and not onvif_available
@@ -563,7 +562,7 @@ def _capture_snapshot_with_fallback(
 ) -> tuple[bytes, bool]:
     """Capture one frame and keep a short-lived last-good image.
 
-    Normal/manual snapshots share the camera I/O lock with diagnostics and PTZ.
+    Normal snapshots share the camera I/O lock with PTZ control.
     PTZ preview frames deliberately bypass that lock so a slow FFmpeg capture
     can never delay a STOP command. The snapshot lock still prevents multiple
     RTSP captures from being opened by this App at the same time.
