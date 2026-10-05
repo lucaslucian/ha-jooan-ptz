@@ -12,7 +12,7 @@ from urllib.parse import quote, urljoin
 
 import requests
 
-from probe import capture_snapshot, ffprobe_rtsp, icmp_probe, onvif_probe, start_mjpeg_rtsp
+from probe import capture_snapshot, icmp_probe
 
 _LOGGER = logging.getLogger("jooan_ptz.camera")
 
@@ -21,14 +21,12 @@ FEATURE_KEY_LENS_MODE = "10008"
 FEATURE_KEY_PLAYBACK_SPEED = "10043"
 FEATURE_VALUE_DOUBLE_LENS = "double"
 RTSP_CREDENTIAL_TTL = 300.0
-RTSP_PROBE_GAP = 0.5
-MAX_RTSP_PROBES = 4
 
 _rtsp_credential_lock = threading.Lock()
 _rtsp_credential_cache: dict[tuple[str, int, str, str], tuple[float, str, str]] = {}
 
 # Only fields observed in local get_deviceFeatures captures and considered safe
-# to expose in diagnostics. Unknown properties are deliberately not returned.
+# to expose in the read-only UI. Unknown properties are deliberately not returned.
 SAFE_PROPERTY_KEYS = {
     "SupportFormatProg",
     "alarm_light_mode",
@@ -333,7 +331,6 @@ class JooanCamera:
         *,
         authenticated: bool = True,
         port: int | None = None,
-        allow_http_error: bool = False,
     ):
         query = {}
         if authenticated:
@@ -365,103 +362,6 @@ class JooanCamera:
             ) from None
 
         self._debug_log("RESPONSE: HTTP %s %s", response.status_code, endpoint)
-        if not allow_http_error:
-            try:
-                response.raise_for_status()
-            except requests.HTTPError as exc:
-                raise JooanNetworkError(
-                    f"Camera returned HTTP {response.status_code} for {endpoint}"
-                ) from exc
-        return response
-
-    def _post_query(
-        self,
-        endpoint: str,
-        params=None,
-        *,
-        body: str = "n/a",
-        authenticated: bool = True,
-        port: int | None = None,
-        allow_http_error: bool = False,
-    ):
-        """POST to a fixed endpoint with parameters in the query string.
-
-        Some related GoAhead camera pages issue their read requests this way.
-        This helper exists only for fixed backend calls; it is not exposed as
-        an arbitrary URL/method proxy.
-        """
-        query = {}
-        if authenticated:
-            query.update({"userid": self.username, "userkey": self.userkey})
-        if params:
-            query.update(params)
-
-        base = self.base_url if port is None else f"http://{self._url_host}:{port}"
-        url = urljoin(base + "/", endpoint.lstrip("/"))
-        prepared = requests.Request("POST", url, params=query, data=body).prepare()
-        self._debug_log("REQUEST: POST %s", self._safe_url(prepared.url or url))
-
-        try:
-            with requests.Session() as session:
-                session.trust_env = False
-                response = session.post(
-                    url,
-                    params=query,
-                    data=body,
-                    timeout=self.timeout,
-                    headers={"Connection": "close"},
-                )
-                _ = response.content
-        except requests.RequestException as exc:
-            raise JooanNetworkError(
-                f"Request to {endpoint} failed: {redact_secrets(exc)}"
-            ) from None
-
-        self._debug_log("RESPONSE: HTTP %s %s", response.status_code, endpoint)
-        if not allow_http_error:
-            try:
-                response.raise_for_status()
-            except requests.HTTPError as exc:
-                raise JooanNetworkError(
-                    f"Camera returned HTTP {response.status_code} for {endpoint}"
-                ) from exc
-        return response
-
-    def _post_form(
-        self,
-        endpoint: str,
-        data=None,
-        *,
-        authenticated: bool = True,
-        port: int | None = None,
-    ):
-        """POST a fixed form endpoint while keeping camera credentials backend-only."""
-        query = {}
-        if authenticated:
-            query.update({"userid": self.username, "userkey": self.userkey})
-
-        base = self.base_url if port is None else f"http://{self._url_host}:{port}"
-        url = urljoin(base + "/", endpoint.lstrip("/"))
-        prepared = requests.Request("POST", url, params=query, data=data or {}).prepare()
-        self._debug_log("REQUEST: POST %s", self._safe_url(prepared.url or url))
-
-        try:
-            with requests.Session() as session:
-                session.trust_env = False
-                response = session.post(
-                    url,
-                    params=query,
-                    data=data or {},
-                    timeout=self.timeout,
-                    headers={"Connection": "close"},
-                )
-                _ = response.content
-        except requests.RequestException as exc:
-            raise JooanNetworkError(
-                f"Request to {endpoint} failed: {redact_secrets(exc)}"
-            ) from None
-
-        self._debug_log("RESPONSE: HTTP %s %s", response.status_code, endpoint)
         try:
             response.raise_for_status()
         except requests.HTTPError as exc:
@@ -469,6 +369,7 @@ class JooanCamera:
                 f"Camera returned HTTP {response.status_code} for {endpoint}"
             ) from exc
         return response
+
 
     @staticmethod
     def _parse_camera_response(text: str) -> dict:
@@ -630,9 +531,6 @@ class JooanCamera:
         key = quote(password, safe="")
         return f"rtsp://{user}:{key}@{self._url_host}:{self.rtsp_port}{path}"
 
-    def build_rtsp_url(self, channel: int, username: str, password: str) -> str:
-        path = f"/live/ch{int(channel):02d}_0"
-        return self.build_rtsp_url_path(path, username, password)
 
     def stream_summary(self, channel_count: int) -> dict:
         username, password = self.get_rtsp_credentials()
@@ -642,145 +540,6 @@ class JooanCamera:
             "reported_channel_count": max(1, int(channel_count)),
         }
 
-    def probe_rtsp_streams(
-        self,
-        onvif_info: dict | None = None,
-        *,
-        channel_count: int = 2,
-    ) -> dict:
-        """Probe the minimum number of RTSP sessions needed.
-
-        For each reported channel, try the confirmed main stream first and only
-        fall back to the corresponding substream if the main stream fails.
-        ONVIF-discovered paths are tried only while fewer working streams than
-        reported channels have been found. A hard cap prevents a malformed
-        profile list from opening an unbounded number of RTSP sessions.
-        """
-        username, password = self.get_rtsp_credentials()
-        channel_count = max(1, min(int(channel_count or 1), 2))
-        discovered_paths: list[str] = []
-        for profile in (onvif_info or {}).get("profiles", []):
-            stream = profile.get("stream") or {}
-            path = stream.get("path")
-            if (
-                isinstance(path, str)
-                and RTSP_DISCOVERED_PATH_RE.fullmatch(path)
-                and ".." not in path
-                and path not in RTSP_PATH_CANDIDATES
-                and path not in discovered_paths
-            ):
-                discovered_paths.append(path)
-
-        results: list[dict] = []
-        working = 0
-
-        def run_probe(path: str, *, discovered: bool = False) -> bool:
-            if len(results) >= MAX_RTSP_PROBES:
-                return False
-            url = self.build_rtsp_url_path(
-                path,
-                username,
-                password,
-                discovered=discovered,
-            )
-            result = ffprobe_rtsp(url, timeout=5.0)
-            results.append(
-                {
-                    "path": path,
-                    "source": "onvif" if discovered else "known_candidate",
-                    **result,
-                }
-            )
-            time.sleep(RTSP_PROBE_GAP)
-            return bool(
-                result.get("available")
-                and any(
-                    isinstance(stream, dict) and stream.get("codec_type") == "video"
-                    for stream in result.get("streams", [])
-                )
-            )
-
-        for channel in range(channel_count):
-            main_path = f"/live/ch{channel:02d}_0"
-            sub_path = f"/live/ch{channel:02d}_1"
-            if run_probe(main_path):
-                working += 1
-                continue
-            if run_probe(sub_path):
-                working += 1
-
-        if working < channel_count:
-            for path in discovered_paths:
-                if len(results) >= MAX_RTSP_PROBES or working >= channel_count:
-                    break
-                if run_probe(path, discovered=True):
-                    working += 1
-
-        return {
-            "port": self.rtsp_port,
-            "reachable": working > 0,
-            "probe_mode": "sequential-minimal",
-            "reported_channel_count": channel_count,
-            "streams": results,
-        }
-
-    def probe_preview_substreams(
-        self,
-        channel_count: int = 2,
-        *,
-        channels: list[int] | tuple[int, ...] | None = None,
-    ) -> dict:
-        """Validate low-bandwidth substreams only when explicitly requested."""
-        username, password = self.get_rtsp_credentials()
-        channel_count = max(1, min(int(channel_count or 1), 2))
-        if channels is None:
-            targets = list(range(channel_count))
-        else:
-            targets = []
-            for channel in channels:
-                channel = int(channel)
-                if 0 <= channel < channel_count and channel not in targets:
-                    targets.append(channel)
-        results: list[dict] = []
-        for index, channel in enumerate(targets):
-            path = f"/live/ch{channel:02d}_1"
-            url = self.build_rtsp_url_path(path, username, password)
-            result = ffprobe_rtsp(url, timeout=5.0)
-            results.append({"path": path, "source": "preview_validation", **result})
-            if index + 1 < len(targets):
-                time.sleep(RTSP_PROBE_GAP)
-        return {
-            "probe_mode": "substreams-only",
-            "reported_channel_count": channel_count,
-            "tested_channels": targets,
-            "streams": results,
-            "reachable": any(
-                item.get("available")
-                and any(
-                    isinstance(stream, dict) and stream.get("codec_type") == "video"
-                    for stream in item.get("streams", [])
-                )
-                for item in results
-            ),
-        }
-
-    def start_mjpeg_preview(
-        self,
-        stream: str,
-        *,
-        width: int = 640,
-        fps: int = 6,
-    ):
-        """Bridge one allowlisted RTSP stream to low-rate MJPEG."""
-        path = stream if stream.startswith("/") else f"/live/{stream}"
-        if path not in RTSP_PATH_CANDIDATES:
-            raise ValueError("Unsupported RTSP preview stream")
-        username, password = self.get_rtsp_credentials()
-        url = self.build_rtsp_url_path(path, username, password)
-        return start_mjpeg_rtsp(url, width=width, fps=fps)
-
-    def probe_onvif(self) -> dict:
-        return onvif_probe(self.ip, self.onvif_port)
 
     def heartbeat(self) -> dict:
         """Very cheap background liveness check using ICMP only."""
@@ -798,5 +557,3 @@ class JooanCamera:
         username, password = self.get_rtsp_credentials()
         return capture_snapshot(self.build_rtsp_url_path(path, username, password))
 
-    def test(self) -> dict:
-        return self.check_auth()

@@ -178,11 +178,6 @@ button:focus-visible,select:focus-visible,summary:focus-visible{outline:2px soli
 .schedule-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
 .schedule-item strong{display:block;font-size:13px}
 .schedule-item span{display:block;color:var(--muted);font-size:11px;margin-top:5px}
-.diagnostic-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
-.diagnostic-item strong{display:block;font-size:13px}
-.diagnostic-item span{display:block;color:var(--muted);font-size:11px;margin-top:5px}
-.onvif-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-bottom:14px}
-.details-stack{display:grid;gap:8px}
 details{border:1px solid var(--border-soft);background:var(--panel-2);border-radius:12px;overflow:hidden}
 summary{cursor:pointer;padding:12px 14px;font-size:13px;font-weight:750;list-style:none}
 summary::-webkit-details-marker{display:none}
@@ -297,9 +292,6 @@ code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:#b8d
 }
 .info-accordion .stat-card .value{font-size:18px}
 .info-accordion .read-settings-group{background:var(--panel-2)}
-.info-accordion .details-stack details{
-  background:rgba(255,255,255,.018)
-}
 
 @media(max-width:1180px){
   .control-dashboard{grid-template-columns:minmax(0,1.8fr) minmax(280px,.72fr)}
@@ -310,7 +302,7 @@ code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:#b8d
   .status-banner{justify-self:start;max-width:none}
   .stat-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
   .content-grid.two,.control-dashboard{grid-template-columns:1fr}
-  .setting-grid,.diagnostic-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .setting-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
   .section-heading,.secondary-heading{align-items:flex-start;flex-direction:column}
   .primary-actions{justify-content:flex-start}
 }
@@ -324,7 +316,7 @@ code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:#b8d
   .secondary-hint{display:none}
   .info-accordion-item>summary{grid-template-columns:34px minmax(0,1fr) 22px;padding:10px 11px}
   .accordion-body{padding:11px}
-  .stat-grid,.feature-grid,.setting-grid,.schedule-grid,.diagnostic-grid,.onvif-grid,.read-setting-grid{grid-template-columns:1fr}
+  .stat-grid,.feature-grid,.setting-grid,.schedule-grid,.read-setting-grid{grid-template-columns:1fr}
   .dual-feed-grid{grid-template-columns:1fr}
   .card{padding:12px;border-radius:14px}
   .section-heading h2{font-size:20px}

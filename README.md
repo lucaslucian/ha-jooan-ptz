@@ -5,12 +5,12 @@
 <h1 align="center">JOOAN Local Control</h1>
 
 <p align="center">
-  Controle e monitoramento local de câmeras JOOAN/CAM720 diretamente pela LAN no Home Assistant.
+  Controle local de câmeras JOOAN/CAM720 compatíveis diretamente pela LAN no Home Assistant.
 </p>
 
 <p align="center">
-  <img alt="Version" src="https://img.shields.io/badge/version-0.18.7-blue">
-  <img alt="Stage" src="https://img.shields.io/badge/stage-experimental-orange">
+  <img alt="Version" src="https://img.shields.io/badge/version-0.18.8-blue">
+  <img alt="Stage" src="https://img.shields.io/badge/stage-stable-success">
   <img alt="aarch64" src="https://img.shields.io/badge/aarch64-yes-success">
   <img alt="amd64" src="https://img.shields.io/badge/amd64-yes-success">
 </p>
@@ -25,94 +25,97 @@ Se o botão não preencher o repositório automaticamente:
 2. Abra **⋮ → Repositórios**.
 3. Adicione `https://github.com/lucaslucian/ha-jooan-ptz`.
 4. Instale **JOOAN Local Control**.
-5. Informe IP, usuário e senha local da câmera.
+5. Configure IP, usuário e senha local da câmera.
 6. Inicie o App e abra o painel pelo Home Assistant.
 
-## O que o App faz hoje
+## Recursos
 
-| Recurso | Estado |
+| Recurso | Implementação |
 |---|---|
-| Validação local CGI | ✅ |
-| PTZ cima/baixo/esquerda/direita/stop | ✅ |
-| PTZ ONVIF com velocidade | ✅ descoberta mínima na primeira movimentação, com fallback CGI |
-| Informações do dispositivo e rede | ✅ |
-| Leitura de capabilities/estado OEM na porta 9898 | ✅ |
-| Estado de SD, gravação, detecção, tracking e luzes | ✅ leitura |
-| Detecção de lente dupla | ✅ |
-| Credenciais RTSP locais | ✅ backend-only |
-| Snapshots JPEG | ✅ sob demanda |
-| Preview PTZ por snapshots | ✅ até 1 frame/s durante movimento |
-| Stream contínuo no add-on | ❌ removido |
-| ONVIF 8899 | ✅ descoberta mínima sob demanda do PTZ |
-| Escrita de configurações da câmera | ❌ removida |
+| Validação e autenticação local | CGI |
+| PTZ cima/baixo/esquerda/direita/stop | CGI |
+| PTZ com velocidade | ONVIF `ContinuousMove`, com fallback CGI |
+| Duas lentes | identificação automática quando reportadas pela câmera |
+| Identificação da lente PTZ | mapeamento do perfil ONVIF |
+| Imagens | snapshots RTSP sob demanda |
+| Acompanhamento durante PTZ | snapshots da lente PTZ em até 1 FPS |
+| Estado do dispositivo | modelo, firmware, rede, canais e serviços |
+| Estado OEM | porta 9898 em modo somente leitura |
+| SD, gravação, detecção, tracking e iluminação | somente leitura |
+| Heartbeat | ICMP, sem abrir sessões de mídia |
 
-## Interface
+## Painel
 
-A v0.18.4 mantém **Câmeras & PTZ como área principal no topo**, com as duas lentes em uma área maior e PTZ + informações gerais empilhados na coluna lateral. Abaixo, os dados somente leitura continuam agrupados em seções expansíveis:
+A área principal mantém **Lente 1, Lente 2 e o controle PTZ na mesma linha** em telas maiores.
 
-- visão geral e saúde;
-- duas lentes com captura de Snapshot;
-- PTZ com velocidade ONVIF e fallback CGI;
-- informações gerais;
-- detecção, tracking, iluminação e alertas;
-- SD, gravação e agendas;
-- diagnóstico técnico somente leitura;
-- todas as configurações/estados lidos.
+- apenas a lente realmente associada ao PTZ recebe a marcação **PTZ**;
+- snapshots das duas lentes são independentes;
+- durante o movimento, somente a lente PTZ é atualizada automaticamente;
+- após `STOP`, são feitas capturas adicionais para mostrar a posição final já estabilizada;
+- **Informações gerais** ficam recolhidas por padrão logo abaixo da área operacional;
+- os demais estados ficam organizados em seções expansíveis de leitura.
 
-<p align="center">
-  <img src="docs/images/dashboard-overview.svg" alt="Interface atual do JOOAN Local Control" width="900">
-</p>
+## Funcionamento
 
-## Uso de rede
+### Inicialização
 
-A JA-A12 de referência mostrou comportamento sensível a várias conexões de mídia. Por isso a v0.18 é mais conservadora:
+O App executa somente operações locais necessárias:
 
-- na inicialização são feitas apenas leituras CGI/OEM já comprovadas;
-- o monitoramento de online/offline usa ICMP;
-- ONVIF só é descoberto uma vez quando o usuário realmente movimenta o PTZ;
-- não existe mais botão de `ffprobe`/teste RTSP no painel;
-- snapshots só abrem RTSP quando solicitados;
-- o add-on não mantém mais bridge MJPEG nem rotas `/api/live/*`;
-- durante movimento PTZ, somente a lente PTZ é atualizada por snapshots, com limite de aproximadamente 1 frame/s;
-- ao soltar o PTZ, um último frame é capturado para mostrar a posição final;
-- o stream contínuo pode permanecer em outra integração, como MotionEye.
+1. valida as credenciais pelo CGI;
+2. lê identificação e estado de rede;
+3. lê capabilities e estado OEM na porta 9898;
+4. obtém a configuração RTSP sem abrir o stream.
 
-## PTZ
+O ONVIF é descoberto apenas quando o PTZ é usado pela primeira vez. Os streams RTSP são abertos somente para capturar snapshots.
 
-O controle CGI continua sendo o caminho comprovado.
+### PTZ
 
-Na primeira movimentação PTZ, o App executa uma descoberta ONVIF mínima. Se houver PTZ ONVIF utilizável, tenta `ContinuousMove` para permitir velocidade variável; se não houver ou ocorrer falha, usa CGI automaticamente como fallback.
+O CGI local é o caminho de fallback permanente.
+
+Quando a câmera oferece um perfil PTZ ONVIF utilizável, o App usa `ContinuousMove` para permitir velocidade variável. Se a operação ONVIF falhar ou for rejeitada, o controle continua automaticamente pelo CGI.
+
+### Snapshots
+
+Os streams principais conhecidos são:
+
+```text
+/live/ch00_0
+/live/ch01_0
+```
+
+A URL autenticada é montada exclusivamente no backend. Usuário, senha e URL RTSP completa não são devolvidos ao navegador.
 
 ## Segurança
 
-O backend:
+- o destino da câmera precisa ser um IP local permitido;
+- não existe proxy genérico de URL ou de comandos CGI;
+- comandos PTZ e paths RTSP são allowlisted;
+- credenciais permanecem no backend;
+- respostas e logs passam por mascaramento de segredos;
+- o App não altera firmware, rede, Wi-Fi ou configurações internas da câmera.
 
-- aceita apenas IP local permitido;
-- não oferece proxy genérico de URL ou `singleCMD`;
-- mantém credenciais HTTP/RTSP fora do navegador;
-- usa caminhos RTSP e comandos PTZ allowlisted;
-- não expõe firmware update, factory reset ou configuração de Wi-Fi;
-- não possui mais endpoints de laboratório/escrita experimental.
-
-## Portas locais conhecidas
+## Portas utilizadas
 
 | Porta | Protocolo | Uso |
 |---|---|---|
-| 80/TCP | HTTP | CGI, autenticação, PTZ e informações |
-| 554/TCP | RTSP | snapshots sob demanda |
+| 80/TCP | HTTP | autenticação, identificação e PTZ CGI |
+| 554/TCP | RTSP | snapshots |
 | 9898/TCP | HTTP | capabilities e estado OEM |
-| 8899/TCP | ONVIF | descoberta e PTZ |
-| 7788/UDP | proprietário | observado em pesquisa |
+| 8899/TCP | ONVIF | descoberta mínima e PTZ |
+
+As portas podem ser ajustadas nas opções do App.
+
+## Compatibilidade
+
+A unidade principal de referência é uma **JOOAN JA-A12 / CAM720 dual-lens** com firmware original. Outras revisões podem reutilizar o mesmo nome comercial com diferenças de hardware ou firmware.
+
+Consulte [Compatibilidade](docs/COMPATIBILITY.md) para o estado validado.
 
 ## Documentação
 
 - [Documentação do App](jooan_ptz/DOCS.md)
-- [Protocolo local / engenharia reversa](docs/LOCAL_PROTOCOL.md)
+- [Protocolo local utilizado](docs/LOCAL_PROTOCOL.md)
 - [Compatibilidade](docs/COMPATIBILITY.md)
 - [Changelog](jooan_ptz/CHANGELOG.md)
 
-## Hardware de referência
-
-A principal unidade usada no desenvolvimento é uma **JOOAN JA-A12 / CAM720 dual-lens**. Firmwares e revisões diferentes podem apresentar comportamento distinto.
-
-A documentação de protocolo preserva descobertas históricas da engenharia reversa, inclusive tentativas que não foram promovidas para o App.
+<sub>Nota: o desenvolvimento deste projeto, incluindo partes do código e da documentação, contou com apoio de ferramentas de inteligência artificial.</sub>
