@@ -2,6 +2,10 @@
 
 ## 0.16.2
 
+- Rebuilt the **Câmeras & PTZ** tab as one compact operational panel: both camera lenses are shown side by side and the ONVIF-mapped PTZ lens is explicitly highlighted.
+- Removed the separate oversized live-preview card and duplicate media card that created unused vertical space.
+- Manual live video now overlays the PTZ camera tile instead of occupying a separate panel; opening the camera tab no longer starts RTSP automatically.
+- After a successful PTZ Stop in snapshot mode, the UI refreshes the PTZ lens three times (initial final frame plus two extra delayed frames) so the settled final position is much more likely to be displayed.
 - Added an explicit **forced legacy CGI write** mode in the Laboratory for one final bounded hardware test when the paired read endpoint returns no usable values or is absent.
 - Forced mode still uses the fixed allowlist: it never accepts an arbitrary CGI path, parameter name or value.
 - When readback is insufficient, forced mode sends **only the selected allowlisted field** instead of guessing sibling settings; automatic rollback is therefore not claimed.
