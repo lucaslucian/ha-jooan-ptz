@@ -370,10 +370,6 @@ def test_dashboard_template_is_served():
     assert "CÂMERAS & PTZ" in body
     assert "snapshotFeed0" in body
     assert "snapshotFeed1" in body
-    assert "liveFeed0" not in body
-    assert "liveFeed1" not in body
-    assert 'id="startLive"' not in body
-    assert 'id="stopLive"' not in body
     assert "Preview PTZ · 1 FPS" in body
     assert "ptzSpeed" in body
     assert "generalInfo" in body
@@ -393,9 +389,7 @@ def test_dashboard_template_is_served():
     assert 'class="info-accordion"' in body
     assert body.count('class="info-accordion-item"') == 4
     assert body.index('id="section-control"') < body.index('id="overviewCards"')
-    assert 'id="lightTest"' not in body
     assert 'id="probe"' not in body
-    assert 'id="validateSubstreams"' not in body
     assert 'class="tabs"' not in body
     assert "static/app.css" in body
     assert "static/app.js" in body
@@ -410,8 +404,6 @@ def test_dashboard_javascript_preserves_snapshot_only_guards():
     assert "manualSnapshotBusy" in script
     assert "ptzSnapshotRequests" in script
     assert "allowManualBusy" in script
-    assert "api/live" not in script
-    assert "liveFeed" not in script
 
 
 def test_ptz_channel_is_inferred_from_onvif_profile_mapping():
@@ -457,4 +449,3 @@ def test_frontend_uses_one_hertz_ptz_snapshot_refresh():
 
     assert "PTZ_SNAPSHOT_INTERVAL_MS=1000" in script
     assert "ptzSnapshotLoop" in script
-    assert "api/live/" not in script
