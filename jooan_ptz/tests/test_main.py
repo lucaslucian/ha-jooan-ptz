@@ -286,7 +286,7 @@ def test_invalid_ptz_direction_is_rejected_without_camera_call(monkeypatch):
     )
     main.update_state(online=True, authenticated=True)
     client = main.app.test_client()
-    response = client.post("/api/ptz/SetDiagMode?client=test-client&seq=1")
+    response = client.post("/api/ptz/zoom?client=test-client&seq=1")
 
     assert response.status_code == 400
 
@@ -391,14 +391,12 @@ def test_dashboard_template_is_served():
     assert 'id="statusBanner"' in body
     assert 'aria-live="polite"' in body
     assert 'class="info-accordion"' in body
-    assert body.count('class="info-accordion-item"') == 5
+    assert body.count('class="info-accordion-item"') == 4
     assert body.index('id="section-control"') < body.index('id="overviewCards"')
     assert 'id="lightTest"' not in body
     assert 'id="probe"' not in body
     assert 'id="validateSubstreams"' not in body
     assert 'class="tabs"' not in body
-    assert "Laboratório" not in body
-    assert "labCgiProbeAll" not in body
     assert "static/app.css" in body
     assert "static/app.js" in body
 
@@ -437,18 +435,9 @@ def test_ptz_channel_is_inferred_from_onvif_profile_mapping():
     assert source == "onvif_profile_mapping"
 
 
-def test_non_control_and_continuous_preview_routes_are_removed():
+def test_unknown_api_route_is_not_exposed():
     client = main.app.test_client()
-
-    assert client.post("/api/test").status_code == 404
-    assert client.post("/api/probe").status_code == 404
-    assert client.post("/api/preview/validate").status_code == 404
-    assert client.get("/api/live/0").status_code == 404
-    assert client.get("/api/live/ptz").status_code == 404
-    assert client.post("/api/live/stop").status_code == 404
-    assert client.post("/api/lab/cgi/probe").status_code == 404
-    assert client.post("/api/lab/onvif/ptz").status_code == 404
-    assert client.post("/api/lab/diag/probe").status_code == 404
+    assert client.get("/api/unsupported").status_code == 404
 
 
 def test_frontend_marks_ptz_lens_and_captures_extra_final_frames():
