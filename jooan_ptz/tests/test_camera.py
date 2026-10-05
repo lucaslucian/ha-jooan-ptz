@@ -72,7 +72,7 @@ def test_rtsp_path_allowlist():
 def test_ptz_command_is_allowlisted(monkeypatch):
     camera = JooanCamera("10.0.0.10", "admin", "secret")
     with pytest.raises(ValueError):
-        camera.command("SetDiagMode")
+        camera.command("zoom")
 
 def test_redact_secrets_hides_userkey_and_rtsp_password():
     message = (
