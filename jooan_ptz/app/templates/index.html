@@ -96,7 +96,7 @@
           </div>
 
           <p id="previewMessage" class="helper" aria-live="polite">
-            Não há stream contínuo neste painel. Durante o movimento PTZ, a lente PTZ captura no máximo um frame por segundo; o stream contínuo pode permanecer no MotionEye.
+            As imagens são capturadas sob demanda. Durante o movimento PTZ, somente a lente PTZ é atualizada, com limite de um frame por segundo.
           </p>
         </article>
 
@@ -285,46 +285,6 @@
         <details class="info-accordion-item">
           <summary>
             <span class="accordion-icon">04</span>
-            <span class="accordion-copy">
-              <strong>Diagnóstico técnico</strong>
-              <small>Serviços conhecidos, ONVIF e leituras técnicas</small>
-            </span>
-            <span class="accordion-chevron">⌄</span>
-          </summary>
-          <div class="accordion-body">
-            <div id="diagnosticSummary" class="diagnostic-grid"></div>
-            <p class="helper">
-              Somente leitura. Nenhum teste adicional de RTSP ou ONVIF é iniciado nesta seção.
-            </p>
-
-            <div class="content-grid two compact-grid">
-              <article class="compact-card">
-                <div class="compact-card-heading">
-                  <div>
-                    <span class="section-kicker">ONVIF</span>
-                    <h3>Resumo técnico</h3>
-                  </div>
-                  <span class="badge neutral">Leitura</span>
-                </div>
-                <div id="onvifSummary"></div>
-              </article>
-
-              <article class="compact-card">
-                <div class="compact-card-heading">
-                  <div>
-                    <span class="section-kicker">DADOS BRUTOS</span>
-                    <h3>Leituras técnicas</h3>
-                  </div>
-                </div>
-                <div id="rawDetails" class="details-stack"></div>
-              </article>
-            </div>
-          </div>
-        </details>
-
-        <details class="info-accordion-item">
-          <summary>
-            <span class="accordion-icon">05</span>
             <span class="accordion-copy">
               <strong>Todas as configurações lidas</strong>
               <small>Estado OEM, capabilities, rede, RTSP e ONVIF</small>
