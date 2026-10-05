@@ -566,7 +566,7 @@ function setFeedUi(channel,state,message){
 }
 
 async function loadSnapshotChannel(channel){
-  if(liveChannels.size)return false;
+  if(liveChannels.size||pendingChannels.size)return false;
   const stream='ch'+String(channel).padStart(2,'0')+'_0';
   setFeedUi(channel,'loading','Capturando um frame do stream principal...');
   try{
@@ -784,12 +784,12 @@ window.addEventListener('blur',emergencyStop);
 document.addEventListener('visibilitychange',()=>{
   if(document.hidden){
     emergencyStop();
-    if(liveChannels.size)void stopAllFeeds();
+    if(liveChannels.size||pendingChannels.size)void stopAllFeeds();
   }
 });
 window.addEventListener('pagehide',()=>{
   emergencyStop();
-  if(liveChannels.size)void stopAllFeeds();
+  if(liveChannels.size||pendingChannels.size)void stopAllFeeds();
   for(const url of Object.values(snapshotUrls))if(url)URL.revokeObjectURL(url);
 });
 
