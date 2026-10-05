@@ -335,7 +335,6 @@ function renderAllReadSettings(data){
     rtsp_port:data.services?.rtsp?.port||554,
     credentials_confirmed:data.stream_info?.credentials_confirmed??null,
     candidate_paths:data.stream_info?.candidate_paths||[],
-    continuous_preview:false,
     ptz_snapshot_interval_ms:PTZ_SNAPSHOT_INTERVAL_MS,
     ptz_snapshot_channel:ptzPreviewChannel(data)
   };
@@ -569,7 +568,7 @@ async function refreshSnapshots(){
     await loadSnapshotChannel(0,{allowManualBusy:true});
     await sleep(350);
     await loadSnapshotChannel(1,{allowManualBusy:true});
-    $('previewMessage').textContent='Snapshots concluídos. O add-on não mantém stream contínuo.';
+    $('previewMessage').textContent='Snapshots concluídos.';
   }finally{
     manualSnapshotBusy=false;
     if(lastData){
