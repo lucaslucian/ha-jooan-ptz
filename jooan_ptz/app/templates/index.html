@@ -98,6 +98,14 @@
           <p id="previewMessage" class="helper" aria-live="polite">
             As imagens são capturadas sob demanda. Durante o movimento PTZ, somente a lente PTZ é atualizada, com limite de um frame por segundo.
           </p>
+          <details class="media-rationale">
+            <summary>Por que usamos snapshots em vez de vídeo contínuo?</summary>
+            <p>
+              A câmera de referência tem poucos recursos para conexões simultâneas. Quando outro software ou NVR já mantém um stream aberto,
+              conexões adicionais RTSP/HTTP/ONVIF podem fazer os serviços locais travarem ou deixarem de responder, mesmo com a câmera ainda acessível na rede.
+              O método mais seguro é abrir o RTSP apenas pelo tempo necessário para capturar um frame e fechar a conexão logo em seguida.
+            </p>
+          </details>
         </article>
 
         <article class="card ptz-card">
