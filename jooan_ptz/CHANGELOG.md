@@ -2,9 +2,9 @@
 
 ## 0.18.6
 
-- Reworked the main camera workspace so both lenses remain side by side on desktop instead of collapsing early.
-- The ONVIF-mapped PTZ lens is now explicitly marked in its own camera tile and receives a highlighted border.
-- Removed the tall left/right workspace arrangement that left unused empty space below the camera feeds; PTZ controls and general camera information now sit in a compact row below the feeds.
+- Reworked the main camera workspace so **Lente 1 + Lente 2 + controle PTZ** occupy the same desktop row.
+- The ONVIF-mapped PTZ lens is explicitly marked in its own camera tile and receives a highlighted border; the non-PTZ lens no longer renders a duplicate PTZ badge.
+- General camera information moves below the operational row, eliminating the unused vertical gap without pushing the PTZ controls under the cameras.
 - After PTZ Stop, the PTZ lens now receives three settling snapshots (initial final frame plus two delayed refreshes) unless a new movement starts.
 
 
