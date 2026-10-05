@@ -401,8 +401,11 @@ class JooanCamera:
 
     @staticmethod
     def _check_auth(data: dict) -> dict:
-        if data.get("result") == "error_passwd":
-            raise JooanAuthError("Camera rejected the configured username/password")
+        result = str(data.get("result") or "")
+        if result in {"error_passwd", "error_no_user"}:
+            raise JooanAuthError(
+                "Camera rejected or did not accept the configured CGI authentication"
+            )
         return data
 
     def _goform(self, endpoint: str, params=None) -> dict:
