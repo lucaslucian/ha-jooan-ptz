@@ -141,17 +141,21 @@
           <p id="command" class="command-state" aria-live="polite"></p>
         </article>
 
-        <article class="card camera-info-card">
-          <div class="card-heading">
-            <div>
-              <span class="section-kicker">CÂMERA</span>
-              <h2>Informações gerais</h2>
-            </div>
-            <span class="badge neutral">Leitura</span>
-          </div>
-          <div id="generalInfo" class="info-list"></div>
-        </article>
       </div>
+
+      <details class="info-accordion-item camera-info-collapse">
+        <summary>
+          <span class="accordion-icon">i</span>
+          <span class="accordion-copy">
+            <strong>Informações gerais</strong>
+            <small>Modelo, firmware, rede, canais, RTSP, ONVIF e último contato</small>
+          </span>
+          <span class="accordion-chevron">⌄</span>
+        </summary>
+        <div class="accordion-body">
+          <div id="generalInfo" class="info-list"></div>
+        </div>
+      </details>
     </section>
 
     <section class="secondary-information" aria-label="Informações da câmera">
