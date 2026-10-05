@@ -13,7 +13,7 @@ def setup_function():
     main.update_state(
         online=False,
         authenticated=False,
-        probe_running=False,
+        validation_running=False,
         ptz_moving=False,
         ptz_channel=None,
         ptz_channel_source=None,
@@ -291,18 +291,65 @@ def test_invalid_ptz_direction_is_rejected_without_camera_call(monkeypatch):
     assert response.status_code == 400
 
 
-def test_offline_heartbeat_clears_authenticated_state(monkeypatch):
+def test_single_failed_heartbeat_preserves_authenticated_state(monkeypatch):
     class FakeCamera:
         def heartbeat(self):
             return {"online": False, "method": "icmp", "error": "ICMP ping failed"}
 
     monkeypatch.setattr(main, "get_camera", lambda: FakeCamera())
-    main.update_state(online=True, authenticated=True)
+    main.update_state(
+        online=True,
+        authenticated=True,
+        heartbeat_failures=0,
+    )
+
+    assert main.heartbeat_camera() is True
+    with main._state_lock:
+        assert main._state["online"] is True
+        assert main._state["authenticated"] is True
+        assert main._state["heartbeat_failures"] == 1
+
+
+def test_three_failed_heartbeats_confirm_offline_and_clear_auth(monkeypatch):
+    class FakeCamera:
+        def heartbeat(self):
+            return {"online": False, "method": "icmp", "error": "ICMP ping failed"}
+
+    monkeypatch.setattr(main, "get_camera", lambda: FakeCamera())
+    main.update_state(
+        online=True,
+        authenticated=True,
+        heartbeat_failures=2,
+    )
 
     assert main.heartbeat_camera() is False
     with main._state_lock:
         assert main._state["online"] is False
         assert main._state["authenticated"] is False
+        assert main._state["heartbeat_failures"] == 3
+        assert main._state["last_recovery_validation"] is None
+
+
+def test_transient_validation_failure_preserves_previous_auth_when_ping_is_up(monkeypatch):
+    class FakeCamera:
+        def check_auth(self):
+            raise RuntimeError("camera CGI worker busy")
+
+        def heartbeat(self):
+            return {"online": True, "method": "icmp", "error": None}
+
+    monkeypatch.setattr(main, "get_camera", lambda: FakeCamera())
+    main.update_state(
+        online=True,
+        authenticated=True,
+        service_degraded=False,
+    )
+
+    assert main.validate_camera() is False
+    with main._state_lock:
+        assert main._state["online"] is True
+        assert main._state["authenticated"] is True
+        assert main._state["service_degraded"] is True
 
 
 def test_api_responses_disable_caching():
