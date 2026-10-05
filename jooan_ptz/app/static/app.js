@@ -360,64 +360,6 @@ function renderAllReadSettings(data){
   ].filter(Boolean).join('')||'<div class="empty">Nenhuma leitura disponível.</div>';
 }
 
-function appendDetails(root,title,obj){
-  const details=document.createElement('details');
-  const summary=document.createElement('summary');
-  const pre=document.createElement('pre');
-  summary.textContent=title;
-  pre.textContent=obj==null?'Não disponível':JSON.stringify(obj,null,2);
-  details.append(summary,pre);
-  root.appendChild(details);
-}
-
-function renderRawDetails(data){
-  const root=$('rawDetails');
-  root.innerHTML='';
-  appendDetails(root,'Dispositivo',data.device_info);
-  appendDetails(root,'ONVIF',data.onvif_info);
-  appendDetails(root,'RTSP',{stream_info:data.stream_info,continuous_preview:false,ptz_snapshot_interval_ms:PTZ_SNAPSHOT_INTERVAL_MS});
-  appendDetails(root,'Rede',{online:data.online,last_seen:data.last_seen,last_heartbeat:data.last_heartbeat,heartbeat_error:data.heartbeat_error,network_state:data.network_state});
-}
-
-function renderDiagnostics(data){
-  const services=data.services||{};
-  const defs=[
-    ['HTTP',services.http,'Porta '+(services.http?.port||80)],
-    ['API local',services.features,'Porta '+(services.features?.port||9898)],
-    ['RTSP',services.rtsp,'Porta '+(services.rtsp?.port||554)],
-    ['ONVIF',services.onvif,'Porta '+(services.onvif?.port||8899)]
-  ];
-  $('diagnosticSummary').innerHTML=defs.map(([label,item,sub])=>{
-    let className='neutral',text='Não testado';
-    if(item?.reachable===true){className='success';text='Disponível'}
-    else if(item?.reachable===false){className='danger';text='Indisponível'}
-    else if(label==='RTSP'&&item?.configured){className='warning';text='Configurado'}
-    return '<div class="diagnostic-item"><strong>'+esc(label)+'</strong><span>'+esc(sub)+
-      '</span><div style="margin-top:9px"><span class="badge '+className+'">'+esc(text)+'</span></div></div>';
-  }).join('');
-
-  const onvif=data.onvif_info||{};
-  const ptz=onvif.ptz||{};
-  const profiles=onvif.profiles||[];
-  const dev=onvif.device_diagnostics?.device_information?.data||{};
-  if(!onvif.reachable){
-    $('onvifSummary').innerHTML='<div class="empty">ONVIF ainda não foi necessário. A descoberta mínima ocorre somente ao usar o PTZ.</div>';
-  }else{
-    $('onvifSummary').innerHTML=
-      '<div class="onvif-grid">'+
-      '<div class="diagnostic-item"><strong>'+esc(dev.manufacturer||'ONVIF Device')+'</strong><span>'+
-      esc(dev.model||'Modelo não informado')+'</span></div>'+
-      '<div class="diagnostic-item"><strong>Perfis</strong><span>'+profiles.length+' perfil(is)</span></div>'+
-      '<div class="diagnostic-item"><strong>PTZ</strong><span>'+(ptz.profile_token?'Perfil '+esc(ptz.profile_token):'Não descoberto')+'</span></div>'+
-      '</div>'+
-      '<div class="meta-row">'+profiles.map(profile=>
-        '<span class="meta-pill">'+esc(profile.name||profile.token)+' · '+esc(profile.video?.width||'—')+'×'+
-        esc(profile.video?.height||'—')+'</span>'
-      ).join('')+'</div>';
-  }
-  renderRawDetails(data);
-}
-
 function renderControl(data){
   renderFeedMeta(data,0);
   renderFeedMeta(data,1);
@@ -483,7 +425,6 @@ function renderAll(data){
   renderControl(data);
   renderDetection(data);
   renderRecording(data);
-  renderDiagnostics(data);
   renderAllReadSettings(data);
   enableControls(data);
 
