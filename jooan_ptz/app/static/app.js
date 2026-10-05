@@ -423,10 +423,21 @@ function renderControl(data){
   renderFeedMeta(data,1);
   renderGeneralInfo(data);
 
+  const frameChannel=ptzPreviewChannel(data);
+  for(const channel of [0,1]){
+    const isPtz=channel===frameChannel;
+    const tile=$('feedTile'+channel);
+    const title=$('feedTitle'+channel);
+    const marker=$('feedPtzMarker'+channel);
+    if(tile)tile.classList.toggle('feed-tile-ptz',isPtz);
+    if(title)title.textContent='Lente '+(channel+1)+' · ch'+String(channel).padStart(2,'0')+(isPtz?' · PTZ':'');
+    if(marker)marker.hidden=!isPtz;
+  }
+
   $('ptzState').textContent=data.ptz_moving?'Em movimento':'Parado';
   $('ptzState').className='badge '+(data.ptz_moving?'warning':'neutral');
 
-  const frameChannel=ptzPreviewChannel(data);
+
   const frameBadge=$('ptzFrameBadge');
   if(frameBadge){
     frameBadge.textContent=activeDirection
@@ -643,10 +654,20 @@ async function ptzSnapshotLoop(direction,generation){
 }
 
 async function stopPtzAndCaptureFinal(){
+  const generation=ptzHoldGeneration;
   await sendPtz('stop');
-  await sleep(180);
-  if(!document.hidden&&lastData?.online&&lastData?.authenticated){
-    await loadSnapshotChannel(ptzPreviewChannel(),{ptzPreview:true,finalFrame:true});
+  const channel=ptzPreviewChannel();
+  const delays=[220,900,900];
+  for(let index=0;index<delays.length;index++){
+    await sleep(delays[index]);
+    if(
+      generation!==ptzHoldGeneration
+      || activeDirection
+      || document.hidden
+      || !lastData?.online
+      || !lastData?.authenticated
+    )break;
+    await loadSnapshotChannel(channel,{ptzPreview:true,finalFrame:true});
   }
   if(lastData)renderControl(lastData);
 }

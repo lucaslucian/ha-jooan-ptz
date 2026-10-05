@@ -119,17 +119,23 @@ button:focus-visible,select:focus-visible,summary:focus-visible{outline:2px soli
 .button.primary{background:var(--accent-strong);border-color:var(--accent-strong);color:white}
 .button.secondary{background:var(--panel-2)}
 .button.ghost{background:transparent;color:var(--muted)}
-.control-dashboard{
-  display:grid;
-  grid-template-columns:minmax(0,1.85fr) minmax(320px,.72fr);
-  gap:14px;align-items:start
-}
+.control-dashboard{display:grid;gap:12px}
 .control-dashboard>.card{margin-bottom:0}
-.control-side{display:grid;gap:12px;align-content:start}
-.control-side>.card{margin-bottom:0}
+.control-bottom{
+  display:grid;grid-template-columns:minmax(0,.82fr) minmax(0,1.18fr);
+  gap:12px;align-items:start
+}
+.control-bottom>.card{margin-bottom:0}
 .feeds-card{min-width:0}
 .dual-feed-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
-.feed-tile{min-width:0;border:1px solid var(--border);border-radius:15px;overflow:hidden;background:var(--panel-2)}
+.feed-tile{
+  min-width:0;border:1px solid var(--border);border-radius:15px;overflow:hidden;background:var(--panel-2);
+  transition:border-color .16s ease,box-shadow .16s ease
+}
+.feed-tile-ptz{
+  border-color:rgba(245,189,85,.52);
+  box-shadow:0 0 0 1px rgba(245,189,85,.08),0 8px 24px rgba(245,189,85,.05)
+}
 .feed-stage{
   aspect-ratio:16/9;background:#030405;position:relative;display:grid;place-items:center;
   border-bottom:1px solid var(--border-soft);overflow:hidden
@@ -138,6 +144,7 @@ button:focus-visible,select:focus-visible,summary:focus-visible{outline:2px soli
 .feed-body{padding:12px}
 .camera-title{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:8px}
 .camera-title strong{font-size:14px}
+.camera-title-badges{display:flex;align-items:center;justify-content:flex-end;gap:6px;flex-wrap:wrap}
 .preview-empty{display:flex;flex-direction:column;align-items:center;gap:6px;color:var(--muted);text-align:center;padding:20px}
 .preview-empty strong{color:var(--text)}
 .stream-meta{display:flex;gap:7px;flex-wrap:wrap;margin:10px 0}
@@ -205,10 +212,10 @@ code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:#b8d
 .primary-heading{margin-bottom:11px}
 .primary-heading h2{font-size:23px}
 .primary-actions{justify-content:flex-end}
-.primary-control-section .control-dashboard>.card{
+.primary-control-section .control-dashboard>.card,
+.primary-control-section .control-bottom>.card{
   box-shadow:0 14px 36px rgba(0,0,0,.18)
 }
-.primary-control-section .feeds-card{min-height:100%}
 
 /* Compact read-only area below the primary controls */
 .secondary-information{margin-top:4px}
@@ -293,15 +300,14 @@ code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:#b8d
 }
 
 @media(max-width:1180px){
-  .control-dashboard{grid-template-columns:minmax(0,1.55fr) minmax(300px,.75fr)}
-  .dual-feed-grid{grid-template-columns:1fr}
+  .control-bottom{grid-template-columns:minmax(0,.9fr) minmax(0,1.1fr)}
   .read-setting-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
 }
 @media(max-width:900px){
   .app-header{grid-template-columns:1fr}
   .status-banner{justify-self:start;max-width:none}
   .stat-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
-  .content-grid.two,.control-dashboard{grid-template-columns:1fr}
+  .content-grid.two,.control-bottom{grid-template-columns:1fr}
   .setting-grid,.diagnostic-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
   .section-heading,.secondary-heading{align-items:flex-start;flex-direction:column}
   .primary-actions{justify-content:flex-start}
@@ -316,7 +322,8 @@ code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:#b8d
   .secondary-hint{display:none}
   .info-accordion-item>summary{grid-template-columns:34px minmax(0,1fr) 22px;padding:10px 11px}
   .accordion-body{padding:11px}
-  .stat-grid,.dual-feed-grid,.feature-grid,.setting-grid,.schedule-grid,.diagnostic-grid,.onvif-grid,.read-setting-grid{grid-template-columns:1fr}
+  .stat-grid,.feature-grid,.setting-grid,.schedule-grid,.diagnostic-grid,.onvif-grid,.read-setting-grid{grid-template-columns:1fr}
+  .dual-feed-grid{grid-template-columns:1fr}
   .card{padding:12px;border-radius:14px}
   .section-heading h2{font-size:20px}
   .primary-actions .button{flex:1 1 auto}
