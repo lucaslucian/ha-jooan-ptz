@@ -123,6 +123,7 @@ def _record_auth_rejection(error: str) -> bool:
         previously_authenticated = bool(_state.get("authenticated"))
         previous_success = _state.get("last_auth_success")
         failures = int(_state.get("auth_failures") or 0) + 1
+        previous_recovery = _state.get("last_recovery_validation")
 
     preserve = bool(previous_success) and previously_authenticated and failures < AUTH_FAILURE_THRESHOLD
     update_state(
@@ -133,7 +134,7 @@ def _record_auth_rejection(error: str) -> bool:
         last_error=error,
         last_check=now,
         last_seen=now,
-        last_recovery_validation=None if preserve else _state.get("last_recovery_validation"),
+        last_recovery_validation=previous_recovery,
     )
     return preserve
 
@@ -325,7 +326,6 @@ def heartbeat_camera() -> bool:
 
         with _state_lock:
             previous_online = bool(_state.get("online"))
-            previous_authenticated = bool(_state.get("authenticated"))
             previous_failures = int(_state.get("heartbeat_failures") or 0)
 
         values = {
