@@ -46,7 +46,7 @@
           </div>
 
           <div class="dual-feed-grid">
-            <article class="feed-tile">
+            <article id="feedTile0" class="feed-tile">
               <div class="feed-stage">
                 <img id="snapshotFeed0" alt="Snapshot da lente 1" hidden>
                 <div id="feedEmpty0" class="preview-empty">
@@ -56,8 +56,11 @@
               </div>
               <div class="feed-body">
                 <div class="camera-title">
-                  <strong>Lente 1 · ch00</strong>
-                  <span id="feedBadge0" class="badge neutral">Parado</span>
+                  <strong id="feedTitle0">Lente 1 · ch00</strong>
+                  <div class="camera-title-badges">
+                    <span id="feedPtzMarker0" class="badge warning" hidden>PTZ</span>
+                    <span id="feedBadge0" class="badge neutral">Parado</span>
+                  </div>
                 </div>
                 <div id="feedMeta0" class="stream-meta"></div>
                 <div class="toolbar compact">
@@ -67,7 +70,7 @@
               </div>
             </article>
 
-            <article class="feed-tile">
+            <article id="feedTile1" class="feed-tile">
               <div class="feed-stage">
                 <img id="snapshotFeed1" alt="Snapshot da lente 2" hidden>
                 <div id="feedEmpty1" class="preview-empty">
@@ -77,8 +80,11 @@
               </div>
               <div class="feed-body">
                 <div class="camera-title">
-                  <strong>Lente 2 · ch01</strong>
-                  <span id="feedBadge1" class="badge neutral">Parado</span>
+                  <strong id="feedTitle1">Lente 2 · ch01</strong>
+                  <div class="camera-title-badges">
+                    <span id="feedPtzMarker1" class="badge warning" hidden>PTZ</span>
+                    <span id="feedBadge1" class="badge neutral">Parado</span>
+                  </div>
                 </div>
                 <div id="feedMeta1" class="stream-meta"></div>
                 <div class="toolbar compact">
@@ -94,7 +100,7 @@
           </p>
         </article>
 
-        <div class="control-side">
+        <div class="control-bottom">
         <article class="card ptz-card">
           <div class="card-heading">
             <div>
