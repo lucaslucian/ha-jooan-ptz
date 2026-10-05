@@ -531,7 +531,14 @@ function setFeedUi(channel,state,message){
 }
 
 async function loadSnapshotChannel(channel,{ptzPreview=false,finalFrame=false,allowManualBusy=false}={}){
-  if(!ptzPreview&&manualSnapshotBusy&&!allowManualBusy)return false;
+  if(
+    !ptzPreview
+    && (
+      (manualSnapshotBusy&&!allowManualBusy)
+      || activeDirection
+      || ptzSnapshotRequests>0
+    )
+  )return false;
 
   const ownsManualBusy=!ptzPreview&&!allowManualBusy;
   if(ownsManualBusy)manualSnapshotBusy=true;
