@@ -18,8 +18,8 @@ configuration:
     name: RTSP port
     description: Local RTSP media port. Usually 554.
   onvif_port:
-    name: ONVIF candidate port
-    description: Local ONVIF port. The reference JA-A12 was validated on 8899; other revisions may differ.
+    name: ONVIF port
+    description: Local ONVIF port used for PTZ discovery and movement. The reference JA-A12 uses 8899.
   validation_interval:
     name: Heartbeat interval
     description: Seconds between ICMP liveness checks. The heartbeat does not open HTTP, ONVIF, port 9898 or RTSP connections.
