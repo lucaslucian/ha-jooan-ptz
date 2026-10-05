@@ -381,7 +381,7 @@ def test_dashboard_template_is_served():
     assert 'id="feedTile1"' in body
     assert 'id="feedPtzMarker0"' in body
     assert 'id="feedPtzMarker1"' in body
-    assert 'class="control-bottom"' in body
+    assert 'class="control-bottom"' not in body
     assert "allReadSettings" in body
     assert 'id="headerTitle"' in body
     assert 'class="control-side"' not in body
@@ -456,6 +456,7 @@ def test_frontend_marks_ptz_lens_and_captures_extra_final_frames():
     assert "feed-tile-ptz" in script
     assert "feedPtzMarker" in script
     assert "const delays=[220,900,900]" in script
+    assert "marker.hidden=!isPtz" in script
 
 
 def test_frontend_uses_one_hertz_ptz_snapshot_refresh():
