@@ -70,34 +70,44 @@ function setHealth(data){
   const badge=$('headerStatus');
   const banner=$('statusBanner');
   const ready=!!data.online&&!!data.authenticated;
+  const authPending=!!data.online&&!data.authenticated;
 
-  badge.className='health-badge '+(ready?'health-online':'health-offline');
+  badge.className='health-badge '+(ready?'health-online':authPending?'health-warning':'health-offline');
   badge.innerHTML='<span class="health-dot"></span><span>'+
-    (ready?'Online':data.online?'Online · autenticação pendente':'Offline')+'</span>';
+    (ready?'Online':authPending?'Online · autenticação pendente':'Offline')+'</span>';
 
   if(!data.online){
     banner.className='status-banner bad';
-    banner.textContent='Câmera offline. O painel mantém os últimos dados conhecidos e não abre novas sessões de mídia.';
+    banner.textContent='Offline · mantendo os últimos dados conhecidos e bloqueando novas sessões.';
   }else if(!data.authenticated){
-    banner.className='status-banner bad';
-    banner.textContent='A câmera responde na rede, mas a autenticação CGI não está validada.';
+    banner.className='status-banner warning';
+    banner.textContent='LAN acessível · autenticação CGI ainda não validada.';
   }else if(data.probe_running){
-    banner.className='status-banner';
-    banner.textContent='Descoberta manual em andamento. Aguarde antes de iniciar mídia ou PTZ.';
+    banner.className='status-banner warning';
+    banner.textContent='Descoberta ONVIF em andamento · mídia e PTZ protegidos contra concorrência.';
+  }else if(pendingChannels.size){
+    banner.className='status-banner warning';
+    banner.textContent='Abrindo '+pendingChannels.size+' feed(s) RTSP · aguarde a negociação terminar.';
   }else if(liveChannels.size){
     banner.className='status-banner ok';
-    banner.textContent='Câmera acessível · '+liveChannels.size+' feed(s) ao vivo aberto(s) sob demanda.';
+    banner.textContent=liveChannels.size+' feed(s) ao vivo · PTZ continua disponível.';
   }else{
     banner.className='status-banner ok';
-    banner.textContent='Câmera autenticada e acessível. Nenhuma sessão RTSP contínua aberta.';
+    banner.textContent='Autenticada · PTZ pronto · RTSP somente sob demanda.';
   }
 
   const device=data.device_info||{};
-  $('headerSubtitle').textContent=[
-    device.model||data.lan_support?.model||'Câmera local',
-    device.firmware_version?'firmware '+device.firmware_version:null,
-    device.timezone||null
-  ].filter(Boolean).join(' · ');
+  const model=device.model||data.lan_support?.model||'Câmera local';
+  $('headerTitle').textContent=model;
+  const meta=[
+    device.firmware_version?['FW',device.firmware_version]:null,
+    device.timezone?['Fuso',device.timezone]:null,
+    data.authenticated?['Auth','OK']:null,
+    liveChannels.size?['RTSP',liveChannels.size+' ativo(s)']:pendingChannels.size?['RTSP','abrindo']:['RTSP','sob demanda']
+  ].filter(Boolean);
+  $('headerSubtitle').innerHTML=meta.map(([label,value])=>
+    '<span class="header-meta-item"><span>'+esc(label)+'</span> '+esc(value)+'</span>'
+  ).join('');
 }
 
 function renderOverview(data){
@@ -450,19 +460,20 @@ function enableControls(data){
   $('ptzSpeed').disabled=!ptzEnabled;
 
   const mediaEnabled=!!data.online&&!!data.authenticated&&!data.probe_running&&!data.preview_probe_running;
-  $('startLive').disabled=!mediaEnabled||liveChannels.size===2;
-  $('stopLive').disabled=liveChannels.size===0;
-  $('refreshSnapshots').disabled=!mediaEnabled||liveChannels.size>0;
+  const mediaBusy=pendingChannels.size>0;
+  $('startLive').disabled=!mediaEnabled||mediaBusy||liveChannels.size===2;
+  $('stopLive').disabled=liveChannels.size===0&&pendingChannels.size===0;
+  $('refreshSnapshots').disabled=!mediaEnabled||mediaBusy||liveChannels.size>0;
   document.querySelectorAll('[data-live-channel]').forEach(button=>{
     const channel=Number(button.dataset.liveChannel);
-    button.disabled=!mediaEnabled||liveChannels.has(channel);
+    button.disabled=!mediaEnabled||mediaBusy||liveChannels.has(channel)||pendingChannels.has(channel);
   });
   document.querySelectorAll('[data-stop-channel]').forEach(button=>{
     const channel=Number(button.dataset.stopChannel);
-    button.disabled=!liveChannels.has(channel);
+    button.disabled=!liveChannels.has(channel)&&!pendingChannels.has(channel);
   });
   document.querySelectorAll('[data-snapshot-channel]').forEach(button=>{
-    button.disabled=!mediaEnabled||liveChannels.size>0;
+    button.disabled=!mediaEnabled||mediaBusy||liveChannels.size>0;
   });
 
 
@@ -496,6 +507,9 @@ async function refreshStatus(){
     renderAll(data);
   }catch(error){
     authenticated=false;
+    pendingChannels.clear();
+    $('headerStatus').className='health-badge health-offline';
+    $('headerStatus').innerHTML='<span class="health-dot"></span><span>App indisponível</span>';
     $('statusBanner').className='status-banner bad';
     $('statusBanner').textContent='App/API indisponível: '+error.message;
   }
@@ -573,7 +587,7 @@ async function loadSnapshotChannel(channel){
 }
 
 async function refreshSnapshots(){
-  if(!lastData?.online||!lastData?.authenticated||liveChannels.size)return;
+  if(!lastData?.online||!lastData?.authenticated||liveChannels.size||pendingChannels.size)return;
   $('previewMessage').textContent='Atualizando as duas imagens, uma de cada vez...';
   await loadSnapshotChannel(0);
   await sleep(500);
@@ -601,18 +615,42 @@ function waitForImageOutcome(image,timeoutMs=12500){
 }
 
 async function startFeed(channel,{waitReady=false}={}){
-  if(!lastData?.online||!lastData?.authenticated||liveChannels.has(channel))return false;
+  if(
+    !lastData?.online||
+    !lastData?.authenticated||
+    liveChannels.has(channel)||
+    pendingChannels.has(channel)
+  )return false;
+
   const image=$('liveFeed'+channel);
+  pendingChannels.add(channel);
   setFeedUi(channel,'loading','Abrindo RTSP autenticado no backend...');
+  if(lastData)setHealth(lastData);
+
   const outcome=waitReady?waitForImageOutcome(image):null;
   image.src=api('api/live/'+channel+'?t='+Date.now());
+
   if(!waitReady)return true;
-  return await outcome;
+
+  const opened=await outcome;
+  if(!opened){
+    pendingChannels.delete(channel);
+    liveChannels.delete(channel);
+    image.removeAttribute('src');
+    try{await fetch(api('api/live/stop?channel='+channel),{method:'POST',keepalive:true})}catch(_){}
+    setFeedUi(channel,'error','O feed não entregou imagem dentro do tempo esperado.');
+    if(lastData){
+      setHealth(lastData);
+      enableControls(lastData);
+    }
+  }
+  return opened;
 }
 
 async function stopFeed(channel){
   const image=$('liveFeed'+channel);
   image.removeAttribute('src');
+  pendingChannels.delete(channel);
   liveChannels.delete(channel);
   try{
     await fetch(api('api/live/stop?channel='+channel),{method:'POST',keepalive:true});
@@ -639,6 +677,7 @@ async function stopAllFeeds(){
   for(const channel of [0,1]){
     $('liveFeed'+channel).removeAttribute('src');
   }
+  pendingChannels.clear();
   liveChannels.clear();
   try{await fetch(api('api/live/stop'),{method:'POST',keepalive:true})}catch(_){}
   for(const channel of [0,1])setFeedUi(channel,'stopped','Feed parado.');
@@ -687,11 +726,13 @@ function emergencyStop(){
 for(const channel of [0,1]){
   const live=$('liveFeed'+channel);
   live.addEventListener('load',()=>{
+    pendingChannels.delete(channel);
     liveChannels.add(channel);
     setFeedUi(channel,'live','Feed contínuo recebido pelo navegador.');
     if(lastData)renderAll(lastData);
   });
   live.addEventListener('error',()=>{
+    pendingChannels.delete(channel);
     liveChannels.delete(channel);
     setFeedUi(channel,'error','O backend não conseguiu manter este feed.');
     if(lastData)renderAll(lastData);
