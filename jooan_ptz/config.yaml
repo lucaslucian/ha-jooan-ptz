@@ -1,6 +1,6 @@
 name: JOOAN Local Control
 description: Local LAN monitoring, dual-lens media and PTZ control for compatible JOOAN/CAM720 cameras
-version: "0.18.9"
+version: "0.18.10"
 slug: jooan_ptz
 url: "https://github.com/lucaslucian/ha-jooan-ptz"
 stage: stable
