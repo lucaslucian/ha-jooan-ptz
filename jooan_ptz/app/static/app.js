@@ -10,6 +10,7 @@ let currentTab='overview';
 let statusTimer=null;
 let snapshotTimer=null;
 let snapshotRefreshRunning=false;
+let postStopRefreshToken=0;
 let lastOverviewSignature='';
 let lastCameraSignature='';
 let labPresets=[];
@@ -171,7 +172,11 @@ function availableMainStreams(data){
 function renderSnapshotTiles(rootId,data,withTechnical){
   const root=$(rootId);
   const streams=availableMainStreams(data);
-  const signature=JSON.stringify(streams.map(({channel,item})=>[channel,item.path,item.streams]));
+  const ptzChannel=Number.isInteger(data?.ptz_channel)?data.ptz_channel:null;
+  const signature=JSON.stringify({
+    ptzChannel,
+    streams:streams.map(({channel,item})=>[channel,item.path,item.streams])
+  });
   const signatureKey=rootId==='overviewMedia'?'overview':'camera';
   const previous=signatureKey==='overview'?lastOverviewSignature:lastCameraSignature;
   if(signature===previous&&root.children.length)return;
@@ -186,11 +191,20 @@ function renderSnapshotTiles(rootId,data,withTechnical){
 
   for(const {channel,item} of streams){
     const video=videoInfo(item),audio=audioInfo(item);
+    const isPtz=channel===ptzChannel;
+    const interactivePtz=isPtz&&rootId==='cameraMedia';
     const tile=document.createElement('article');
-    tile.className='camera-tile';
+    tile.className='camera-tile'+(isPtz?' camera-tile-ptz':'');
+    tile.dataset.channel=String(channel);
     tile.innerHTML=
-      '<div class="camera-frame"><img data-stream="'+esc(item.path.split('/').pop())+'" alt="Lente '+(channel+1)+'"></div>'+
-      '<div class="camera-body"><div class="camera-title"><strong>Lente '+(channel+1)+'</strong><span class="badge success">RTSP</span></div>'+
+      '<div class="camera-frame">'+
+      '<img class="camera-snapshot" data-stream="'+esc(item.path.split('/').pop())+'" alt="Lente '+(channel+1)+(isPtz?' PTZ':'')+'">'+
+      (interactivePtz?'<img id="liveImage" class="camera-live-overlay" alt="Vídeo da lente PTZ" hidden>':'')+
+      (interactivePtz?'<div id="liveIndicator" class="live-indicator" hidden><span></span> AO VIVO</div>':'')+
+      (isPtz?'<div class="ptz-lens-marker">PTZ</div>':'')+
+      '</div>'+
+      '<div class="camera-body"><div class="camera-title"><strong>Lente '+(channel+1)+(isPtz?' · PTZ':'')+'</strong>'+
+      '<span class="badge '+(isPtz?'warning':'success')+'">'+(isPtz?'PTZ · RTSP':'RTSP')+'</span></div>'+
       '<div class="meta-row"><span class="meta-pill">'+esc(video.width||'—')+'×'+esc(video.height||'—')+'</span>'+
       '<span class="meta-pill">'+esc((video.codec_name||'').toUpperCase()||'—')+'</span>'+
       (audio.codec_name?'<span class="meta-pill">Áudio '+esc(audio.codec_name)+'</span>':'')+
@@ -414,63 +428,97 @@ function enablePtz(enabled){
   $('stop').disabled=!enabled;
 }
 
+function ptzSnapshotImage(){
+  return document.querySelector('#cameraMedia .camera-tile-ptz img[data-stream]');
+}
+
 async function sendPtz(command,keepalive=false){
-  if(!authenticated)return;
+  if(!authenticated)return false;
   const sequence=++ptzSequence;
   try{
     const response=await fetch(ptzUrl(command,sequence),{method:'POST',keepalive});
     const body=await response.json();
     if(!body.ignored)$('command').textContent=response.ok?'Comando: '+command:'Erro: '+(body.error||'falha');
     if(!response.ok&&response.status===401){authenticated=false;enablePtz(false)}
-  }catch(error){$('command').textContent='Erro: '+error.message}
+    return response.ok&&!body.ignored;
+  }catch(error){
+    $('command').textContent='Erro: '+error.message;
+    return false;
+  }
+}
+
+async function refreshPtzAfterStop(){
+  const token=++postStopRefreshToken;
+  if(document.hidden||currentTab!=='camera'||liveActive)return;
+  const image=ptzSnapshotImage();
+  if(!image)return;
+  const delays=[300,1000,1000];
+  for(let index=0;index<delays.length;index++){
+    await sleep(delays[index]);
+    if(token!==postStopRefreshToken||activeDirection||liveActive||document.hidden||currentTab!=='camera')return;
+    $('previewMessage').textContent='Atualizando posição final do PTZ '+(index+1)+'/3...';
+    await loadSnapshot(image);
+  }
+  if(token===postStopRefreshToken)$('previewMessage').textContent='PTZ parado · posição final atualizada.';
+}
+
+async function stopPtzAndRefresh({keepalive=false}={}){
+  activeDirection=null;
+  const stopped=await sendPtz('stop',keepalive);
+  if(stopped&&!keepalive)void refreshPtzAfterStop();
 }
 
 function emergencyStop(){
   if(!activeDirection)return;
-  activeDirection=null;
-  void sendPtz('stop',true);
+  postStopRefreshToken++;
+  void stopPtzAndRefresh({keepalive:true});
 }
 
 async function startLivePreview(){
   if(!lastData?.online||!lastData?.authenticated){$('previewMessage').textContent='A câmera precisa estar online e autenticada.';return}
+  if(!$('liveImage')&&lastData)renderSnapshotTiles('cameraMedia',lastData,true);
+  const liveImage=$('liveImage');
+  const liveIndicator=$('liveIndicator');
+  const snapshot=ptzSnapshotImage();
+  if(!liveImage||!snapshot){$('previewMessage').textContent='A lente PTZ ainda não foi identificada no painel.';return}
+  postStopRefreshToken++;
   liveActive=true;
-  $('singleSnapshot').hidden=true;
-  $('previewEmpty').hidden=true;
-  $('liveImage').hidden=false;
-  $('liveIndicator').hidden=false;
+  snapshot.hidden=true;
+  liveImage.hidden=false;
+  if(liveIndicator)liveIndicator.hidden=false;
   $('startLive').disabled=true;
   $('stopLive').disabled=false;
-  $('previewMessage').textContent='Abrindo preview local...';
-  $('liveImage').src=api('api/live/ptz?t='+Date.now());
+  $('previewMessage').textContent='Abrindo vídeo local da lente PTZ...';
+  liveImage.src=api('api/live/ptz?t='+Date.now());
 }
 
 async function stopLivePreview(){
   liveActive=false;
-  $('liveImage').removeAttribute('src');
-  $('liveImage').hidden=true;
-  $('liveIndicator').hidden=true;
+  const liveImage=$('liveImage');
+  const liveIndicator=$('liveIndicator');
+  const snapshot=ptzSnapshotImage();
+  if(liveImage){
+    liveImage.removeAttribute('src');
+    liveImage.hidden=true;
+  }
+  if(liveIndicator)liveIndicator.hidden=true;
+  if(snapshot)snapshot.hidden=false;
   $('startLive').disabled=false;
   $('stopLive').disabled=true;
   try{await fetch(api('api/live/stop'),{method:'POST',keepalive:true})}catch(_){}
-  if(!$('singleSnapshot').hasAttribute('src'))$('previewEmpty').hidden=false;
-  if($('previewMessage').textContent.includes('preview'))$('previewMessage').textContent='Preview parado.';
+  if(snapshot&&currentTab==='camera'&&!document.hidden)await loadSnapshot(snapshot);
+  if($('previewMessage').textContent.includes('vídeo')||$('previewMessage').textContent.includes('preview')){
+    $('previewMessage').textContent='Vídeo PTZ parado · snapshot atualizado.';
+  }
 }
 
 async function loadSingleSnapshot(){
   if(liveActive)await stopLivePreview();
-  const stream='ch'+String(selectedChannel).padStart(2,'0')+'_0';
-  $('previewMessage').textContent='Carregando snapshot...';
-  try{
-    const response=await fetch(api('api/snapshot/'+stream+'?t='+Date.now()),{cache:'no-store'});
-    if(!response.ok)throw new Error('HTTP '+response.status);
-    const blob=await response.blob();
-    const url=URL.createObjectURL(blob);
-    const previous=$('singleSnapshot').dataset.objectUrl;
-    $('singleSnapshot').src=url;$('singleSnapshot').dataset.objectUrl=url;$('singleSnapshot').hidden=false;
-    $('previewEmpty').hidden=true;
-    if(previous)URL.revokeObjectURL(previous);
-    $('previewMessage').textContent=response.headers.get('X-JOOAN-Snapshot')==='stale'?'Snapshot em cache temporário.':'Snapshot atualizado.';
-  }catch(error){$('previewMessage').textContent='Falha no snapshot: '+error.message}
+  const image=ptzSnapshotImage();
+  if(!image){$('previewMessage').textContent='A lente PTZ ainda não foi identificada.';return}
+  $('previewMessage').textContent='Atualizando snapshot da lente PTZ...';
+  const ok=await loadSnapshot(image);
+  $('previewMessage').textContent=ok?'Snapshot PTZ atualizado.':'Falha ao atualizar snapshot PTZ.';
 }
 
 async function validateSubstreams(){
@@ -1295,8 +1343,8 @@ function switchTab(name,{focus=false}={}){
     panel.classList.toggle('active',panel.id==='tab-'+name);
   });
   if(name!=='camera'&&liveActive)void stopLivePreview();
-  if(name==='camera'&&!liveActive&&lastData?.online&&lastData?.authenticated){
-    void startLivePreview();
+  if(name==='camera'&&!liveActive){
+    void refreshSnapshots($('cameraMedia'));
   }else if(name==='overview'&&!liveActive){
     void refreshSnapshots($('overviewMedia'));
   }
@@ -1335,18 +1383,19 @@ directionButtons.forEach(button=>{
   const direction=button.dataset.dir;
   button.addEventListener('pointerdown',event=>{
     event.preventDefault();
+    postStopRefreshToken++;
     activeDirection=direction;
     button.setPointerCapture?.(event.pointerId);
     void sendPtz(direction);
   });
   const stop=()=>{
-    if(activeDirection===direction){activeDirection=null;void sendPtz('stop')}
+    if(activeDirection===direction)void stopPtzAndRefresh();
   };
   button.addEventListener('pointerup',stop);
   button.addEventListener('pointercancel',stop);
   button.addEventListener('lostpointercapture',stop);
 });
-$('stop').addEventListener('click',()=>{activeDirection=null;void sendPtz('stop')});
+$('stop').addEventListener('click',()=>{postStopRefreshToken++;void stopPtzAndRefresh()});
 $('startLive').addEventListener('click',startLivePreview);
 $('stopLive').addEventListener('click',stopLivePreview);
 $('singleSnapshotButton').addEventListener('click',loadSingleSnapshot);
