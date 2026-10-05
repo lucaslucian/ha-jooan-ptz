@@ -377,9 +377,14 @@ def test_dashboard_template_is_served():
     assert "Preview PTZ · 1 FPS" in body
     assert "ptzSpeed" in body
     assert "generalInfo" in body
+    assert 'id="feedTile0"' in body
+    assert 'id="feedTile1"' in body
+    assert 'id="feedPtzMarker0"' in body
+    assert 'id="feedPtzMarker1"' in body
+    assert 'class="control-bottom"' in body
     assert "allReadSettings" in body
     assert 'id="headerTitle"' in body
-    assert 'class="control-side"' in body
+    assert 'class="control-side"' not in body
     assert 'id="statusBanner"' in body
     assert 'aria-live="polite"' in body
     assert 'class="info-accordion"' in body
@@ -441,6 +446,16 @@ def test_non_control_and_continuous_preview_routes_are_removed():
     assert client.post("/api/lab/cgi/probe").status_code == 404
     assert client.post("/api/lab/onvif/ptz").status_code == 404
     assert client.post("/api/lab/diag/probe").status_code == 404
+
+
+def test_frontend_marks_ptz_lens_and_captures_extra_final_frames():
+    script = (
+        Path(__file__).parents[1] / "app" / "static" / "app.js"
+    ).read_text(encoding="utf-8")
+
+    assert "feed-tile-ptz" in script
+    assert "feedPtzMarker" in script
+    assert "const delays=[220,900,900]" in script
 
 
 def test_frontend_uses_one_hertz_ptz_snapshot_refresh():
