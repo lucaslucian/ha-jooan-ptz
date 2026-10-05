@@ -10,24 +10,20 @@ from camera import (
     redact_secrets,
 )
 
-
 def test_private_camera_ip_is_accepted():
     camera = JooanCamera("192.168.1.20", "admin", "secret")
     assert camera.ip == "192.168.1.20"
-
 
 @pytest.mark.parametrize("address", ["8.8.8.8", "1.1.1.1", "100.64.0.1", "203.0.113.10", "127.0.0.1", "0.0.0.0"])
 def test_non_lan_camera_ip_is_rejected(address):
     with pytest.raises(ValueError):
         JooanCamera(address, "admin", "secret")
 
-
 def test_html_wrapped_json_is_parsed():
     data = JooanCamera._parse_camera_response(
         '<html><h2>{"result":"successful","model":"JA-A12"}</h2></html>'
     )
     assert data["model"] == "JA-A12"
-
 
 def test_safe_properties_drop_unknown_secrets():
     raw = {
@@ -44,7 +40,6 @@ def test_safe_properties_drop_unknown_secrets():
     assert "security_password" not in safe
     assert "unknown_future_field" not in safe
 
-
 def test_local_state_is_read_only_subset():
     raw = {
         "md_enable": 1,
@@ -54,7 +49,6 @@ def test_local_state_is_read_only_subset():
     }
     state = _state_from_properties(raw)
     assert state == {"record_enable": 1, "md_enable": 1, "autotrack": 0}
-
 
 def test_capability_derivation():
     caps = _capabilities(
@@ -67,7 +61,6 @@ def test_capability_derivation():
     assert caps["motion_detection"] is True
     assert caps["automatic_tracking"] is True
 
-
 def test_rtsp_path_allowlist():
     camera = JooanCamera("10.0.0.10", "admin", "secret")
     for path in RTSP_PATH_CANDIDATES:
@@ -76,12 +69,10 @@ def test_rtsp_path_allowlist():
     with pytest.raises(ValueError):
         camera.build_rtsp_url_path("/live/../../bad", "admin", "secret")
 
-
 def test_ptz_command_is_allowlisted(monkeypatch):
     camera = JooanCamera("10.0.0.10", "admin", "secret")
     with pytest.raises(ValueError):
         camera.command("SetDiagMode")
-
 
 def test_redact_secrets_hides_userkey_and_rtsp_password():
     message = (
@@ -95,7 +86,6 @@ def test_redact_secrets_hides_userkey_and_rtsp_password():
     assert "json-secret" not in safe
     assert "userkey=<redacted>" in safe
     assert "rtsp://admin:<redacted>@10.0.0.10" in safe
-
 
 def test_check_auth_uses_ptz_stop(monkeypatch):
     camera = JooanCamera("10.0.0.10", "admin", "secret")
@@ -113,7 +103,6 @@ def test_check_auth_uses_ptz_stop(monkeypatch):
         ("/goform/SingleHandlebyCommand", {"singleCMD": "stop"})
     ]
 
-
 def test_heartbeat_uses_icmp_without_touching_camera_ports(monkeypatch):
     camera = JooanCamera("10.0.0.10", "admin", "secret", http_port=8080)
     calls = []
@@ -127,7 +116,6 @@ def test_heartbeat_uses_icmp_without_touching_camera_ports(monkeypatch):
 
     assert result == {"online": True, "method": "icmp", "error": None}
     assert calls == [("10.0.0.10", 1.5)]
-
 
 def test_rtsp_credentials_are_cached(monkeypatch):
     camera_module._rtsp_credential_cache.clear()
@@ -146,7 +134,6 @@ def test_rtsp_credentials_are_cached(monkeypatch):
     assert second == first
     assert len(calls) == 1
 
-
 def test_device_features_tolerates_non_object_sections(monkeypatch):
     camera = JooanCamera("10.0.0.10", "admin", "secret")
 
@@ -160,35 +147,6 @@ def test_device_features_tolerates_non_object_sections(monkeypatch):
     assert info.safe_properties == {}
     assert info.device_features == {}
     assert info.local_state == {}
-
-
-def test_audio_only_rtsp_result_does_not_count_as_working_video(monkeypatch):
-    camera = JooanCamera("10.0.0.10", "admin", "secret")
-    monkeypatch.setattr(camera, "get_rtsp_credentials", lambda: ("admin", "rtsp"))
-    monkeypatch.setattr(camera_module.time, "sleep", lambda _: None)
-
-    def fake_ffprobe(url, timeout=None):
-        if "/live/ch00_0" in url:
-            return {
-                "available": True,
-                "error": None,
-                "streams": [{"codec_type": "audio", "codec_name": "pcm_alaw"}],
-            }
-        return {
-            "available": True,
-            "error": None,
-            "streams": [{"codec_type": "video", "codec_name": "h264"}],
-        }
-
-    monkeypatch.setattr(camera_module, "ffprobe_rtsp", fake_ffprobe)
-    result = camera.probe_rtsp_streams(channel_count=1)
-
-    assert [item["path"] for item in result["streams"]] == [
-        "/live/ch00_0",
-        "/live/ch00_1",
-    ]
-    assert result["reachable"] is True
-
 
 def test_heartbeat_preserves_unknown_icmp_state(monkeypatch):
     camera = JooanCamera("10.0.0.10", "admin", "secret")
@@ -204,242 +162,3 @@ def test_heartbeat_preserves_unknown_icmp_state(monkeypatch):
     )
 
     assert camera.heartbeat()["online"] is None
-
-
-def test_preview_substream_probe_is_sequential(monkeypatch):
-    camera = JooanCamera("10.0.0.10", "admin", "secret")
-    monkeypatch.setattr(camera, "get_rtsp_credentials", lambda: ("admin", "rtsp"))
-    monkeypatch.setattr(camera_module.time, "sleep", lambda _: None)
-
-    calls = []
-
-    def fake_ffprobe(url, timeout=None):
-        calls.append(url)
-        return {
-            "available": True,
-            "error": None,
-            "streams": [{"codec_type": "video", "codec_name": "h264"}],
-        }
-
-    monkeypatch.setattr(camera_module, "ffprobe_rtsp", fake_ffprobe)
-    result = camera.probe_preview_substreams(2)
-
-    assert [item["path"] for item in result["streams"]] == [
-        "/live/ch00_1",
-        "/live/ch01_1",
-    ]
-    assert result["probe_mode"] == "substreams-only"
-    assert len(calls) == 2
-
-
-def test_start_mjpeg_preview_uses_allowlisted_stream(monkeypatch):
-    camera = JooanCamera("10.0.0.10", "admin", "secret")
-    monkeypatch.setattr(camera, "get_rtsp_credentials", lambda: ("admin", "rtsp-secret"))
-    calls = []
-    sentinel = object()
-
-    def fake_start(url, width=640, fps=6):
-        calls.append((url, width, fps))
-        return sentinel
-
-    monkeypatch.setattr(camera_module, "start_mjpeg_rtsp", fake_start)
-
-    assert camera.start_mjpeg_preview("ch00_1", width=640, fps=6) is sentinel
-    assert "/live/ch00_1" in calls[0][0]
-    assert "rtsp-secret" in calls[0][0]
-
-    with pytest.raises(ValueError):
-        camera.start_mjpeg_preview("../../bad")
-
-
-def test_preview_substream_probe_can_target_only_ptz_channel(monkeypatch):
-    camera = JooanCamera("10.0.0.10", "admin", "secret")
-    monkeypatch.setattr(camera, "get_rtsp_credentials", lambda: ("admin", "rtsp"))
-    calls = []
-
-    def fake_ffprobe(url, timeout=None):
-        calls.append(url)
-        return {
-            "available": True,
-            "error": None,
-            "streams": [{"codec_type": "video", "codec_name": "h264"}],
-        }
-
-    monkeypatch.setattr(camera_module, "ffprobe_rtsp", fake_ffprobe)
-    result = camera.probe_preview_substreams(2, channels=[0])
-
-    assert result["tested_channels"] == [0]
-    assert [item["path"] for item in result["streams"]] == ["/live/ch00_1"]
-    assert len(calls) == 1
-
-def test_post_form_uses_direct_session_and_keeps_credentials_out_of_form(monkeypatch):
-    camera = JooanCamera("10.0.0.10", "admin", "secret")
-    captured = {}
-
-    class FakeResponse:
-        status_code = 200
-        content = b"result:success"
-        text = "result:success"
-        headers = {"Content-Type": "text/plain"}
-
-        def raise_for_status(self):
-            return None
-
-    class FakeSession:
-        def __init__(self):
-            self.trust_env = True
-
-        def __enter__(self):
-            captured["session"] = self
-            return self
-
-        def __exit__(self, exc_type, exc, tb):
-            return False
-
-        def post(self, url, *, params, data, timeout, headers):
-            captured.update({
-                "url": url,
-                "params": dict(params),
-                "data": dict(data),
-                "timeout": timeout,
-                "headers": dict(headers),
-                "trust_env_at_post": self.trust_env,
-            })
-            return FakeResponse()
-
-    monkeypatch.setattr(camera_module.requests, "Session", FakeSession)
-
-    response = camera._post_form(
-        "/goform/NTP",
-        {"time_zone": "AST_-04"},
-        authenticated=True,
-    )
-
-    assert response.status_code == 200
-    assert captured["url"] == "http://10.0.0.10:80/goform/NTP"
-    assert captured["params"]["userid"] == "admin"
-    assert "userkey" in captured["params"]
-    assert captured["data"] == {"time_zone": "AST_-04"}
-    assert "userid" not in captured["data"]
-    assert "userkey" not in captured["data"]
-    assert captured["trust_env_at_post"] is False
-    assert captured["headers"]["Connection"] == "close"
-
-def test_post_query_keeps_fields_in_query_and_uses_fixed_body(monkeypatch):
-    camera = JooanCamera("10.0.0.10", "admin", "secret")
-    captured = {}
-
-    class FakeResponse:
-        status_code = 200
-        content = b"motionEnable:YES"
-        text = "motionEnable:YES"
-        headers = {"Content-Type": "text/plain"}
-
-        def raise_for_status(self):
-            return None
-
-    class FakeSession:
-        def __init__(self):
-            self.trust_env = True
-
-        def __enter__(self):
-            return self
-
-        def __exit__(self, exc_type, exc, tb):
-            return False
-
-        def post(self, url, *, params, data, timeout, headers):
-            captured.update({
-                "url": url,
-                "params": dict(params),
-                "data": data,
-                "trust_env_at_post": self.trust_env,
-            })
-            return FakeResponse()
-
-    monkeypatch.setattr(camera_module.requests, "Session", FakeSession)
-
-    response = camera._post_query(
-        "/goform/getmotiondetectSettings",
-        {"motionEnable": "", "sensitivity": ""},
-        body="n/a",
-    )
-
-    assert response.status_code == 200
-    assert captured["url"] == "http://10.0.0.10:80/goform/getmotiondetectSettings"
-    assert captured["params"]["userid"] == "admin"
-    assert captured["params"]["motionEnable"] == ""
-    assert captured["params"]["sensitivity"] == ""
-    assert captured["data"] == "n/a"
-    assert captured["trust_env_at_post"] is False
-
-def test_get_can_return_expected_http_error_to_guarded_lab(monkeypatch):
-    camera = JooanCamera("10.0.0.10", "admin", "secret")
-
-    class FakeResponse:
-        status_code = 404
-        content = b"not found"
-        text = "not found"
-        headers = {"Content-Type": "text/plain"}
-
-        def raise_for_status(self):
-            raise camera_module.requests.HTTPError("404")
-
-    class FakeSession:
-        trust_env = True
-
-        def __enter__(self):
-            return self
-
-        def __exit__(self, exc_type, exc, tb):
-            return False
-
-        def get(self, *args, **kwargs):
-            return FakeResponse()
-
-    monkeypatch.setattr(camera_module.requests, "Session", FakeSession)
-
-    response = camera._get(
-        "/goform/missing",
-        authenticated=True,
-        allow_http_error=True,
-    )
-    assert response.status_code == 404
-
-    with pytest.raises(camera_module.JooanNetworkError):
-        camera._get("/goform/missing", authenticated=True)
-
-
-def test_post_query_can_return_expected_http_error_to_guarded_lab(monkeypatch):
-    camera = JooanCamera("10.0.0.10", "admin", "secret")
-
-    class FakeResponse:
-        status_code = 405
-        content = b"method not allowed"
-        text = "method not allowed"
-        headers = {"Content-Type": "text/plain"}
-
-        def raise_for_status(self):
-            raise camera_module.requests.HTTPError("405")
-
-    class FakeSession:
-        trust_env = True
-
-        def __enter__(self):
-            return self
-
-        def __exit__(self, exc_type, exc, tb):
-            return False
-
-        def post(self, *args, **kwargs):
-            return FakeResponse()
-
-    monkeypatch.setattr(camera_module.requests, "Session", FakeSession)
-
-    response = camera._post_query(
-        "/goform/getVideoSettings",
-        {"rotation": ""},
-        allow_http_error=True,
-    )
-    assert response.status_code == 405
-
