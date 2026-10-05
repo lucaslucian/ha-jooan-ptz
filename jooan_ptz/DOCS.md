@@ -18,7 +18,7 @@ O **JOOAN Local Control** fornece monitoramento e controle local para câmeras J
 
 ## Painel
 
-A v0.18.3 usa uma única página organizada em seções.
+A v0.18.4 usa uma única página organizada em seções, com as imagens das câmeras priorizadas e PTZ/informações gerais agrupados na coluna lateral.
 
 ### Visão geral
 
@@ -51,7 +51,7 @@ Se a câmera demorar mais de um segundo para gerar uma imagem, a taxa real fica 
 
 O CGI local validado permanece como fallback confiável.
 
-Após uma descoberta ONVIF manual, quando houver perfil PTZ utilizável, o App tenta ONVIF `ContinuousMove` com velocidade selecionável. Em caso de erro ou rejeição, volta automaticamente para o CGI.
+Na primeira movimentação, o App executa uma descoberta ONVIF mínima. Quando houver perfil PTZ utilizável, tenta ONVIF `ContinuousMove` com velocidade selecionável; em caso de erro ou rejeição, volta automaticamente para o CGI.
 
 ### Detecção e alertas
 
