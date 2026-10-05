@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.18.7
+
+- Detectable Home Assistant update release for the camera/PTZ layout fixes.
+- Keeps Lente 1, Lente 2 and PTZ controls on the same desktop row.
+- Fixes duplicate PTZ lens marking so only the mapped PTZ channel is highlighted.
+- Moves general camera information into a collapsed section below the operational row.
+- Keeps the three post-STOP settling snapshots for the PTZ lens.
+
 ## 0.18.6
 
 - Reworked the main camera workspace so **Lente 1 + Lente 2 + controle PTZ** occupy the same desktop row.
