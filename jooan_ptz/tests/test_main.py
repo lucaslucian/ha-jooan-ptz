@@ -377,6 +377,9 @@ def test_dashboard_template_is_served():
     assert "Preview PTZ · 1 FPS" in body
     assert "ptzSpeed" in body
     assert "generalInfo" in body
+    assert 'class="info-accordion-item camera-info-collapse"' in body
+    assert '<strong>Informações gerais</strong>' in body
+    assert 'class="card camera-info-card"' not in body
     assert 'id="feedTile0"' in body
     assert 'id="feedTile1"' in body
     assert 'id="feedPtzMarker0"' in body
