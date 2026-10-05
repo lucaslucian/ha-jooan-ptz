@@ -8,6 +8,8 @@
 - Reduced the ONVIF helper module to the minimal PTZ discovery/movement flow actually used by the App.
 - Removed obsolete design/research assets and documentation that no longer describe the current interface.
 - Kept the supported scope focused on dual-lens snapshots, read-only state, CGI/ONVIF PTZ and ICMP heartbeat.
+- Authentication state now survives isolated CGI/ICMP failures after a known-good login; three consecutive heartbeat failures are required before declaring the camera offline, and known-good CGI authentication is only dropped after repeated explicit credential rejections.
+- Added user-facing documentation explaining why continuous RTSP is intentionally avoided: the reference camera becomes unstable with multiple simultaneous clients, especially when an NVR already holds a stream.
 
 ## 0.18.7
 
