@@ -366,6 +366,64 @@ def test_third_explicit_auth_rejection_confirms_auth_loss():
         assert main._state["auth_failures"] == 3
 
 
+def test_transient_validation_failure_with_unknown_icmp_keeps_known_good_auth(monkeypatch):
+    class FakeCamera:
+        def check_auth(self):
+            raise RuntimeError("camera CGI worker busy")
+
+        def heartbeat(self):
+            return {
+                "online": None,
+                "method": "icmp",
+                "error": "ICMP heartbeat is unavailable in this container",
+            }
+
+    monkeypatch.setattr(main, "get_camera", lambda: FakeCamera())
+    main.update_state(
+        online=True,
+        authenticated=True,
+        last_auth_success=123.0,
+        service_degraded=False,
+    )
+
+    assert main.validate_camera() is False
+    with main._state_lock:
+        assert main._state["online"] is True
+        assert main._state["authenticated"] is True
+        assert main._state["service_degraded"] is True
+
+
+def test_successful_cgi_ptz_resets_auth_rejection_counter(monkeypatch):
+    class FakeCamera:
+        ip = "10.0.0.10"
+        onvif_port = 8899
+
+        def command(self, direction):
+            return {"result": "success"}
+
+    monkeypatch.setattr(main, "get_camera", lambda: FakeCamera())
+    main._ptz_onvif_discovery_attempted = True
+    main.update_state(
+        online=True,
+        authenticated=True,
+        last_auth_success=123.0,
+        auth_failures=2,
+        service_degraded=True,
+        ptz_onvif_available=False,
+    )
+
+    response = main.app.test_client().post(
+        "/api/ptz/stop?client=auth-reset&seq=1"
+    )
+
+    assert response.status_code == 200
+    with main._state_lock:
+        assert main._state["authenticated"] is True
+        assert main._state["auth_failures"] == 0
+        assert main._state["service_degraded"] is False
+        assert main._state["last_auth_success"] > 123.0
+
+
 def test_transient_validation_failure_preserves_previous_auth_when_ping_is_up(monkeypatch):
     class FakeCamera:
         def check_auth(self):

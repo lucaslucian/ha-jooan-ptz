@@ -111,6 +111,20 @@ def update_state(**values) -> None:
         _state.update(values)
 
 
+def _record_auth_success() -> None:
+    """Refresh the known-good CGI authentication state."""
+    now = time.time()
+    update_state(
+        online=True,
+        authenticated=True,
+        auth_failures=0,
+        last_auth_success=now,
+        service_degraded=False,
+        last_error=None,
+        last_seen=now,
+    )
+
+
 def _record_auth_rejection(error: str) -> bool:
     """Record one explicit CGI credential rejection.
 
@@ -178,6 +192,7 @@ def _validate_camera_locked() -> bool:
         # endpoint already proven by the local integration and avoids treating
         # getPlatformID as the sole source of truth for authentication.
         camera.check_auth()
+        _record_auth_success()
         update_state(ptz_moving=False)
         time.sleep(DISCOVERY_GAP)
 
@@ -283,30 +298,32 @@ def _validate_camera_locked() -> bool:
         safe_error = redact_secrets(exc)
         _LOGGER.warning("JOOAN camera validation had a transient failure: %s", safe_error)
 
-        heartbeat_online = False
+        heartbeat_state = None
         try:
             heartbeat = get_camera().heartbeat()
-            heartbeat_online = bool(heartbeat.get("online"))
+            heartbeat_state = heartbeat.get("online")
         except Exception:
             pass
 
         now = time.time()
         with _state_lock:
+            previous_online = bool(_state.get("online"))
             previous_authenticated = bool(_state.get("authenticated"))
             previous_last_seen = _state.get("last_seen")
 
-        # A busy embedded CGI/RTSP stack can temporarily reject or time out
-        # while the camera itself remains online. Once credentials have been
-        # validated, do not reinterpret a transport hiccup as an auth failure.
-        preserve_auth = heartbeat_online and previous_authenticated
+        # A validation hiccup must never bypass the regular heartbeat debounce.
+        # Preserve a known-good session here and let heartbeat_camera() decide
+        # offline state only after its consecutive-failure threshold.
+        online = True if heartbeat_state is True else previous_online
+        preserve_auth = previous_authenticated
         update_state(
-            online=heartbeat_online,
+            online=online,
             authenticated=preserve_auth,
             service_degraded=preserve_auth,
             initial_scan_complete=True,
             last_error=safe_error,
             last_check=now,
-            last_seen=now if heartbeat_online else previous_last_seen,
+            last_seen=now if heartbeat_state is True else previous_last_seen,
         )
         return False
 
@@ -598,6 +615,7 @@ def ptz(direction: str):
             _ptz_onvif_disabled_until = time.monotonic() + 60.0
 
         result = camera.command(direction)
+        _record_auth_success()
         transport = (
             "cgi-fallback"
             if direction != "stop" and onvif_available

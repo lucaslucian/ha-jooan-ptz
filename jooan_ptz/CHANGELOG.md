@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.18.10
+
+- Final authentication hardening after the v0.18.9 resilience changes.
+- A transient validation failure no longer bypasses the three-failure heartbeat debounce when ICMP is unavailable or inconclusive.
+- Successful CGI PTZ commands reset accumulated authentication-rejection counters and refresh the known-good login timestamp.
+- CGI `error_no_user` is now handled as an authentication rejection instead of being mistaken for a successful command.
+- Closed the obsolete v0.16.2 forced-writer experiment without merging it; configuration remains read-only outside PTZ.
+
 ## 0.18.9
 
 - Made authentication state resilient to transient camera stalls after a known-good login.

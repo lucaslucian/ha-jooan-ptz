@@ -87,6 +87,12 @@ def test_redact_secrets_hides_userkey_and_rtsp_password():
     assert "userkey=<redacted>" in safe
     assert "rtsp://admin:<redacted>@10.0.0.10" in safe
 
+def test_auth_checker_rejects_missing_user_response():
+    camera = JooanCamera("10.0.0.10", "admin", "secret")
+    with pytest.raises(camera_module.JooanAuthError):
+        camera._check_auth({"result": "error_no_user"})
+
+
 def test_check_auth_uses_ptz_stop(monkeypatch):
     camera = JooanCamera("10.0.0.10", "admin", "secret")
     calls = []
