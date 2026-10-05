@@ -446,6 +446,7 @@ def test_dashboard_template_is_served():
     assert response.status_code == 200
     body = response.get_data(as_text=True)
     assert "CÂMERAS & PTZ" in body
+    assert "Por que usamos snapshots em vez de vídeo contínuo?" in body
     assert "snapshotFeed0" in body
     assert "snapshotFeed1" in body
     assert "Preview PTZ · 1 FPS" in body
