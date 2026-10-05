@@ -287,6 +287,9 @@ def test_dashboard_template_is_served():
     assert 'aria-controls="tab-camera"' in body
     assert 'id="headerTitle"' in body
     assert 'id="statusBanner"' in body
+    assert 'id="cameraMedia"' in body
+    assert 'class="camera-control-deck"' in body
+    assert 'id="ptzLensBadge"' in body
     assert "static/app.css" in body
     assert "static/app.js" in body
 
