@@ -73,17 +73,24 @@ function setHealth(data){
   const banner=$('statusBanner');
   const ready=!!data.online&&!!data.authenticated;
   const authPending=!!data.online&&!data.authenticated;
+  const authRecovering=authPending&&!!data.last_auth_success;
 
   badge.className='health-badge '+(ready?'health-online':authPending?'health-warning':'health-offline');
   badge.innerHTML='<span class="health-dot"></span><span>'+
-    (ready?'Online':authPending?'Online · autenticação pendente':'Offline')+'</span>';
+    (ready
+      ?(data.service_degraded?'Online · serviço instável':'Online')
+      :authRecovering?'Online · revalidando sessão'
+      :authPending?'Online · autenticação pendente':'Offline')+
+    '</span>';
 
   if(!data.online){
     banner.className='status-banner bad';
     banner.textContent='Offline · mantendo os últimos dados conhecidos e bloqueando novas capturas.';
   }else if(!data.authenticated){
     banner.className='status-banner warning';
-    banner.textContent='LAN acessível · aguardando validação CGI.';
+    banner.textContent=data.last_auth_success
+      ?'LAN acessível · sessão anterior conhecida; revalidando CGI.'
+      :'LAN acessível · aguardando primeira validação CGI.';
   }else if(data.service_degraded){
     banner.className='status-banner warning';
     banner.textContent='Autenticação preservada · serviço da câmera respondeu de forma instável na última validação.';
