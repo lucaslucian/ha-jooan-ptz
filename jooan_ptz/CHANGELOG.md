@@ -11,6 +11,7 @@
 - Kept STOP priority intact: PTZ preview snapshots still use the backend snapshot lock without taking the PTZ/control-plane I/O lock.
 - Added regression checks for the compact header/sidebar and for the absence of continuous-live frontend markers.
 - Corrected documentation that still referenced the v0.18.2 layout or described ONVIF PTZ discovery as manual.
+- Restored the original **camera-inside-blue-house** project identity for Home Assistant `icon.png`, App Store `logo.png` and the GitHub vector logo; the newer dual-lens/smile icon is no longer used.
 
 
 ## 0.18.3
