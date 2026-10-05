@@ -18,12 +18,11 @@ A identidade do projeto usa a mesma paleta da extensão:
 | Azul ativo | `#2588ef` |
 | Online | `#4fd08b` |
 
-O símbolo combina **duas lentes** com um arco de movimento PTZ. A mesma marca é usada no GitHub, no App Store e nos assets vetoriais.
+A identidade oficial volta a ser o logo original do projeto: **câmera dentro da casa azul**. Essa marca é usada no GitHub e no Home Assistant; o painel continua com a paleta escura/azul sem substituir o logo histórico.
 
 Assets principais:
 
 - `docs/images/jooan-local-control-logo.svg` — wordmark do GitHub;
-- `docs/images/jooan-icon.svg` — fonte vetorial do ícone;
 - `jooan_ptz/icon.png` — ícone 128×128 do Home Assistant;
 - `jooan_ptz/logo.png` — logo 250×100 do App Store;
 - `docs/images/dashboard-overview.svg` — representação atual da interface.
