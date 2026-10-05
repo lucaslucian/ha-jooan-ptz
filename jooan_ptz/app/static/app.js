@@ -60,33 +60,45 @@ function ptzUrl(command,sequence){
 function setHealth(data){
   const badge=$('headerStatus');
   const status=$('statusBanner');
-  badge.className='health-badge '+(data.online&&data.authenticated?'health-online':'health-offline');
+  const healthy=!!data.online&&!!data.authenticated;
+  const authPending=!!data.online&&!data.authenticated;
+
+  badge.className='health-badge '+(healthy?'health-online':authPending?'health-warning':'health-offline');
   badge.innerHTML='<span class="health-dot"></span><span>'+
-    (data.online&&data.authenticated?'Online':data.online?'Online · não autenticada':'Offline')+'</span>';
+    (healthy?'Online':authPending?'Online · autenticação pendente':'Offline')+'</span>';
 
   if(!data.online){
     status.className='status-banner bad';
-    status.textContent='Câmera offline. O painel mantém somente os últimos dados conhecidos.';
+    status.textContent='Offline · mantendo os últimos dados conhecidos.';
   }else if(!data.authenticated){
-    status.className='status-banner bad';
-    status.textContent='Câmera online, mas a autenticação local ainda não foi validada.';
+    status.className='status-banner warning';
+    status.textContent='LAN acessível · autenticação local ainda não validada.';
   }else if(data.probe_running){
-    status.className='status-banner';
-    status.textContent='Diagnóstico profundo em andamento. PTZ e mídia pesada ficam protegidos contra concorrência.';
+    status.className='status-banner warning';
+    status.textContent='Diagnóstico profundo em andamento · PTZ e mídia pesada protegidos.';
+  }else if(data.preview_probe_running){
+    status.className='status-banner warning';
+    status.textContent='Validando stream PTZ · aguarde a conclusão antes de outros testes.';
   }else if(data.preview_active){
     status.className='status-banner ok';
-    status.textContent='Câmera acessível · preview ao vivo ativo · PTZ disponível.';
+    status.textContent='Autenticada · preview PTZ ativo · controles disponíveis.';
   }else{
     status.className='status-banner ok';
-    status.textContent='Câmera autenticada e acessível pela LAN.';
+    status.textContent='Autenticada · serviços locais prontos · RTSP sob demanda.';
   }
 
   const device=data.device_info||{};
-  $('headerSubtitle').textContent=[
-    device.model||data.lan_support?.model||'Câmera local',
-    device.firmware_version?'firmware '+device.firmware_version:null,
-    device.timezone||null
-  ].filter(Boolean).join(' · ');
+  const model=device.model||data.lan_support?.model||'Câmera local';
+  $('headerTitle').textContent=model;
+  const meta=[
+    device.firmware_version?['FW',device.firmware_version]:null,
+    device.timezone?['Fuso',device.timezone]:null,
+    data.authenticated?['Auth','OK']:null,
+    data.preview_active?['RTSP','ativo']:['RTSP','sob demanda']
+  ].filter(Boolean);
+  $('headerSubtitle').innerHTML=meta.map(([label,value])=>
+    '<span class="header-meta-item"><span>'+esc(label)+'</span> '+esc(value)+'</span>'
+  ).join('');
 }
 
 function statusBadge(enabled,onLabel='Ativo',offLabel='Inativo'){
@@ -482,8 +494,10 @@ async function deepProbe(){
     const response=await fetch(api('api/probe'),{method:'POST'});
     if(!response.ok){const body=await response.json();throw new Error(body.error||('HTTP '+response.status))}
     for(let i=0;i<90;i++){await sleep(1000);await refreshStatus();if(!lastData?.probe_running)break}
-  }catch(error){$('statusBanner').textContent='Diagnóstico: '+error.message}
-  finally{button.disabled=!!lastData?.probe_running;button.textContent=lastData?.probe_running?'Diagnosticando...':'Executar diagnóstico profundo'}
+  }catch(error){
+    $('statusBanner').className='status-banner bad';
+    $('statusBanner').textContent='Diagnóstico: '+error.message;
+  }finally{button.disabled=!!lastData?.probe_running;button.textContent=lastData?.probe_running?'Diagnosticando...':'Executar diagnóstico profundo'}
 }
 
 async function lightTest(){
@@ -492,8 +506,10 @@ async function lightTest(){
     const response=await fetch(api('api/test'),{method:'POST'});
     if(!response.ok){const body=await response.json();throw new Error(body.busy?'Câmera ocupada':(body.error||('HTTP '+response.status)))}
     await refreshStatus();
-  }catch(error){$('statusBanner').textContent='Validação CGI: '+error.message}
-  finally{button.disabled=false}
+  }catch(error){
+    $('statusBanner').className='status-banner bad';
+    $('statusBanner').textContent='Validação CGI: '+error.message;
+  }finally{button.disabled=false}
 }
 
 function showLabResult(value){
@@ -1259,15 +1275,25 @@ async function refreshStatus(){
     renderAll(data);
   }catch(error){
     authenticated=false;enablePtz(false);
+    $('headerStatus').className='health-badge health-offline';
+    $('headerStatus').innerHTML='<span class="health-dot"></span><span>App indisponível</span>';
     $('statusBanner').className='status-banner bad';
     $('statusBanner').textContent='App/API indisponível: '+error.message;
   }
 }
 
-function switchTab(name){
+function switchTab(name,{focus=false}={}){
   currentTab=name;
-  document.querySelectorAll('.tab').forEach(button=>button.classList.toggle('active',button.dataset.tab===name));
-  document.querySelectorAll('.tab-panel').forEach(panel=>panel.classList.toggle('active',panel.id==='tab-'+name));
+  document.querySelectorAll('.tab').forEach(button=>{
+    const active=button.dataset.tab===name;
+    button.classList.toggle('active',active);
+    button.setAttribute('aria-selected',active?'true':'false');
+    button.tabIndex=active?0:-1;
+    if(active&&focus)button.focus();
+  });
+  document.querySelectorAll('.tab-panel').forEach(panel=>{
+    panel.classList.toggle('active',panel.id==='tab-'+name);
+  });
   if(name!=='camera'&&liveActive)void stopLivePreview();
   if(name==='camera'&&!liveActive&&lastData?.online&&lastData?.authenticated){
     void startLivePreview();
@@ -1290,7 +1316,20 @@ function startPolling(){
   },SNAPSHOT_REFRESH_MS);
 }
 
-document.querySelectorAll('.tab').forEach(button=>button.addEventListener('click',()=>switchTab(button.dataset.tab)));
+const tabButtons=[...document.querySelectorAll('.tab')];
+tabButtons.forEach((button,index)=>{
+  button.addEventListener('click',()=>switchTab(button.dataset.tab));
+  button.addEventListener('keydown',event=>{
+    if(!['ArrowLeft','ArrowRight','Home','End'].includes(event.key))return;
+    event.preventDefault();
+    let next=index;
+    if(event.key==='ArrowRight')next=(index+1)%tabButtons.length;
+    if(event.key==='ArrowLeft')next=(index-1+tabButtons.length)%tabButtons.length;
+    if(event.key==='Home')next=0;
+    if(event.key==='End')next=tabButtons.length-1;
+    switchTab(tabButtons[next].dataset.tab,{focus:true});
+  });
+});
 const directionButtons=[...document.querySelectorAll('[data-dir]')];
 directionButtons.forEach(button=>{
   const direction=button.dataset.dir;
@@ -1356,7 +1395,14 @@ $('labClearResult').addEventListener('click',()=>showLabResult('Nenhum teste exe
 
 $('liveImage').addEventListener('load',()=>{$('previewMessage').textContent='Preview ao vivo ativo.'});
 $('liveImage').addEventListener('error',()=>{
-  if(liveActive)$('previewMessage').textContent='O preview PTZ foi interrompido. O backend tentará o stream principal se o substream não gerar vídeo.';
+  if(!liveActive)return;
+  liveActive=false;
+  $('liveImage').hidden=true;
+  $('liveIndicator').hidden=true;
+  $('startLive').disabled=false;
+  $('stopLive').disabled=true;
+  $('previewEmpty').hidden=false;
+  $('previewMessage').textContent='O preview PTZ foi interrompido. Você pode tentar novamente ou validar o stream PTZ.';
 });
 
 window.addEventListener('blur',emergencyStop);
