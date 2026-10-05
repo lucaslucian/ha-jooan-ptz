@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.18.6
+
+- Reworked the main camera workspace so both lenses remain side by side on desktop instead of collapsing early.
+- The ONVIF-mapped PTZ lens is now explicitly marked in its own camera tile and receives a highlighted border.
+- Removed the tall left/right workspace arrangement that left unused empty space below the camera feeds; PTZ controls and general camera information now sit in a compact row below the feeds.
+- After PTZ Stop, the PTZ lens now receives three settling snapshots (initial final frame plus two delayed refreshes) unless a new movement starts.
+
+
 ## 0.18.5
 
 - Restored the original JOOAN Local Control visual identity after the v0.18.2 branding refresh replaced it unintentionally.
