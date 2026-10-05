@@ -6,6 +6,8 @@ let activeDirection=null;
 let statusTimer=null;
 let ptzSequence=0;
 let ptzHoldGeneration=0;
+let manualSnapshotBusy=false;
+let ptzSnapshotRequests=0;
 const snapshotUrls={0:null,1:null};
 const STATUS_REFRESH_MS=5000;
 const PTZ_SNAPSHOT_INTERVAL_MS=1000;
@@ -70,31 +72,48 @@ function setHealth(data){
   const badge=$('headerStatus');
   const banner=$('statusBanner');
   const ready=!!data.online&&!!data.authenticated;
+  const authPending=!!data.online&&!data.authenticated;
 
-  badge.className='health-badge '+(ready?'health-online':'health-offline');
+  badge.className='health-badge '+(ready?'health-online':authPending?'health-warning':'health-offline');
   badge.innerHTML='<span class="health-dot"></span><span>'+
-    (ready?'Online':data.online?'Online · autenticação pendente':'Offline')+'</span>';
+    (ready?'Online':authPending?'Online · autenticação pendente':'Offline')+'</span>';
 
   if(!data.online){
     banner.className='status-banner bad';
-    banner.textContent='Câmera offline. O painel mantém os últimos dados conhecidos e não abre novas sessões de mídia.';
+    banner.textContent='Offline · mantendo os últimos dados conhecidos e bloqueando novas capturas.';
   }else if(!data.authenticated){
-    banner.className='status-banner bad';
-    banner.textContent='A câmera responde na rede, mas a autenticação CGI não está validada.';
+    banner.className='status-banner warning';
+    banner.textContent='LAN acessível · autenticação CGI ainda não validada.';
   }else if(data.probe_running){
-    banner.className='status-banner';
-    banner.textContent='Validação em andamento. Aguarde antes de usar mídia ou PTZ.';
+    banner.className='status-banner warning';
+    banner.textContent='Validação em andamento · mídia e PTZ temporariamente protegidos.';
+  }else if(activeDirection){
+    banner.className='status-banner warning';
+    banner.textContent='PTZ em movimento · atualizando a lente PTZ por snapshot em até 1 FPS.';
+  }else if(ptzSnapshotRequests>0){
+    banner.className='status-banner warning';
+    banner.textContent='Atualizando posição do PTZ · nenhuma sessão de vídeo contínua aberta.';
+  }else if(manualSnapshotBusy){
+    banner.className='status-banner warning';
+    banner.textContent='Capturando snapshot · outras ações de mídia aguardam a conclusão.';
   }else{
     banner.className='status-banner ok';
-    banner.textContent='Câmera autenticada e acessível. Imagens por snapshot; nenhum stream contínuo é aberto pelo add-on.';
+    banner.textContent='Autenticada · PTZ pronto · RTSP usado somente para snapshots sob demanda.';
   }
 
   const device=data.device_info||{};
-  $('headerSubtitle').textContent=[
-    device.model||data.lan_support?.model||'Câmera local',
-    device.firmware_version?'firmware '+device.firmware_version:null,
-    device.timezone||null
-  ].filter(Boolean).join(' · ');
+  const model=device.model||data.lan_support?.model||'Câmera local';
+  $('headerTitle').textContent=model;
+  const meta=[
+    device.firmware_version?['FW',device.firmware_version]:null,
+    device.timezone?['Fuso',device.timezone]:null,
+    data.authenticated?['Auth','OK']:null,
+    ['RTSP','snapshots'],
+    ['PTZ','preview 1 FPS']
+  ].filter(Boolean);
+  $('headerSubtitle').innerHTML=meta.map(([label,value])=>
+    '<span class="header-meta-item"><span>'+esc(label)+'</span> '+esc(value)+'</span>'
+  ).join('');
 }
 
 function renderOverview(data){
@@ -434,15 +453,16 @@ function renderControl(data){
 }
 
 function enableControls(data){
-  const ptzEnabled=!!data.online&&!!data.authenticated&&!data.probe_running;
+  const ready=!!data.online&&!!data.authenticated&&!data.probe_running;
+  const ptzEnabled=ready&&!manualSnapshotBusy;
   document.querySelectorAll('[data-dir]').forEach(button=>button.disabled=!ptzEnabled);
   $('stop').disabled=!ptzEnabled;
   $('ptzSpeed').disabled=!ptzEnabled;
 
-  const mediaEnabled=!!data.online&&!!data.authenticated&&!data.probe_running;
-  $('refreshSnapshots').disabled=!mediaEnabled;
+  const mediaBusy=manualSnapshotBusy||!!activeDirection||ptzSnapshotRequests>0;
+  $('refreshSnapshots').disabled=!ready||mediaBusy;
   document.querySelectorAll('[data-snapshot-channel]').forEach(button=>{
-    button.disabled=!mediaEnabled;
+    button.disabled=!ready||mediaBusy;
   });
 }
 
@@ -471,6 +491,8 @@ async function refreshStatus(){
     renderAll(data);
   }catch(error){
     authenticated=false;
+    $('headerStatus').className='health-badge health-offline';
+    $('headerStatus').innerHTML='<span class="health-dot"></span><span>App indisponível</span>';
     $('statusBanner').className='status-banner bad';
     $('statusBanner').textContent='App/API indisponível: '+error.message;
   }
@@ -508,7 +530,25 @@ function setFeedUi(channel,state,message){
   if(lastData)enableControls(lastData);
 }
 
-async function loadSnapshotChannel(channel,{ptzPreview=false,finalFrame=false}={}){
+async function loadSnapshotChannel(channel,{ptzPreview=false,finalFrame=false,allowManualBusy=false}={}){
+  if(
+    !ptzPreview
+    && (
+      (manualSnapshotBusy&&!allowManualBusy)
+      || activeDirection
+      || ptzSnapshotRequests>0
+    )
+  )return false;
+
+  const ownsManualBusy=!ptzPreview&&!allowManualBusy;
+  if(ownsManualBusy)manualSnapshotBusy=true;
+  if(ptzPreview)ptzSnapshotRequests++;
+
+  if(lastData){
+    setHealth(lastData);
+    enableControls(lastData);
+  }
+
   const stream='ch'+String(channel).padStart(2,'0')+'_0';
   if(ptzPreview){
     const badge=$('feedBadge'+channel);
@@ -547,16 +587,44 @@ async function loadSnapshotChannel(channel,{ptzPreview=false,finalFrame=false}={
   }catch(error){
     setFeedUi(channel,'error',(ptzPreview?'PTZ · ':'')+'Falha no snapshot: '+error.message);
     return false;
+  }finally{
+    if(ownsManualBusy)manualSnapshotBusy=false;
+    if(ptzPreview)ptzSnapshotRequests=Math.max(0,ptzSnapshotRequests-1);
+    if(lastData){
+      setHealth(lastData);
+      enableControls(lastData);
+    }
   }
 }
 
 async function refreshSnapshots(){
-  if(!lastData?.online||!lastData?.authenticated)return;
+  if(
+    !lastData?.online||
+    !lastData?.authenticated||
+    manualSnapshotBusy||
+    activeDirection||
+    ptzSnapshotRequests>0
+  )return;
+
+  manualSnapshotBusy=true;
+  if(lastData){
+    setHealth(lastData);
+    enableControls(lastData);
+  }
   $('previewMessage').textContent='Atualizando as duas imagens, uma de cada vez...';
-  await loadSnapshotChannel(0);
-  await sleep(350);
-  await loadSnapshotChannel(1);
-  $('previewMessage').textContent='Snapshots concluídos. O add-on não mantém stream contínuo.';
+
+  try{
+    await loadSnapshotChannel(0,{allowManualBusy:true});
+    await sleep(350);
+    await loadSnapshotChannel(1,{allowManualBusy:true});
+    $('previewMessage').textContent='Snapshots concluídos. O add-on não mantém stream contínuo.';
+  }finally{
+    manualSnapshotBusy=false;
+    if(lastData){
+      setHealth(lastData);
+      enableControls(lastData);
+    }
+  }
 }
 
 async function ptzSnapshotLoop(direction,generation){
@@ -625,6 +693,11 @@ function emergencyStop(){
   if(!activeDirection)return;
   activeDirection=null;
   ptzHoldGeneration++;
+  if(lastData){
+    setHealth(lastData);
+    renderControl(lastData);
+    enableControls(lastData);
+  }
   void sendPtz('stop',true);
 }
 
@@ -638,6 +711,11 @@ document.querySelectorAll('[data-dir]').forEach(button=>{
     event.preventDefault();
     activeDirection=direction;
     const generation=++ptzHoldGeneration;
+    if(lastData){
+      setHealth(lastData);
+      renderControl(lastData);
+      enableControls(lastData);
+    }
     button.setPointerCapture?.(event.pointerId);
     void holdPtz(direction,generation);
   });
@@ -645,6 +723,11 @@ document.querySelectorAll('[data-dir]').forEach(button=>{
     if(activeDirection===direction){
       activeDirection=null;
       ptzHoldGeneration++;
+      if(lastData){
+        setHealth(lastData);
+        renderControl(lastData);
+        enableControls(lastData);
+      }
       void stopPtzAndCaptureFinal();
     }
   };
@@ -656,6 +739,11 @@ document.querySelectorAll('[data-dir]').forEach(button=>{
 $('stop').addEventListener('click',()=>{
   activeDirection=null;
   ptzHoldGeneration++;
+  if(lastData){
+    setHealth(lastData);
+    renderControl(lastData);
+    enableControls(lastData);
+  }
   void stopPtzAndCaptureFinal();
 });
 $('refreshSnapshots').addEventListener('click',refreshSnapshots);

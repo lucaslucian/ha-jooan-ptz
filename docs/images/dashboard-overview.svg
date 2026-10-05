@@ -1,47 +1,71 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900" role="img" aria-labelledby="title desc">
-<title id="title">JOOAN Local Control — interface atual</title>
-<desc id="desc">Câmeras e PTZ como área principal, com dados somente leitura em seções expansíveis.</desc>
+<title id="title">JOOAN Local Control — interface v0.18.4</title>
+<desc id="desc">Dashboard compacto com duas câmeras em destaque, PTZ e informações empilhados à direita e dados somente leitura em seções expansíveis.</desc>
 <defs>
 <style>
-.k{font:800 13px system-ui,-apple-system,Segoe UI,sans-serif;letter-spacing:1.7px;fill:#4da3ff}
-.h1{font:800 34px system-ui,-apple-system,Segoe UI,sans-serif;fill:#f4f7fb}
-.h2{font:750 20px system-ui,-apple-system,Segoe UI,sans-serif;fill:#f4f7fb}
-.b{font:500 14px system-ui,-apple-system,Segoe UI,sans-serif;fill:#9ba7b5}
-.s{font:700 12px system-ui,-apple-system,Segoe UI,sans-serif;fill:#9ba7b5}
-.v{font:700 14px system-ui,-apple-system,Segoe UI,sans-serif;fill:#f4f7fb}
+.k{font:800 12px system-ui,-apple-system,Segoe UI,sans-serif;letter-spacing:1.6px;fill:#4da3ff}
+.h1{font:800 30px system-ui,-apple-system,Segoe UI,sans-serif;fill:#f4f7fb}
+.h2{font:750 19px system-ui,-apple-system,Segoe UI,sans-serif;fill:#f4f7fb}
+.b{font:500 13px system-ui,-apple-system,Segoe UI,sans-serif;fill:#9ba7b5}
+.s{font:700 11px system-ui,-apple-system,Segoe UI,sans-serif;fill:#9ba7b5}
+.v{font:700 13px system-ui,-apple-system,Segoe UI,sans-serif;fill:#f4f7fb}
 .card{fill:#12151b;stroke:#2b323d;stroke-width:2}.soft{fill:#171b22;stroke:#222831;stroke-width:1.5}
 </style>
 </defs>
 <rect width="1600" height="900" fill="#0b0d11"/>
-<rect x="34" y="28" width="1532" height="74" rx="18" fill="#12151b" stroke="#2b323d" stroke-width="2"/>
-<text x="62" y="57" class="k">JOOAN · CONTROLE LOCAL</text><text x="62" y="86" class="h2">JA-A12</text>
-<rect x="1408" y="47" width="122" height="38" rx="19" fill="#123126" stroke="#275c49"/><circle cx="1432" cy="66" r="6" fill="#4fd08b"/><text x="1450" y="71" class="v" fill="#4fd08b">Online</text>
-<text x="36" y="135" class="k">CÂMERAS &amp; PTZ</text><text x="36" y="170" class="h1">Vídeo e controle</text>
-<rect x="1370" y="128" width="194" height="38" rx="10" fill="#124d7f"/><text x="1403" y="152" class="s" fill="#d9edff">Atualizar imagens</text>
-<rect x="34" y="188" width="760" height="430" rx="20" class="card"/>
-<text x="56" y="220" class="k">VÍDEO LOCAL</text><text x="56" y="249" class="h2">Duas lentes</text>
-<rect x="56" y="274" width="348" height="196" rx="14" fill="#020304" stroke="#2b323d"/><rect x="420" y="274" width="348" height="196" rx="14" fill="#020304" stroke="#2b323d"/>
-<text x="198" y="360" class="v">Lente 1</text><text x="562" y="360" class="v">Lente 2</text>
-<text x="145" y="390" class="b">Snapshot sob demanda</text><text x="509" y="390" class="b">Snapshot sob demanda</text>
-<rect x="56" y="486" width="348" height="105" rx="14" class="soft"/><rect x="420" y="486" width="348" height="105" rx="14" class="soft"/>
-<text x="72" y="514" class="v">Lente 1 · ch00</text><text x="436" y="514" class="v">Lente 2 · ch01</text>
-<rect x="72" y="536" width="126" height="34" rx="9" fill="#124d7f"/><text x="93" y="558" class="s" fill="#d9edff">Capturar frame</text>
-<rect x="436" y="536" width="126" height="34" rx="9" fill="#124d7f"/><text x="457" y="558" class="s" fill="#d9edff">Capturar frame</text>
-<rect x="812" y="188" width="326" height="430" rx="20" class="card"/>
-<text x="834" y="220" class="k">MOVIMENTO</text><text x="834" y="249" class="h2">PTZ</text>
-<rect x="834" y="272" width="84" height="32" rx="16" class="soft"/><text x="854" y="293" class="s">CGI PTZ</text>
-<rect x="834" y="312" width="130" height="30" rx="15" fill="#13283b"/><text x="850" y="332" class="s" fill="#4da3ff">Preview · 1 FPS</text>
-<text x="982" y="281" class="s">Velocidade</text><rect x="982" y="289" width="128" height="38" rx="9" class="soft"/><text x="1000" y="313" class="v">2 · normal</text>
-<rect x="936" y="354" width="70" height="70" rx="15" class="soft"/><text x="960" y="398" class="h2">↑</text>
-<rect x="850" y="440" width="70" height="70" rx="15" class="soft"/><text x="875" y="484" class="h2">←</text>
-<rect x="936" y="440" width="70" height="70" rx="15" class="soft"/><text x="952" y="481" class="s" fill="#ff6b73">STOP</text>
-<rect x="1022" y="440" width="70" height="70" rx="15" class="soft"/><text x="1047" y="484" class="h2">→</text>
-<rect x="936" y="526" width="70" height="70" rx="15" class="soft"/><text x="960" y="570" class="h2">↓</text>
-<rect x="1156" y="188" width="410" height="430" rx="20" class="card"/>
-<text x="1178" y="220" class="k">CÂMERA</text><text x="1178" y="249" class="h2">Informações gerais</text>
-<g class="b"><text x="1178" y="290">Modelo</text><text x="1510" y="290" text-anchor="end">JA-A12</text><text x="1178" y="330">Firmware</text><text x="1510" y="330" text-anchor="end">84025202</text><text x="1178" y="370">Canais</text><text x="1510" y="370" text-anchor="end">2</text><text x="1178" y="410">Codec</text><text x="1510" y="410" text-anchor="end">H.264</text><text x="1178" y="450">Timezone</text><text x="1510" y="450" text-anchor="end">GMT-03:00</text><text x="1178" y="490">RTSP</text><text x="1510" y="490" text-anchor="end">Sob demanda</text><text x="1178" y="530">ONVIF</text><text x="1510" y="530" text-anchor="end">PTZ</text><text x="1178" y="570">Estado</text><text x="1510" y="570" text-anchor="end">Leitura</text></g>
-<text x="36" y="665" class="k">INFORMAÇÕES</text><text x="36" y="696" class="h2">Dados e estado da câmera</text>
-<rect x="34" y="716" width="1532" height="62" rx="14" class="card"/><rect x="50" y="730" width="34" height="34" rx="10" fill="#13283b"/><text x="59" y="752" class="s" fill="#4da3ff">01</text><text x="101" y="745" class="v">Resumo e serviços</text><text x="101" y="763" class="b">Estado geral, recursos e serviços locais</text><text x="1534" y="753" class="h2">⌄</text>
-<rect x="34" y="788" width="1532" height="50" rx="14" class="card"/><text x="55" y="819" class="s" fill="#4da3ff">02</text><text x="101" y="819" class="v">Detecção e alertas</text><text x="1534" y="821" class="h2">⌄</text>
-<rect x="34" y="848" width="1532" height="36" rx="12" class="card"/><text x="55" y="871" class="s" fill="#4da3ff">03–05</text><text x="118" y="871" class="b">Gravação · Diagnóstico técnico · Todas as configurações lidas</text>
+
+<rect x="34" y="26" width="1532" height="92" rx="18" fill="#12151b" stroke="#222831" stroke-width="2"/>
+<text x="56" y="50" class="k">JOOAN · CONTROLE LOCAL</text>
+<text x="56" y="80" class="h2">JA-A12</text>
+<rect x="154" y="60" width="92" height="28" rx="14" fill="#123126" stroke="#275c49"/>
+<circle cx="174" cy="74" r="5" fill="#4fd08b"/><text x="188" y="78" class="s" fill="#4fd08b">Online</text>
+<text x="56" y="104" class="b">FW 84025202 · GMT-03:00 · Auth OK · RTSP snapshots · PTZ preview 1 FPS</text>
+<rect x="1165" y="48" width="365" height="48" rx="12" fill="#10291f" stroke="#214b3c"/>
+<text x="1184" y="68" class="s" fill="#4fd08b">Autenticada · PTZ pronto</text>
+<text x="1184" y="86" class="b">RTSP usado somente para snapshots sob demanda</text>
+
+<text x="36" y="151" class="k">CÂMERAS &amp; PTZ</text>
+<text x="36" y="181" class="h1">Vídeo e controle</text>
+<rect x="1370" y="144" width="194" height="36" rx="10" fill="#124d7f"/>
+<text x="1403" y="167" class="s" fill="#d9edff">Atualizar imagens</text>
+
+<rect x="34" y="198" width="1030" height="420" rx="18" class="card"/>
+<text x="56" y="228" class="k">VÍDEO LOCAL</text><text x="56" y="255" class="h2">Duas lentes</text>
+<rect x="56" y="278" width="482" height="271" rx="13" fill="#020304" stroke="#2b323d"/>
+<rect x="556" y="278" width="482" height="271" rx="13" fill="#020304" stroke="#2b323d"/>
+<text x="255" y="392" class="v">Lente 1</text><text x="755" y="392" class="v">Lente 2</text>
+<text x="217" y="417" class="b">Snapshot sob demanda</text><text x="717" y="417" class="b">Snapshot sob demanda</text>
+<rect x="56" y="558" width="482" height="42" rx="10" class="soft"/>
+<rect x="556" y="558" width="482" height="42" rx="10" class="soft"/>
+<text x="70" y="584" class="v">Lente 1 · ch00</text><text x="570" y="584" class="v">Lente 2 · ch01</text>
+<rect x="392" y="566" width="128" height="28" rx="8" fill="#124d7f"/><text x="411" y="585" class="s" fill="#d9edff">Capturar frame</text>
+<rect x="892" y="566" width="128" height="28" rx="8" fill="#124d7f"/><text x="911" y="585" class="s" fill="#d9edff">Capturar frame</text>
+
+<rect x="1080" y="198" width="486" height="268" rx="18" class="card"/>
+<text x="1102" y="228" class="k">MOVIMENTO</text><text x="1102" y="255" class="h2">PTZ</text>
+<rect x="1102" y="276" width="80" height="28" rx="14" class="soft"/><text x="1120" y="295" class="s">CGI PTZ</text>
+<rect x="1192" y="276" width="130" height="28" rx="14" fill="#13283b"/><text x="1208" y="295" class="s" fill="#4da3ff">Preview · 1 FPS</text>
+<text x="1350" y="283" class="s">Velocidade</text><rect x="1350" y="292" width="188" height="34" rx="9" class="soft"/><text x="1370" y="314" class="v">2 · normal</text>
+<rect x="1253" y="332" width="54" height="54" rx="12" class="soft"/><text x="1271" y="366" class="h2">↑</text>
+<rect x="1189" y="392" width="54" height="54" rx="12" class="soft"/><text x="1207" y="426" class="h2">←</text>
+<rect x="1253" y="392" width="54" height="54" rx="12" class="soft"/><text x="1263" y="424" class="s" fill="#ff6b73">STOP</text>
+<rect x="1317" y="392" width="54" height="54" rx="12" class="soft"/><text x="1335" y="426" class="h2">→</text>
+<rect x="1388" y="392" width="150" height="54" rx="12" class="soft"/><text x="1406" y="414" class="s">Snapshot PTZ</text><text x="1406" y="432" class="b">máx. 1 FPS</text>
+
+<rect x="1080" y="480" width="486" height="138" rx="18" class="card"/>
+<text x="1102" y="510" class="k">CÂMERA</text><text x="1102" y="536" class="h2">Informações gerais</text>
+<g class="b">
+<text x="1102" y="563">Modelo</text><text x="1538" y="563" text-anchor="end">JA-A12</text>
+<text x="1102" y="586">Firmware</text><text x="1538" y="586" text-anchor="end">84025202</text>
+<text x="1102" y="609">RTSP / ONVIF</text><text x="1538" y="609" text-anchor="end">Snapshots · PTZ</text>
+</g>
+
+<text x="36" y="660" class="k">INFORMAÇÕES</text><text x="36" y="689" class="h2">Dados e estado da câmera</text>
+<rect x="34" y="705" width="1532" height="56" rx="13" class="card"/>
+<rect x="49" y="716" width="32" height="32" rx="9" fill="#13283b"/><text x="57" y="737" class="s" fill="#4da3ff">01</text>
+<text x="98" y="729" class="v">Resumo e serviços</text><text x="98" y="747" class="b">Estado geral, recursos e serviços locais</text><text x="1532" y="738" class="h2">⌄</text>
+<rect x="34" y="770" width="1532" height="48" rx="12" class="card"/>
+<text x="55" y="800" class="s" fill="#4da3ff">02</text><text x="98" y="800" class="v">Detecção e alertas</text><text x="1532" y="802" class="h2">⌄</text>
+<rect x="34" y="827" width="1532" height="48" rx="12" class="card"/>
+<text x="55" y="857" class="s" fill="#4da3ff">03–05</text><text x="118" y="857" class="b">Gravação · Diagnóstico técnico · Todas as configurações lidas</text>
 </svg>

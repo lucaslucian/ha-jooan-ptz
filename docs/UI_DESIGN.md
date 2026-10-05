@@ -1,6 +1,6 @@
 # Direção visual do painel
 
-A v0.18.3 consolida o **JOOAN Local Control** em uma única página com **Câmeras & PTZ como área principal**. Todo o restante fica abaixo em painéis expansíveis somente leitura.
+A v0.18.4 consolida o **JOOAN Local Control** em uma única página com **Câmeras & PTZ como área principal**, priorizando área útil para as duas imagens. PTZ e informações gerais ficam empilhados na coluna lateral; todo o restante permanece abaixo em painéis expansíveis somente leitura.
 
 ## Identidade visual
 
@@ -42,10 +42,11 @@ Assets principais:
 
 ```text
 ┌──────────────────────────────────────────────────────────────┐
-│ JOOAN Local Control · modelo · online/offline               │
+│ JA-A12 · Online · FW · Fuso · Auth · RTSP snapshots         │
 ├──────────────────────────────────────────────────────────────┤
 │ CÂMERAS & PTZ                                                │
-│ [Lente 1] [Lente 2]        [PTZ]        [Informações]        │
+│ [      Lente 1      ] [      Lente 2      ] │ [PTZ]         │
+│                                             │ [Informações]  │
 ├──────────────────────────────────────────────────────────────┤
 │ INFORMAÇÕES                                                  │
 │ ▼ Resumo e serviços                                          │

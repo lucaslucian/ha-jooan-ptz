@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <img alt="Version" src="https://img.shields.io/badge/version-0.18.3-blue">
+  <img alt="Version" src="https://img.shields.io/badge/version-0.18.4-blue">
   <img alt="Stage" src="https://img.shields.io/badge/stage-experimental-orange">
   <img alt="aarch64" src="https://img.shields.io/badge/aarch64-yes-success">
   <img alt="amd64" src="https://img.shields.io/badge/amd64-yes-success">
@@ -48,7 +48,7 @@ Se o botão não preencher o repositório automaticamente:
 
 ## Interface
 
-A v0.18.2 usa **Câmeras & PTZ como área principal no topo**. Abaixo dela, as informações somente leitura ficam agrupadas em seções expansíveis para reduzir a poluição visual:
+A v0.18.4 mantém **Câmeras & PTZ como área principal no topo**, com as duas lentes em uma área maior e PTZ + informações gerais empilhados na coluna lateral. Abaixo, os dados somente leitura continuam agrupados em seções expansíveis:
 
 - visão geral e saúde;
 - duas lentes com captura de Snapshot;

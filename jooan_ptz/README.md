@@ -19,7 +19,7 @@ Controle e monitoramento **local** para câmeras JOOAN/CAM720 compatíveis no Ho
 
 ### Comportamento conservador de rede
 
-A JA-A12 de referência mostrou instabilidade quando várias sessões RTSP/ONVIF são abertas em sequência. A v0.18.3:
+A JA-A12 de referência mostrou instabilidade quando várias sessões RTSP/ONVIF são abertas em sequência. A v0.18.4:
 
 - não abre RTSP na inicialização;
 - não possui preview MJPEG contínuo;

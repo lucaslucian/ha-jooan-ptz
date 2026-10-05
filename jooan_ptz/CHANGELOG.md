@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.18.4
+
+- Reapplied the compact dashboard work on top of the final v0.18.3 snapshot-only PTZ implementation instead of the earlier continuous-preview base.
+- Compacted the header into one status surface showing model, online/authentication state, firmware, timezone, RTSP snapshot mode and the 1 FPS PTZ preview behavior.
+- Reworked the primary desktop layout into a larger dual-camera area plus a stacked PTZ/general-information sidebar; responsive layouts preserve one-column behavior on smaller screens.
+- Reduced spacing and card sizes throughout the read-only sections so more useful camera state remains visible inside Home Assistant Ingress.
+- Preserved the v0.18.3 media model: no MJPEG bridge, no `/api/live/*`, manual snapshots only, and PTZ visual refresh limited to sequential snapshots at a maximum of 1 FPS.
+- Added frontend guards so manual snapshots cannot be queued while PTZ snapshot refresh is active, and PTZ cannot start while a manual snapshot batch is in progress.
+- Kept STOP priority intact: PTZ preview snapshots still use the backend snapshot lock without taking the PTZ/control-plane I/O lock.
+- Added regression checks for the compact header/sidebar and for the absence of continuous-live frontend markers.
+- Corrected documentation that still referenced the v0.18.2 layout or described ONVIF PTZ discovery as manual.
+
+
 ## 0.18.3
 
 - Removed the continuous MJPEG preview backend and all `/api/live/*` routes.
