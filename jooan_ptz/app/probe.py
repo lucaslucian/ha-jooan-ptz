@@ -17,6 +17,7 @@ ONVIF_SCHEMA = "http://www.onvif.org/ver10/schema"
 ONVIF_REQUEST_GAP = 0.15
 MAX_ONVIF_PROFILES = 4
 
+
 def icmp_probe(host: str, timeout: float = 1.5) -> dict[str, Any]:
     """Check liveness without opening a camera service TCP socket.
 
@@ -57,14 +58,17 @@ def icmp_probe(host: str, timeout: float = 1.5) -> dict[str, Any]:
             "error": "ICMP heartbeat is unavailable in this container",
         }
 
+
 def _local_name(tag: str) -> str:
     return tag.rsplit("}", 1)[-1]
+
 
 def _safe_int(value: str | None) -> int | None:
     try:
         return int(value) if value is not None else None
     except (TypeError, ValueError):
         return None
+
 
 def _safe_service_path(xaddr: str | None, fallback: str | None = None) -> str | None:
     """Return only the path component from an ONVIF XAddr.
@@ -84,6 +88,7 @@ def _safe_service_path(xaddr: str | None, fallback: str | None = None) -> str | 
         return fallback
     return path
 
+
 def _soap_envelope(namespace: str, prefix: str, payload: str) -> bytes:
     return (
         '<?xml version="1.0" encoding="UTF-8"?>'
@@ -91,6 +96,7 @@ def _soap_envelope(namespace: str, prefix: str, payload: str) -> bytes:
         f'xmlns:tt="{ONVIF_SCHEMA}">'
         f"<s:Body>{payload}</s:Body></s:Envelope>"
     ).encode("utf-8")
+
 
 def _soap_post(
     host: str,
@@ -133,9 +139,9 @@ def _soap_post(
     finally:
         connection.close()
         # Give the embedded ONVIF service a brief recovery window before the
-        # next SOAP transaction. This is intentionally small but prevents a
-        # deep diagnostic from becoming a tight request burst.
+        # next SOAP transaction.
         time.sleep(ONVIF_REQUEST_GAP)
+
 
 def _parse_xml(body: bytes) -> ET.Element | None:
     if not body:
@@ -144,6 +150,7 @@ def _parse_xml(body: bytes) -> ET.Element | None:
         return ET.fromstring(body)
     except ET.ParseError:
         return None
+
 
 def _soap_fault(root: ET.Element | None) -> str | None:
     if root is None:
@@ -157,6 +164,7 @@ def _soap_fault(root: ET.Element | None) -> str | None:
             if value:
                 return value[:240]
     return "ONVIF SOAP fault"
+
 
 def _extract_capability_services(root: ET.Element | None) -> dict[str, dict[str, Any]]:
     services: dict[str, dict[str, Any]] = {}
@@ -190,6 +198,7 @@ def _extract_capability_services(root: ET.Element | None) -> dict[str, dict[str,
             "reported_port": reported_port,
         }
     return services
+
 
 def _extract_profiles(root: ET.Element | None) -> list[dict[str, Any]]:
     profiles: list[dict[str, Any]] = []
@@ -246,16 +255,15 @@ def _extract_profiles(root: ET.Element | None) -> list[dict[str, Any]]:
             break
     return profiles
 
+
 def onvif_ptz_discovery(
     host: str,
     port: int = 8899,
     timeout: float = 3.0,
 ) -> dict[str, Any]:
-    """Discover only the ONVIF pieces required by the production PTZ control.
+    """Discover only the ONVIF pieces required by production PTZ control.
 
-    The full diagnostic probe is intentionally avoided here. This performs at
-    most GetCapabilities + GetProfiles and does not open RTSP, query presets,
-    enumerate nodes/configurations, or fan out into device diagnostics.
+    This performs at most GetCapabilities + GetProfiles and never opens RTSP.
     """
     result: dict[str, Any] = {
         "port": int(port),
@@ -360,6 +368,7 @@ def onvif_ptz_discovery(
 
     return result
 
+
 def _onvif_response_summary(response: dict[str, Any]) -> dict[str, Any]:
     root = _parse_xml(response.get("body") or b"")
     fault = _soap_fault(root)
@@ -370,6 +379,7 @@ def _onvif_response_summary(response: dict[str, Any]) -> dict[str, Any]:
         "fault": fault,
         "error": response.get("error"),
     }
+
 
 def onvif_continuous_move(
     host: str,
@@ -453,6 +463,7 @@ def onvif_continuous_move(
         "stop": _onvif_response_summary(stop_response or {}),
     }
 
+
 def _run(command: list[str], timeout: float) -> subprocess.CompletedProcess[bytes]:
     return subprocess.run(
         command,
@@ -461,6 +472,7 @@ def _run(command: list[str], timeout: float) -> subprocess.CompletedProcess[byte
         timeout=timeout,
         check=False,
     )
+
 
 def capture_snapshot(url: str, timeout: float = 10.0) -> bytes:
     try:
