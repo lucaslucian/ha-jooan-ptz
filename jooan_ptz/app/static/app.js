@@ -83,8 +83,11 @@ function setHealth(data){
     banner.textContent='Offline · mantendo os últimos dados conhecidos e bloqueando novas capturas.';
   }else if(!data.authenticated){
     banner.className='status-banner warning';
-    banner.textContent='LAN acessível · autenticação CGI ainda não validada.';
-  }else if(data.probe_running){
+    banner.textContent='LAN acessível · aguardando validação CGI.';
+  }else if(data.service_degraded){
+    banner.className='status-banner warning';
+    banner.textContent='Autenticação preservada · serviço da câmera respondeu de forma instável na última validação.';
+  }else if(data.validation_running){
     banner.className='status-banner warning';
     banner.textContent='Validação em andamento · mídia e PTZ temporariamente protegidos.';
   }else if(activeDirection){
@@ -405,7 +408,7 @@ function renderControl(data){
 }
 
 function enableControls(data){
-  const ready=!!data.online&&!!data.authenticated&&!data.probe_running;
+  const ready=!!data.online&&!!data.authenticated&&!data.validation_running;
   const ptzEnabled=ready&&!manualSnapshotBusy;
   document.querySelectorAll('[data-dir]').forEach(button=>button.disabled=!ptzEnabled);
   $('stop').disabled=!ptzEnabled;
@@ -427,7 +430,7 @@ function renderAll(data){
   renderAllReadSettings(data);
   enableControls(data);
 
-  if(data.last_error&&!data.probe_running){
+  if(data.last_error&&!data.validation_running){
     $('command').textContent='Último erro: '+data.last_error;
   }
 }
