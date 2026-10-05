@@ -330,6 +330,37 @@ def test_three_failed_heartbeats_confirm_offline_and_clear_auth(monkeypatch):
         assert main._state["last_recovery_validation"] is None
 
 
+def test_first_explicit_auth_rejection_preserves_known_good_session():
+    main.update_state(
+        online=True,
+        authenticated=True,
+        last_auth_success=123.0,
+        auth_failures=0,
+        service_degraded=False,
+    )
+
+    assert main._record_auth_rejection("Camera rejected credentials") is True
+    with main._state_lock:
+        assert main._state["authenticated"] is True
+        assert main._state["auth_failures"] == 1
+        assert main._state["service_degraded"] is True
+
+
+def test_third_explicit_auth_rejection_confirms_auth_loss():
+    main.update_state(
+        online=True,
+        authenticated=True,
+        last_auth_success=123.0,
+        auth_failures=2,
+        service_degraded=True,
+    )
+
+    assert main._record_auth_rejection("Camera rejected credentials") is False
+    with main._state_lock:
+        assert main._state["authenticated"] is False
+        assert main._state["auth_failures"] == 3
+
+
 def test_transient_validation_failure_preserves_previous_auth_when_ping_is_up(monkeypatch):
     class FakeCamera:
         def check_auth(self):
