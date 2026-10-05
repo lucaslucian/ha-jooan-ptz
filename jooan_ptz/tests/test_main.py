@@ -282,6 +282,11 @@ def test_dashboard_template_is_served():
     assert "labCgiProbeAll" in body
     assert "labCgiRoundtrip" in body
     assert "labCgiWrite" in body
+    assert "labCgiWriteMode" in body
+    assert 'role="tablist"' in body
+    assert 'aria-controls="tab-camera"' in body
+    assert 'id="headerTitle"' in body
+    assert 'id="statusBanner"' in body
     assert "static/app.css" in body
     assert "static/app.js" in body
 
