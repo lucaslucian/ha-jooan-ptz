@@ -1,5 +1,6 @@
 import threading
 import time
+from pathlib import Path
 
 import main
 
@@ -377,6 +378,10 @@ def test_dashboard_template_is_served():
     assert "ptzSpeed" in body
     assert "generalInfo" in body
     assert "allReadSettings" in body
+    assert 'id="headerTitle"' in body
+    assert 'class="control-side"' in body
+    assert 'id="statusBanner"' in body
+    assert 'aria-live="polite"' in body
     assert 'class="info-accordion"' in body
     assert body.count('class="info-accordion-item"') == 5
     assert body.index('id="section-control"') < body.index('id="overviewCards"')
@@ -388,6 +393,19 @@ def test_dashboard_template_is_served():
     assert "labCgiProbeAll" not in body
     assert "static/app.css" in body
     assert "static/app.js" in body
+
+
+def test_dashboard_javascript_preserves_snapshot_only_guards():
+    script = (
+        Path(__file__).parents[1] / "app" / "static" / "app.js"
+    ).read_text(encoding="utf-8")
+
+    assert "PTZ_SNAPSHOT_INTERVAL_MS=1000" in script
+    assert "manualSnapshotBusy" in script
+    assert "ptzSnapshotRequests" in script
+    assert "allowManualBusy" in script
+    assert "api/live" not in script
+    assert "liveFeed" not in script
 
 
 def test_ptz_channel_is_inferred_from_onvif_profile_mapping():
