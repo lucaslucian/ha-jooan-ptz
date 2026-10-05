@@ -42,6 +42,7 @@ DISCOVERY_GAP = 0.15
 RECOVERY_GRACE = 10.0
 RECOVERY_VALIDATION_INTERVAL = 300.0
 HEARTBEAT_FAILURE_THRESHOLD = 3
+AUTH_FAILURE_THRESHOLD = 3
 MAX_PTZ_CLIENTS = 64
 PTZ_DIRECTIONS = {"up", "down", "left", "right", "stop"}
 PTZ_CLIENT_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
@@ -67,6 +68,7 @@ _state = {
     "last_heartbeat": None,
     "heartbeat_error": None,
     "heartbeat_failures": 0,
+    "auth_failures": 0,
     "validation_running": False,
     "last_recovery_validation": None,
     "last_auth_success": None,
@@ -107,6 +109,33 @@ def get_camera() -> JooanCamera:
 def update_state(**values) -> None:
     with _state_lock:
         _state.update(values)
+
+
+def _record_auth_rejection(error: str) -> bool:
+    """Record one explicit CGI credential rejection.
+
+    Once credentials were successfully validated, require consecutive explicit
+    rejections before downgrading the session. The reference camera can return
+    transient CGI failures while its embedded services are overloaded.
+    """
+    now = time.time()
+    with _state_lock:
+        previously_authenticated = bool(_state.get("authenticated"))
+        previous_success = _state.get("last_auth_success")
+        failures = int(_state.get("auth_failures") or 0) + 1
+
+    preserve = bool(previous_success) and previously_authenticated and failures < AUTH_FAILURE_THRESHOLD
+    update_state(
+        online=True,
+        authenticated=preserve,
+        auth_failures=failures,
+        service_degraded=preserve,
+        last_error=error,
+        last_check=now,
+        last_seen=now,
+        last_recovery_validation=None if preserve else _state.get("last_recovery_validation"),
+    )
+    return preserve
 
 
 def _infer_ptz_channel(onvif_info: dict | None) -> tuple[int | None, str | None]:
@@ -206,6 +235,7 @@ def _validate_camera_locked() -> bool:
             "last_auth_success": now,
             "service_degraded": False,
             "heartbeat_failures": 0,
+            "auth_failures": 0,
         }
 
         with _state_lock:
@@ -246,15 +276,7 @@ def _validate_camera_locked() -> bool:
     except JooanAuthError as exc:
         safe_error = redact_secrets(exc)
         _LOGGER.warning("JOOAN camera rejected configured credentials: %s", safe_error)
-        now = time.time()
-        update_state(
-            online=True,
-            authenticated=False,
-            service_degraded=False,
-            last_error=safe_error,
-            last_check=now,
-            last_seen=now,
-        )
+        _record_auth_rejection(safe_error)
         return False
     except Exception as exc:
         safe_error = redact_secrets(exc)
@@ -379,7 +401,10 @@ def validation_loop() -> None:
         with _state_lock:
             should_recover = (
                 bool(_state.get("online"))
-                and not bool(_state.get("authenticated"))
+                and (
+                    not bool(_state.get("authenticated"))
+                    or bool(_state.get("service_degraded"))
+                )
                 and not bool(_state.get("validation_running"))
                 and (
                     _state.get("last_recovery_validation") is None
@@ -594,8 +619,13 @@ def ptz(direction: str):
         })
     except JooanAuthError as exc:
         safe_error = redact_secrets(exc)
-        update_state(authenticated=False, last_error=safe_error)
-        return jsonify({"error": safe_error}), 401
+        preserved = _record_auth_rejection(safe_error)
+        if preserved:
+            return jsonify({
+                "error": "Camera CGI temporarily rejected the request",
+                "authentication_preserved": True,
+            }), 503
+        return jsonify({"error": safe_error, "authentication_preserved": False}), 401
     except Exception as exc:
         safe_error = redact_secrets(exc)
         update_state(last_error=safe_error)
