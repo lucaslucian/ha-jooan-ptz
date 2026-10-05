@@ -375,6 +375,10 @@ def test_dashboard_template_is_served():
     assert "ptzSpeed" in body
     assert "generalInfo" in body
     assert "allReadSettings" in body
+    assert 'id="headerTitle"' in body
+    assert 'class="control-side"' in body
+    assert 'id="statusBanner"' in body
+    assert 'aria-live="polite"' in body
     assert 'class="info-accordion"' in body
     assert body.count('class="info-accordion-item"') == 5
     assert body.index('id="section-control"') < body.index('id="overviewCards"')
